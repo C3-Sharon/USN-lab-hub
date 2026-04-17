@@ -1,0 +1,33 @@
+spring:
+  profiles:
+    active: dev   # 默认激活 dev，部署时可通过参数覆盖
+  jackson:
+    time-zone: Asia/Shanghai
+  flyway:
+    enabled: false
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+# 自定义 JWT 配置
+usnhub:
+  jwt:
+    # 密钥：必须足够长
+    secret-key: UsnLabHub_SecretKey_Professional_Version_2026_Secure!
+    # 过期时间：43200000 毫秒 (12小时)
+    ttl: 43200000
+    # 前端请求头中的名字
+    token-name: Authorization
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+
+server:
+  port: 8080

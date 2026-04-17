@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.SysUserMapper">
+    <select id="selectRole" resultType="map">
+        SELECT
+            u.id, u.username, u.password, u.member_id,
+            r.role_key as roleKey,
+            i.identity_name as identityName,
+            g.group_name as groupName,
+            f.college_name as collegeName,
+            f.major_name as majorName
+        FROM sys_user u
+                 LEFT JOIN sys_user_role ur ON u.id = ur.user_id
+                 LEFT JOIN sys_role r ON ur.role_id = r.id
+                 LEFT JOIN sys_identity i ON u.identity_id = i.id
+                 LEFT JOIN sys_group g ON u.group_id = g.id
+                 LEFT JOIN sys_faculty_major f ON u.faculty_id = f.id
+        WHERE u.member_id = #{memberId}
+        LIMIT 1
+    </select>
+
+</mapper>
