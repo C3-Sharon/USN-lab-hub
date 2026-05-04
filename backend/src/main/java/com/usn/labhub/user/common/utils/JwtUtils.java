@@ -38,11 +38,12 @@ public class JwtUtils {
      * @param roleKey  用户的角色 (admin/student)
      * @return 生成的 JWT 字符串
      */
-    public String createToken(String memberId, String roleKey) {
+    public String createToken(String memberId, String roleKey,Long userId) {
         long exp = System.currentTimeMillis() + jwtProperties.getTtl();
 
         return Jwts.builder()
                 .claim("memberId", memberId)
+                .claim("userId", userId)
                 .claim("roleKey", roleKey)
                 .expiration(new Date(exp))
                 .signWith(secretKey)
@@ -60,5 +61,33 @@ public class JwtUtils {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+    /**
+     * 校验 Token 是否有效
+     * @param token 前端传来的 token
+     * @return true-有效, false-无效
+     */
+    public boolean validateToken(String token) {
+        try {
+            parseToken(token); // 如果解析不报错，说明 token 有效且未过期
+            return true;
+        } catch (Exception e) {
+            // 解析报错（如过期、伪造、格式不对）则返回 false
+            return false;
+        }
+    }
+
+    /**
+     * 从 Token 中获取 memberId
+     * @param token 前端传来的 token
+     * @return 解析出来的 memberId
+     */
+    public String getMemberIdFromToken(String token) {
+        Claims claims = parseToken(token);
+        return claims.get("memberId", String.class);
+    }
+    public String getUserIdFromToken(String token) {
+        Claims claims = parseToken(token);
+        return claims.get("userId", String.class);
     }
 }

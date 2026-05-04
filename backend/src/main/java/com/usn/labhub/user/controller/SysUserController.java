@@ -1,6 +1,7 @@
 package com.usn.labhub.user.controller;
 
 import com.usn.labhub.user.common.result.Result;
+import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.LoginDTO;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.service.ISysUserService;
@@ -9,10 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
@@ -36,4 +34,5 @@ public class SysUserController {
 
         return Result.success(loginVO);
     }
+
 }

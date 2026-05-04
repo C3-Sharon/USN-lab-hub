@@ -3,6 +3,8 @@ package com.usn.labhub.user.domain.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Schema(description = "用户登录成功返回结果")
 public class LoginVO {
@@ -55,10 +57,32 @@ public class LoginVO {
         @Schema(description = "今日签到时间 (HH:mm)")
         private String checkInTime;
 
+        @Schema(description = "今日签退时间 (HH:mm)")
+        private String checkOutTime;
+
         @Schema(description = "本周累计时长 (小时)")
         private Double weekHours;
 
         @Schema(description = "本学期累计时长 (小时)")
         private Double semesterHours;
+
+        @Schema(description = "签到日期")
+        private String checkInDate;
+
+        @Schema(description = "今日签到明细列表")
+        private List<RecordDetail> todayRecords;
+
+    }
+    @Data
+    @Schema(description = "单次打卡明细")
+    public static class RecordDetail {
+        @Schema(description = "签到时间 (HH:mm)")
+        private String inTime;
+
+        @Schema(description = "签退时间 (HH:mm)")
+        private String outTime;
+
+        @Schema(description = "本次有效时长 (分钟)")
+        private Integer durationMins;
     }
 }

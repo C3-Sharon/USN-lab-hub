@@ -7,6 +7,7 @@ import com.usn.labhub.user.domain.dto.LoginDTO;
 import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.mapper.SysUserMapper;
+import com.usn.labhub.user.service.IAttendanceService;
 import com.usn.labhub.user.service.ISysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,8 @@ import java.util.Map;
 public class ISysUserServiceImpl
         extends ServiceImpl<SysUserMapper, SysUser>
         implements ISysUserService {
+    @Autowired
+    private IAttendanceService attendanceService;
     @Autowired
     private JwtUtils jwtUtils;
     @Autowired
@@ -42,8 +45,9 @@ public class ISysUserServiceImpl
         //2. 身份和权限核实(用学号查身份，返回身份)
 
         String roleKey = (String) userMap.get("roleKey");
+        Long userId = Long.valueOf(userMap.get("id").toString());
         //3. 组装用户信息  4. 签发令牌与考勤
-        String token = jwtUtils.createToken(loginDTO.getMemberId(), roleKey);
+        String token = jwtUtils.createToken(loginDTO.getMemberId(),roleKey,userId);
 
         LoginVO vo = new LoginVO();
         vo.setToken(token);
@@ -56,8 +60,9 @@ public class ISysUserServiceImpl
         userInfo.setGroupName((String) userMap.get("groupName"));
         userInfo.setIdentity((String) userMap.get("identityName"));
         vo.setUser(userInfo);
-        vo.setAttendance(new LoginVO.AttendanceInfo()); // 考勤先放空
+        vo.setAttendance(attendanceService.getOverview(userId));
 
         return vo;
     }
+
 }
