@@ -364,6 +364,108 @@ cd ../frontend && npm run build
 
 macOS / Linux 将 `mvnw.cmd` 替换为 `./mvnw`。
 
+## 暑假远程协作分支流程
+
+暑假远程阶段以 GitHub 作为主协作仓库。实验室 GitLab 由于只能在连接实验室 WiFi 时访问，暂时作为后续同步归档仓库，不和 GitHub 双主线并行开发。
+
+分支职责：
+
+| 分支 | 用途 | 维护规则 |
+| --- | --- | --- |
+| `main` | 稳定演示版 | 只放可以给老师展示的版本，不直接开发 |
+| `dev` | 日常集成版 | 三个人的功能先合到这里联调 |
+| `feature/iot-product` | 产品与文档 | 产品经理维护需求、字段、会议纪要、页面说明 |
+| `feature/iot-frontend` | 前端实现 | 前端负责人维护 Vue 页面、mock、接口联调 |
+| `feature/iot-backend` | 后端实现 | 后端负责人维护数据库、接口、MQTT、告警、日志 |
+| `feature/iot-mqtt-demo` | MQTT 联调 | 后端或硬件组维护模拟器和联调脚本 |
+
+推荐流向：
+
+```text
+feature/*  ->  dev  ->  main
+个人开发      团队联调   稳定展示
+```
+
+首次拉取项目后，先切到 `dev`，再创建自己的功能分支：
+
+```bash
+git clone git@github.com:C3-Sharon/USN-lab-hub.git
+cd USN-lab-hub
+
+git checkout dev
+git pull origin dev
+
+# 产品经理
+git checkout -b feature/iot-product
+
+# 前端负责人
+git checkout -b feature/iot-frontend
+
+# 后端负责人
+git checkout -b feature/iot-backend
+```
+
+日常开始工作前：
+
+```bash
+git checkout feature/iot-backend   # 替换为自己的分支
+git fetch origin
+git merge origin/dev
+git status --short
+```
+
+日常完成一个小任务后：
+
+```bash
+git status --short
+git add .
+git commit -m "feat: add iot device api draft"
+git push -u origin feature/iot-backend
+```
+
+然后在 GitHub 创建 Pull Request：
+
+```text
+base: dev
+compare: feature/iot-backend
+```
+
+不要把日常功能 PR 到 `main`。每周阶段验收通过后，再从 `dev` 创建 PR 到 `main`：
+
+```text
+base: main
+compare: dev
+title: release: week 1 integration
+```
+
+PR 描述必须包含：
+
+```text
+改了什么：
+- 
+
+如何测试：
+- 
+
+影响契约：
+- API_CONTRACT：是/否
+- MQTT_CONTRACT：是/否
+- 数据库表：是/否
+- 前端字段：是/否
+
+需要谁配合：
+- 
+```
+
+协作规则：
+
+- 不直接向 `main` 推送代码。
+- 不用 QQ/微信压缩包合并代码。
+- 每个 PR 至少让另一位同学看一眼。
+- 字段或接口变化必须同步 `docs/agent-guides/04_API_CONTRACT.md`。
+- MQTT Topic 或 payload 变化必须同步 `docs/agent-guides/05_MQTT_CONTRACT.md`。
+- 每个 agent 任务必须给出运行方法、测试方法、预期结果和契约影响。
+
 ## 给 Agent 的协作 Prompt
 
 可以把下面这段发给代码 Agent，让它拉取项目并完成本地运行检查：
@@ -388,6 +490,16 @@ macOS / Linux 将 `mvnw.cmd` 替换为 `./mvnw`。
 4. 打开 http://localhost:5173
 5. 使用 admin/admin123 登录管理员账号，使用 20260001/20260001 登录学生账号。
 
+首次创建协作分支：（请先咨询我是负责哪个部分的负责人）
+1. git checkout dev
+2. git pull origin dev
+3. 根据角色创建分支：
+   - 产品经理：git checkout -b feature/iot-product
+   - 前端负责人：git checkout -b feature/iot-frontend
+   - 后端负责人：git checkout -b feature/iot-backend
+4. 后续所有日常开发都在自己的 feature 分支完成，通过 Pull Request 合并到 dev。
+5. 不要直接向 main 推送代码；main 只接收每周验收后的稳定版本。
+
 约束：
 - 不要提交 node_modules、dist、target、.idea、.deploy。
 - 不要提交任何真实服务器密码、数据库密码、私钥或 Token。
@@ -395,4 +507,5 @@ macOS / Linux 将 `mvnw.cmd` 替换为 `./mvnw`。
 - 新增 IoT 代码前必须先阅读 docs/agent-guides。
 - 新增 IoT 接口使用 /api/iot/**，数据表使用 iot_ 前缀。
 - 每次 PR 必须包含测试方法和预期结果。
+- 如果改动涉及 API 字段、数据库表、MQTT 消息或前端字段，必须同步更新对应契约文档。
 ```
