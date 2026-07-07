@@ -1,0 +1,208 @@
+# MQTT Contract / MQTT 契约
+
+> 中文说明：本文件是硬件组和后端对接的核心契约。硬件上报、后端订阅、指令下发、ACK 回执都必须以本文件为准。任何 Topic 或 payload 字段变更都必须同步更新本文件。
+
+## 1. Broker / MQTT Broker
+
+MVP recommended broker:
+
+- EMQX or Mosquitto
+
+中文建议：MVP 阶段推荐 EMQX 或 Mosquitto。EMQX 管理台更适合演示，Mosquitto 更轻量。最终由后端负责人和硬件组根据实际环境确定。
+
+## 2. Topic Rules / Topic 规则
+
+```text
+Telemetry:   usn/{projectCode}/{deviceCode}/telemetry
+Status:      usn/{projectCode}/{deviceCode}/status
+Command:     usn/{projectCode}/{deviceCode}/command
+Command ACK: usn/{projectCode}/{deviceCode}/command_ack
+```
+
+Example:
+
+```text
+usn/power-monitor/PM-001/telemetry
+usn/power-monitor/PM-001/status
+usn/power-monitor/PM-001/command
+usn/power-monitor/PM-001/command_ack
+```
+
+## 3. Device Code Rule / 设备编号规则
+
+Recommended examples:
+
+```text
+PM-001      power monitor / 功耗检测设备
+DAQ-001     data acquisition device / 串行采集设备
+MED-001     smart medicine box / 智慧药盒
+AUDIO-001   audio inspection device / 音频巡检
+```
+
+Rules:
+
+- Device code must be stable.
+- Device code in Topic and payload must match.
+- Do not reuse a device code for another physical device.
+- 设备编号必须稳定。
+- Topic 和 payload 中的设备编号必须一致。
+- 不要把同一个编号复用给另一台实体设备。
+
+## 4. Telemetry Payload / 数据上报消息
+
+Topic:
+
+```text
+usn/{projectCode}/{deviceCode}/telemetry
+```
+
+Payload:
+
+```json
+{
+  "deviceCode": "PM-001",
+  "timestamp": 1783333800000,
+  "metrics": {
+    "voltage": 220.3,
+    "current": 0.42,
+    "power": 92.5
+  },
+  "status": "online"
+}
+```
+
+Field meaning / 字段含义：
+
+| Field | Type | Required | 中文说明 |
+|---|---|---|---|
+| deviceCode | string | yes | 设备编号 |
+| timestamp | number | yes | 设备侧时间戳，毫秒 |
+| metrics | object | yes | 指标键值对 |
+| status | string | no | online/offline/alert/maintenance |
+
+Metric naming rule / 指标命名：
+
+- Use lower camel case or lower snake case consistently.
+- MVP vertical slice uses `voltage`, `current`, `power`.
+- 指标名保持稳定，不要临时改中文字段。
+
+## 5. Status Payload / 状态消息
+
+Topic:
+
+```text
+usn/{projectCode}/{deviceCode}/status
+```
+
+Payload:
+
+```json
+{
+  "deviceCode": "PM-001",
+  "status": "online",
+  "timestamp": 1783333800000,
+  "message": "device online"
+}
+```
+
+Allowed status:
+
+```text
+online / offline / alert / maintenance
+```
+
+## 6. Command Payload / 指令消息
+
+Topic:
+
+```text
+usn/{projectCode}/{deviceCode}/command
+```
+
+Payload:
+
+```json
+{
+  "commandId": "CMD-20260706-0001",
+  "command": "SET_SAMPLE_INTERVAL",
+  "params": {
+    "intervalSeconds": 5
+  }
+}
+```
+
+Rules:
+
+- Every command must include `commandId`.
+- Hardware must include the same `commandId` in ACK.
+- MVP should only use low-risk commands.
+- 每条指令必须有 `commandId`。
+- 硬件 ACK 必须带回同一个 `commandId`。
+- MVP 只做低风险控制动作。
+
+## 7. Command ACK Payload / 指令回执消息
+
+Topic:
+
+```text
+usn/{projectCode}/{deviceCode}/command_ack
+```
+
+Payload:
+
+```json
+{
+  "commandId": "CMD-20260706-0001",
+  "status": "ACKED",
+  "message": "sample interval updated",
+  "timestamp": 1783333801000
+}
+```
+
+Allowed ACK status:
+
+```text
+ACKED / FAILED
+```
+
+Backend command status:
+
+```text
+PENDING / SENT / ACKED / FAILED / TIMEOUT
+```
+
+## 8. MVP Hardware Confirmation Table / MVP 硬件确认表
+
+| Device | deviceCode | Metrics | Units | Report interval | Control action | ACK support |
+|---|---|---|---|---|---|---|
+| 功耗检测 | PM-001 | voltage/current/power | V/A/W | 待确认 | SET_SAMPLE_INTERVAL | 待确认 |
+| 串行采集数据监测仪 | DAQ-001 | analog_value | 待确认 | 待确认 | 待确认 | 待确认 |
+
+## 9. MQTT Test Checklist / MQTT 测试清单
+
+For every MQTT integration test, record:
+
+- Broker address / Broker 地址
+- Topic / 主题
+- Payload / 消息体
+- Publish tool / 发布工具
+- Backend log / 后端日志
+- Database result / 数据库结果
+- Frontend result / 前端结果
+
+Expected telemetry test result:
+
+```text
+1. Backend receives telemetry.
+2. iot_telemetry_raw inserts one raw payload.
+3. iot_metric_data inserts one row per metric.
+4. Redis latest value updates if Redis is enabled.
+5. Frontend device detail shows latest data.
+```
+
+## 10. Change Log / 变更记录
+
+| Date | Change | Owner | Impact |
+|---|---|---|---|
+| 2026-07-06 | Initial MQTT contract draft | Codex | Hardware/backend alignment |
+

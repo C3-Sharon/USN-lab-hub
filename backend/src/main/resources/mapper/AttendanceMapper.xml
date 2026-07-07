@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.AttendanceMapper">
+
+    <sql id="AttendanceQueryColumns">
+        ar.id,
+        u.username,
+        u.member_id AS memberId,
+        g.group_name AS groupName,
+        ar.check_in_time AS checkInTime,
+        ar.check_out_time AS checkOutTime,
+        ar.duration_minutes AS durationMinutes,
+        ar.semester,
+        ar.source
+    </sql>
+
+    <sql id="AttendanceQueryFromWhere">
+        FROM attendance_record ar
+        LEFT JOIN sys_user u ON ar.user_id = u.id
+        LEFT JOIN sys_group g ON u.group_id = g.id
+        <where>
+            <if test="query.username != null and query.username != ''">
+                AND (u.username LIKE CONCAT('%', #{query.username}, '%')
+                    OR u.member_id LIKE CONCAT('%', #{query.username}, '%'))
+            </if>
+            <if test="query.groupId != null">
+                AND u.group_id = #{query.groupId}
+            </if>
+            <if test="query.startDate != null">
+                AND ar.check_in_date &gt;= #{query.startDate}
+            </if>
+            <if test="query.endDate != null">
+                AND ar.check_in_date &lt;= #{query.endDate}
+            </if>
+            <if test="query.attendanceStatus != null and query.attendanceStatus != ''">
+                <choose>
+                    <when test="query.attendanceStatus == 'CHECKED_OUT'">
+                        AND ar.check_out_time IS NOT NULL
+                    </when>
+                    <when test="query.attendanceStatus == 'IN_PROGRESS'">
+                        AND ar.check_out_time IS NULL
+                    </when>
+                    <when test="query.attendanceStatus == 'CHECKED_IN'">
+                        AND ar.check_in_time IS NOT NULL
+                    </when>
+                </choose>
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectAttendancePage" resultType="com.usn.labhub.user.domain.vo.AttendanceQueryVO">
+        SELECT
+        <include refid="AttendanceQueryColumns"/>
+        <include refid="AttendanceQueryFromWhere"/>
+        ORDER BY ar.check_in_time DESC
+    </select>
+
+    <select id="selectAttendanceExportList" resultType="com.usn.labhub.user.domain.vo.AttendanceExportVO">
+        SELECT
+        u.username,
+        u.member_id AS memberId,
+        g.group_name AS groupName,
+        ar.check_in_time AS checkInTime,
+        ar.check_out_time AS checkOutTime,
+        ar.duration_minutes AS durationMinutes,
+        ar.semester,
+        ar.source
+        <include refid="AttendanceQueryFromWhere"/>
+        ORDER BY ar.check_in_time DESC
+    </select>
+</mapper>

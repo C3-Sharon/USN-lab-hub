@@ -19,4 +19,38 @@
         LIMIT 1
     </select>
 
+    <select id="selectMemberPage" resultType="com.usn.labhub.user.domain.vo.MemberVO">
+        SELECT
+            u.id,
+            u.username,
+            u.member_id AS memberId,
+            u.faculty_id AS facultyId,
+            u.identity_id AS identityId,
+            u.group_id AS groupId,
+            f.college_name AS collegeName,
+            f.major_name AS majorName,
+            i.identity_name AS identityName,
+            g.group_name AS groupName,
+            u.status
+        FROM sys_user u
+        LEFT JOIN sys_identity i ON u.identity_id = i.id
+        LEFT JOIN sys_group g ON u.group_id = g.id
+        LEFT JOIN sys_faculty_major f ON u.faculty_id = f.id
+        <where>
+            <if test="query.username != null and query.username != ''">
+                AND u.username LIKE CONCAT('%', #{query.username}, '%')
+            </if>
+            <if test="query.identityId != null">
+                AND u.identity_id = #{query.identityId}
+            </if>
+            <if test="query.groupId != null">
+                AND u.group_id = #{query.groupId}
+            </if>
+            <if test="query.status != null">
+                AND u.status = #{query.status}
+            </if>
+        </where>
+        ORDER BY u.create_time DESC, u.id DESC
+    </select>
+
 </mapper>

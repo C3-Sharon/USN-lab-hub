@@ -1,0 +1,81 @@
+:root {
+  color: #172033;
+  background: #f4f7fb;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f4f7fb;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: #68758b;
+  font-size: 14px;
+}
+
+.toolbar {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e7ecf3;
+  border-radius: 8px;
+}
+
+.data-panel {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e7ecf3;
+  border-radius: 8px;
+}
+
+.table-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.muted {
+  color: #7c8798;
+}
+
+@media (max-width: 768px) {
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .table-footer {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+}

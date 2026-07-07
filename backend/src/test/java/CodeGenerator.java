@@ -4,30 +4,34 @@ import com.baomidou.mybatisplus.generator.FastAutoGenerator;
 public class CodeGenerator {
     public static void main(String[] args) {
         String projectPath = System.getProperty("user.dir");
-        FastAutoGenerator.create("jdbc:mysql://localhost:3306/usn_hub", "root", "523123")
+        String dbUrl = System.getenv().getOrDefault("DB_URL", "jdbc:mysql://localhost:3306/usn_hub");
+        String dbUsername = System.getenv().getOrDefault("DB_USERNAME", "root");
+        String dbPassword = System.getenv().getOrDefault("DB_PASSWORD", "");
+
+        FastAutoGenerator.create(dbUrl, dbUsername, dbPassword)
                 .globalConfig(builder -> {
-                    builder.author("陈思瑞") // 设置作者
-                            .outputDir(projectPath + "/backend/src/main/java") // 拼成绝对路径
-                            .fileOverride(); // 加上这个，解决你日志里那些“文件已存在”的警告
+                    builder.author("USN Lab Hub")
+                            .outputDir(projectPath + "/backend/src/main/java")
+                            .fileOverride();
                 })
                 .packageConfig(builder -> {
-                    builder.parent("com.usn.labhub") // 设置父包名
-                            .moduleName("user"); // 设置模块名
+                    builder.parent("com.usn.labhub")
+                            .moduleName("user");
                 })
                 .strategyConfig(builder -> {
                     builder.addInclude(
-                                    "sys_user",             // 用户主表
-                                    "sys_role",             // 角色表
-                                    "sys_identity",         // 身份表
-                                    "sys_group",            // 工作组表
-                                    "sys_faculty_major",    // 学院专业表
-                                    "sys_user_role",        // 用户角色关联表
-                                    "attendance_record"     // 考勤记录表
+                                    "sys_user",
+                                    "sys_role",
+                                    "sys_identity",
+                                    "sys_group",
+                                    "sys_faculty_major",
+                                    "sys_user_role",
+                                    "attendance_record"
                             )
                             .entityBuilder()
-                            .enableLombok()             // 必须开启，省去手写 getter/setter
+                            .enableLombok()
                             .enableTableFieldAnnotation()
-                            .idType(IdType.AUTO);       // 对应我们 SQL 里的自增主键
+                            .idType(IdType.AUTO);
                 })
                 .execute();
     }

@@ -1,18 +1,24 @@
 package com.usn.labhub.user.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.usn.labhub.user.domain.dto.LoginDTO;
+import com.usn.labhub.user.domain.dto.MemberQueryDTO;
+import com.usn.labhub.user.domain.dto.MemberSaveDTO;
+import com.usn.labhub.user.domain.dto.MemberUpdateDTO;
 import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.vo.LoginVO;
-import com.usn.labhub.user.mapper.SysUserMapper;
-import org.springframework.stereotype.Service;
-
+import com.usn.labhub.user.domain.vo.MemberVO;
 
 public interface ISysUserService extends IService<SysUser> {
-    /**
-     * 用户登录业务
-     * @param loginDTO 登录信息
-     * @return 登录成功后的完整数据包
-     */
+
     LoginVO login(LoginDTO loginDTO);
+
+    IPage<MemberVO> pageMembers(MemberQueryDTO queryDTO);
+
+    void saveMember(MemberSaveDTO saveDTO);
+
+    void updateMember(MemberUpdateDTO updateDTO);
+
+    void updateMemberStatus(Long id, Byte status);
 }

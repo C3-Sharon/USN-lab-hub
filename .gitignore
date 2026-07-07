@@ -1,0 +1,30 @@
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Java / Maven
+backend/target/
+target/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Deployment artifacts
+.deploy/
+*.tar.gz
+*.zip
+
+# Local runtime config
+*.local.yml
+*.local.yaml
