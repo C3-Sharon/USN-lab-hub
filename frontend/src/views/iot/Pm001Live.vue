@@ -37,9 +37,7 @@
             <el-tag :type="isOnline ? 'success' : 'info'" size="large" effect="dark">
               {{ isOnline ? '在线' : '离线' }}
             </el-tag>
-            <span v-if="!isOnline && reportTime" class="offline-reason">
-              （已超过 15 秒未上报）
-            </span>
+
           </div>
           <div class="info-row">
             <span class="info-label">上报时间</span>
@@ -96,7 +94,7 @@
       <p>接口：GET /api/iot/devices/1/latest</p>
       <p>当前模式：{{ USE_MOCK ? 'Mock 数据' : '真实接口' }}</p>
       <p>自动刷新：每 10 秒</p>
-      <p>在线判断：上报时间距当前 15 秒内为在线</p>
+      <p>在线状态：直接展示后端 status 字段（第一周）</p>
     </el-alert>
   </div>
 </template>
@@ -132,13 +130,10 @@ const reportTime = computed(() => {
   return latestData.value.reportTime || latestData.value.reportedAt || ''
 })
 
-// 在线状态：上报时间距当前 15 秒内为在线
+// 第一周：直接展示后端返回的 status 字段（ONLINE/OFFLINE）
+// 第二阶段 MQTT 接入后，再改为按上报时间 15 秒动态判断
 const isOnline = computed(() => {
-  const timeStr = reportTime.value
-  if (!timeStr) return false
-  const report = new Date(timeStr.replace(' ', 'T')).getTime()
-  const now = Date.now()
-  return now - report <= 15000
+  return latestData.value.status === 'ONLINE'
 })
 
 const metricsList = computed(() => {

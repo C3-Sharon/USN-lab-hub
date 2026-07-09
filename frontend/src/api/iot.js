@@ -70,7 +70,7 @@ const MOCK_LATEST_METRICS = {
   metrics: [
     { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
     { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
-    { metricKey: 'power', metricName: '功率', value: 120.5, unit: 'W' }
+    { metricKey: 'power', metricName: '功率', value: 92.5, unit: 'W' }
   ]
 }
 
