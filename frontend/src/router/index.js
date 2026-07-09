@@ -5,6 +5,11 @@ import Login from '@/views/Login.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import MemberManage from '@/views/admin/MemberManage.vue'
 import AttendanceRecord from '@/views/admin/AttendanceRecord.vue'
+import IotOverview from '@/views/iot/Overview.vue'
+import IotDeviceList from '@/views/iot/DeviceList.vue'
+import IotDeviceDetail from '@/views/iot/DeviceDetail.vue'
+import IotAlertCenter from '@/views/iot/AlertCenter.vue'
+import IotCommandConsole from '@/views/iot/CommandConsole.vue'
 import { hasLogin, isAdmin } from '@/store/user'
 
 const routes = [
@@ -36,6 +41,36 @@ const routes = [
         name: 'AttendanceRecord',
         component: AttendanceRecord,
         meta: { title: '考勤检查与导出', role: 'admin' }
+      },
+      {
+        path: 'iot/overview',
+        name: 'IotOverview',
+        component: IotOverview,
+        meta: { title: 'IoT 总览' }
+      },
+      {
+        path: 'iot/devices',
+        name: 'IotDeviceList',
+        component: IotDeviceList,
+        meta: { title: '设备列表' }
+      },
+      {
+        path: 'iot/devices/:id',
+        name: 'IotDeviceDetail',
+        component: IotDeviceDetail,
+        meta: { title: '设备详情' }
+      },
+      {
+        path: 'iot/alerts',
+        name: 'IotAlertCenter',
+        component: IotAlertCenter,
+        meta: { title: '告警中心' }
+      },
+      {
+        path: 'iot/commands',
+        name: 'IotCommandConsole',
+        component: IotCommandConsole,
+        meta: { title: '指令控制台' }
       }
     ]
   },
