@@ -29,6 +29,10 @@
             <el-icon><Monitor /></el-icon>
             <span>IoT 总览</span>
           </el-menu-item>
+          <el-menu-item index="/iot/projects">
+            <el-icon><FolderOpened /></el-icon>
+            <span>项目列表</span>
+          </el-menu-item>
           <el-menu-item index="/iot/devices">
             <el-icon><Cpu /></el-icon>
             <span>设备列表</span>
@@ -40,6 +44,10 @@
           <el-menu-item index="/iot/commands">
             <el-icon><SetUp /></el-icon>
             <span>指令控制台</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/logs">
+            <el-icon><Document /></el-icon>
+            <span>操作日志</span>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -68,7 +76,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document } from '@element-plus/icons-vue'
 import { userStore } from '@/store/user'
 
 const route = useRoute()

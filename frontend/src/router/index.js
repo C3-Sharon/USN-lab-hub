@@ -10,6 +10,10 @@ import IotDeviceList from '@/views/iot/DeviceList.vue'
 import IotDeviceDetail from '@/views/iot/DeviceDetail.vue'
 import IotAlertCenter from '@/views/iot/AlertCenter.vue'
 import IotCommandConsole from '@/views/iot/CommandConsole.vue'
+import IotProjects from '@/views/iot/Projects.vue'
+import IotProjectDetail from '@/views/iot/ProjectDetail.vue'
+import IotOperationLogs from '@/views/iot/OperationLogs.vue'
+import IotPublic from '@/views/iot/PublicDisplay.vue'
 import { hasLogin, isAdmin } from '@/store/user'
 
 const routes = [
@@ -71,8 +75,32 @@ const routes = [
         name: 'IotCommandConsole',
         component: IotCommandConsole,
         meta: { title: '指令控制台' }
+      },
+      {
+        path: 'iot/projects',
+        name: 'IotProjects',
+        component: IotProjects,
+        meta: { title: '项目列表' }
+      },
+      {
+        path: 'iot/projects/:id',
+        name: 'IotProjectDetail',
+        component: IotProjectDetail,
+        meta: { title: '项目详情' }
+      },
+      {
+        path: 'iot/logs',
+        name: 'IotOperationLogs',
+        component: IotOperationLogs,
+        meta: { title: '操作日志' }
       }
     ]
+  },
+  {
+    path: '/iot/public',
+    name: 'IotPublic',
+    component: IotPublic,
+    meta: { public: true, title: '公开项目展示' }
   },
   {
     path: '/:pathMatch(.*)*',
