@@ -4,18 +4,6 @@
     <p class="sub-title">本周最小闭环联调 — 只展示最新遥测数据</p>
 
     <el-card v-loading="loading" class="device-card">
-      <template #header>
-        <div class="card-header">
-          <span class="device-name">
-            <el-icon><Cpu /></el-icon>
-            功耗检测设备 PM-001
-          </span>
-          <el-tag :type="statusType" size="large" effect="dark">
-            {{ latestData.status === 'ONLINE' ? '在线' : latestData.status === 'OFFLINE' ? '离线' : latestData.status }}
-          </el-tag>
-        </div>
-      </template>
-
       <template v-if="error">
         <el-alert
           title="数据加载失败"
@@ -30,6 +18,37 @@
       </template>
 
       <template v-else>
+        <!-- 设备信息区 -->
+        <div class="device-info">
+          <div class="info-row">
+            <span class="info-label">项目名称</span>
+            <span class="info-value">{{ latestData.projectName || '--' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">设备名称</span>
+            <span class="info-value">{{ latestData.deviceName || '--' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">设备编号</span>
+            <span class="info-value code">{{ latestData.deviceCode || '--' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">在线状态</span>
+            <el-tag :type="isOnline ? 'success' : 'info'" size="large" effect="dark">
+              {{ isOnline ? '在线' : '离线' }}
+            </el-tag>
+            <span v-if="!isOnline && reportTime" class="offline-reason">
+              （已超过 15 秒未上报）
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">上报时间</span>
+            <span class="info-value">{{ reportTime || '--' }}</span>
+          </div>
+        </div>
+
+        <el-divider />
+
         <!-- 指标卡片 -->
         <el-row :gutter="20" class="metrics-row">
           <el-col :span="8" v-for="m in metricsList" :key="m.metricKey">
@@ -50,23 +69,19 @@
 
         <el-divider />
 
-        <!-- 底部信息栏 -->
+        <!-- 底部操作栏 -->
         <div class="footer-bar">
-          <div class="report-time">
-            <el-icon><Timer /></el-icon>
-            上报时间：{{ latestData.reportedAt || '--' }}
-          </div>
-          <div class="actions">
-            <span v-if="lastUpdateTime" class="last-update">更新于 {{ lastUpdateTime }}</span>
-            <el-button
-              type="primary"
-              :icon="Refresh"
-              :loading="loading"
-              @click="loadData"
-            >
-              刷新数据
-            </el-button>
-          </div>
+          <span v-if="lastUpdateTime" class="last-update">
+            页面更新于 {{ lastUpdateTime }}
+          </span>
+          <el-button
+            type="primary"
+            :icon="Refresh"
+            :loading="loading"
+            @click="loadData"
+          >
+            刷新数据
+          </el-button>
         </div>
       </template>
     </el-card>
@@ -81,21 +96,27 @@
       <p>接口：GET /api/iot/devices/1/latest</p>
       <p>当前模式：{{ USE_MOCK ? 'Mock 数据' : '真实接口' }}</p>
       <p>自动刷新：每 10 秒</p>
+      <p>在线判断：上报时间距当前 15 秒内为在线</p>
     </el-alert>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Cpu, Timer, Refresh, Lightning, Magnet, OfficeBuilding } from '@element-plus/icons-vue'
+import { Cpu, Refresh, Lightning, Magnet, OfficeBuilding } from '@element-plus/icons-vue'
 import { getLatestMetrics } from '@/api/iot'
-
-// 与 api/iot.js 的开关保持一致（用于页面展示）
 import { USE_MOCK } from '@/api/iot'
 
 const loading = ref(false)
 const error = ref('')
-const latestData = ref({ status: '', reportedAt: '', metrics: [] })
+const latestData = ref({
+  deviceCode: '',
+  deviceName: '',
+  projectName: '',
+  status: '',
+  reportTime: '',
+  metrics: []
+})
 const lastUpdateTime = ref('')
 let pollTimer = null
 
@@ -106,17 +127,26 @@ const iconMap = {
   power: Lightning
 }
 
+// 上报时间（兼容 reportTime / reportedAt 两种字段名）
+const reportTime = computed(() => {
+  return latestData.value.reportTime || latestData.value.reportedAt || ''
+})
+
+// 在线状态：上报时间距当前 15 秒内为在线
+const isOnline = computed(() => {
+  const timeStr = reportTime.value
+  if (!timeStr) return false
+  const report = new Date(timeStr.replace(' ', 'T')).getTime()
+  const now = Date.now()
+  return now - report <= 15000
+})
+
 const metricsList = computed(() => {
   const list = latestData.value.metrics || []
   return list.map(m => ({
     ...m,
     icon: iconMap[m.metricKey] || Cpu
   }))
-})
-
-const statusType = computed(() => {
-  const map = { ONLINE: 'success', OFFLINE: 'info', ALERT: 'danger', MAINTENANCE: 'warning' }
-  return map[latestData.value.status] || 'info'
 })
 
 function formatValue(val) {
@@ -128,12 +158,13 @@ async function loadData() {
   error.value = ''
   try {
     const res = await getLatestMetrics(1)
-    // 后端返回：{ code, msg, data }，request 拦截器已做统一处理
-    // mock 模式返回：{ code, message, data }
     const payload = res.data || {}
     latestData.value = {
+      deviceCode: payload.deviceCode || '',
+      deviceName: payload.deviceName || '',
+      projectName: payload.projectName || '',
       status: payload.status || 'UNKNOWN',
-      reportedAt: payload.reportedAt || '',
+      reportTime: payload.reportTime || payload.reportedAt || '',
       metrics: payload.metrics || []
     }
     lastUpdateTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
@@ -185,22 +216,51 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-.card-header {
+/* 设备信息区 */
+.device-info {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.device-name {
+.info-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 600;
+  gap: 16px;
+  min-height: 32px;
 }
 
+.info-label {
+  width: 80px;
+  color: #7c8798;
+  font-size: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.info-value {
+  font-size: 15px;
+  color: #172033;
+  font-weight: 500;
+}
+
+.info-value.code {
+  font-family: 'Courier New', monospace;
+  background: #f4f7fb;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.offline-reason {
+  color: #909399;
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+/* 指标卡片 */
 .metrics-row {
-  margin-bottom: 8px;
+  margin: 8px 0;
 }
 
 .metric-box {
@@ -264,25 +324,12 @@ onUnmounted(() => {
   margin-left: 4px;
 }
 
+/* 底部 */
 .footer-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-}
-
-.report-time {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #7c8798;
-  font-size: 14px;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
   gap: 12px;
 }
 
@@ -308,6 +355,10 @@ onUnmounted(() => {
   .metric-box {
     padding: 16px 12px;
     margin-bottom: 12px;
+  }
+
+  .info-label {
+    width: 70px;
   }
 }
 </style>

@@ -63,8 +63,10 @@ const MOCK_DEVICE_DETAIL = {
 const MOCK_LATEST_METRICS = {
   deviceId: 1,
   deviceCode: 'PM-001',
+  deviceName: '实验室功耗监测仪 #1',
+  projectName: '实验室功耗监测',
   status: 'ONLINE',
-  reportedAt: '2026-07-09 13:50:00',
+  reportTime: '2026-07-09 13:50:00',
   metrics: [
     { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
     { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
@@ -193,7 +195,11 @@ export function getDeviceDetail(id) {
 // ========== Telemetry APIs ==========
 
 export function getLatestMetrics(deviceId) {
-  if (USE_MOCK) return mockResponse(MOCK_LATEST_METRICS)
+  if (USE_MOCK) {
+    const data = { ...MOCK_LATEST_METRICS }
+    data.reportTime = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    return mockResponse(data)
+  }
   return request.get(`/api/iot/devices/${deviceId}/latest`)
 }
 
