@@ -2,7 +2,7 @@ import request from '@/utils/request'
 
 // ========== Mock 开关 ==========
 // 后端接口未就绪时设为 true，使用 mock 数据
-const USE_MOCK = true
+export const USE_MOCK = true
 
 // ========== Mock 数据 ==========
 const MOCK_PROJECTS = [

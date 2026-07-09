@@ -14,6 +14,7 @@ import IotProjects from '@/views/iot/Projects.vue'
 import IotProjectDetail from '@/views/iot/ProjectDetail.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
+import Pm001Live from '@/views/iot/Pm001Live.vue'
 import { hasLogin, isAdmin } from '@/store/user'
 
 const routes = [
@@ -93,6 +94,12 @@ const routes = [
         name: 'IotOperationLogs',
         component: IotOperationLogs,
         meta: { title: '操作日志' }
+      },
+      {
+        path: 'iot/pm001',
+        name: 'Pm001Live',
+        component: Pm001Live,
+        meta: { title: 'PM-001 实时数据' }
       }
     ]
   },
