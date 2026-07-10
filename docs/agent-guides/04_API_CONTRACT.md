@@ -18,21 +18,21 @@ Use existing backend `Result` style where possible.
 ```json
 {
   "code": 200,
-  "message": "success",
+  "msg": "操作成功",
   "data": {}
 }
 ```
 
-If the current project uses different field names, update this section before implementation.
+Current backend `Result<T>` uses `code/msg/data`.
 
-如果现有 `Result` 结构与上述不一致，以现有项目为准，并在实现前更新此处。
+当前后端 `Result<T>` 使用 `code/msg/data`，前端 mock 和联调必须使用 `msg`，不要使用 `message`。
 
 ## 2. Common Page Response / 通用分页结构
 
 ```json
 {
   "code": 200,
-  "message": "success",
+  "msg": "操作成功",
   "data": {
     "records": [],
     "total": 0,
@@ -229,7 +229,7 @@ Request body:
 
 ```text
 GET /api/iot/devices/{id}/latest
-Status: draft
+Status: implemented
 Used by: /iot/devices/:id
 ```
 
@@ -239,8 +239,10 @@ Response data:
 {
   "deviceId": 1,
   "deviceCode": "PM-001",
+  "deviceName": "实验室功耗监测仪 #1",
+  "projectName": "实验室功耗监测",
   "status": "ONLINE",
-  "reportedAt": "2026-07-06 20:05:00",
+  "reportTime": "2026-07-09 20:00:00",
   "metrics": [
     {"metricKey": "voltage", "metricName": "电压", "value": 220.3, "unit": "V"},
     {"metricKey": "current", "metricName": "电流", "value": 0.42, "unit": "A"},
@@ -248,6 +250,15 @@ Response data:
   ]
 }
 ```
+
+Implementation boundary / 实现边界：
+
+- Week 1 implementation is backend code mock.
+- It does not read from database.
+- It does not consume MQTT yet.
+- It does not depend on `pm001_simulator.py`.
+- MQTT integration target for the next step is `iot/power-monitor/PM-001/telemetry`.
+- Online status rule after MQTT integration: `reportTime` within the latest 15 seconds means `ONLINE`; otherwise `OFFLINE`.
 
 ### 5.2 Metric History / 历史数据
 
@@ -444,4 +455,3 @@ Response data record:
 | Date | Change | Owner | Impact |
 |---|---|---|---|
 | 2026-07-06 | Initial API contract draft | Codex | Frontend/backend initial alignment |
-
