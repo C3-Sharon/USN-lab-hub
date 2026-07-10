@@ -31,6 +31,12 @@ usnhub:
     ttl: 43200000
     # 前端请求头中的名字
     token-name: Authorization
+  iot:
+    mqtt:
+      enabled: true
+      broker-url: tcp://127.0.0.1:1883
+      client-id: usn-lab-hub-backend
+      telemetry-topic: iot/power-monitor/PM-001/telemetry
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

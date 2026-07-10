@@ -49,9 +49,9 @@ TOPIC_STATUS = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/status"
 power_threshold = 100
 
 
-def get_current_timestamp() -> str:
-    """生成带时区的时间戳字符串。"""
-    return datetime.now(timezone.utc).astimezone().isoformat()
+def get_current_report_time() -> str:
+    """生成后端契约使用的上报时间字符串。"""
+    return datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def generate_telemetry(counter: int) -> dict:
@@ -70,7 +70,7 @@ def generate_telemetry(counter: int) -> dict:
     return {
         "projectCode": PROJECT_CODE,
         "deviceCode": DEVICE_CODE,
-        "timestamp": get_current_timestamp(),
+        "reportTime": get_current_report_time(),
         "metrics": {
             "voltage": voltage,
             "current": current,
@@ -88,7 +88,7 @@ def handle_command(payload: dict) -> dict:
     ack = {
         "projectCode": PROJECT_CODE,
         "deviceCode": DEVICE_CODE,
-        "timestamp": get_current_timestamp(),
+        "reportTime": get_current_report_time(),
         "commandId": payload.get("commandId"),
         "action": action,
         "status": "SUCCESS",
@@ -131,7 +131,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
         status = {
             "projectCode": PROJECT_CODE,
             "deviceCode": DEVICE_CODE,
-            "timestamp": get_current_timestamp(),
+            "reportTime": get_current_report_time(),
             "status": "ONLINE",
         }
         client.publish(TOPIC_STATUS, json.dumps(status))
