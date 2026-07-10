@@ -5,6 +5,16 @@ import Login from '@/views/Login.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import MemberManage from '@/views/admin/MemberManage.vue'
 import AttendanceRecord from '@/views/admin/AttendanceRecord.vue'
+import IotOverview from '@/views/iot/Overview.vue'
+import IotDeviceList from '@/views/iot/DeviceList.vue'
+import IotDeviceDetail from '@/views/iot/DeviceDetail.vue'
+import IotAlertCenter from '@/views/iot/AlertCenter.vue'
+import IotCommandConsole from '@/views/iot/CommandConsole.vue'
+import IotProjects from '@/views/iot/Projects.vue'
+import IotProjectDetail from '@/views/iot/ProjectDetail.vue'
+import IotOperationLogs from '@/views/iot/OperationLogs.vue'
+import IotPublic from '@/views/iot/PublicDisplay.vue'
+import Pm001Live from '@/views/iot/Pm001Live.vue'
 import { hasLogin, isAdmin } from '@/store/user'
 
 const routes = [
@@ -36,8 +46,68 @@ const routes = [
         name: 'AttendanceRecord',
         component: AttendanceRecord,
         meta: { title: '考勤检查与导出', role: 'admin' }
+      },
+      {
+        path: 'iot/overview',
+        name: 'IotOverview',
+        component: IotOverview,
+        meta: { title: 'IoT 总览' }
+      },
+      {
+        path: 'iot/devices',
+        name: 'IotDeviceList',
+        component: IotDeviceList,
+        meta: { title: '设备列表' }
+      },
+      {
+        path: 'iot/devices/:id',
+        name: 'IotDeviceDetail',
+        component: IotDeviceDetail,
+        meta: { title: '设备详情' }
+      },
+      {
+        path: 'iot/alerts',
+        name: 'IotAlertCenter',
+        component: IotAlertCenter,
+        meta: { title: '告警中心' }
+      },
+      {
+        path: 'iot/commands',
+        name: 'IotCommandConsole',
+        component: IotCommandConsole,
+        meta: { title: '指令控制台' }
+      },
+      {
+        path: 'iot/projects',
+        name: 'IotProjects',
+        component: IotProjects,
+        meta: { title: '项目列表' }
+      },
+      {
+        path: 'iot/projects/:id',
+        name: 'IotProjectDetail',
+        component: IotProjectDetail,
+        meta: { title: '项目详情' }
+      },
+      {
+        path: 'iot/logs',
+        name: 'IotOperationLogs',
+        component: IotOperationLogs,
+        meta: { title: '操作日志' }
+      },
+      {
+        path: 'iot/pm001',
+        name: 'Pm001Live',
+        component: Pm001Live,
+        meta: { title: 'PM-001 实时数据' }
       }
     ]
+  },
+  {
+    path: '/iot/public',
+    name: 'IotPublic',
+    component: IotPublic,
+    meta: { public: true, title: '公开项目展示' }
   },
   {
     path: '/:pathMatch(.*)*',

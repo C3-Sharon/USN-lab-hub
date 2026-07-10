@@ -20,6 +20,36 @@
             <span>考勤检查</span>
           </el-menu-item>
         </template>
+        <el-sub-menu index="/iot">
+          <template #title>
+            <el-icon><Cpu /></el-icon>
+            <span>IoT 管理</span>
+          </template>
+          <el-menu-item index="/iot/overview">
+            <el-icon><Monitor /></el-icon>
+            <span>IoT 总览</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/projects">
+            <el-icon><FolderOpened /></el-icon>
+            <span>项目列表</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/devices">
+            <el-icon><Cpu /></el-icon>
+            <span>设备列表</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/alerts">
+            <el-icon><Bell /></el-icon>
+            <span>告警中心</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/commands">
+            <el-icon><SetUp /></el-icon>
+            <span>指令控制台</span>
+          </el-menu-item>
+          <el-menu-item index="/iot/logs">
+            <el-icon><Document /></el-icon>
+            <span>操作日志</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 
@@ -46,7 +76,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document } from '@element-plus/icons-vue'
 import { userStore } from '@/store/user'
 
 const route = useRoute()
