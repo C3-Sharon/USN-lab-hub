@@ -153,7 +153,9 @@ async function loadData() {
   error.value = ''
   try {
     const res = await getLatestMetrics(1)
-    const payload = res.data || {}
+    // mock 模式下 res = { code, message, data: {...} }, res.data 有效
+    // 真实接口模式下 axios 拦截器已解包，res 直接是内层数据
+    const payload = res.data || res || {}
     latestData.value = {
       deviceCode: payload.deviceCode || '',
       deviceName: payload.deviceName || '',
