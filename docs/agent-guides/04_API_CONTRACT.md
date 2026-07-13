@@ -255,15 +255,15 @@ Implementation boundary / 实现边界：
 
 - Week 2 implementation is driven by telemetry ingest.
 - `POST /api/iot/telemetry/mock-report` and MQTT topic `iot/power-monitor/PM-001/telemetry` write into the same backend ingest service.
-- Current week 2 storage is in-memory raw payload + parsed metric records for integration testing.
-- Formal MySQL/Flyway persistence should replace in-memory storage in a later backend step.
+- Week 3 production storage uses MySQL/Flyway tables `iot_telemetry_raw` and `iot_metric_data`.
+- Backend automated tests use an isolated in-memory store so tests do not require MySQL.
 - Online status rule: `reportTime` within the latest 15 seconds means `ONLINE`; otherwise `OFFLINE`.
 
 ### 5.2 Metric History / 历史数据
 
 ```text
 GET /api/iot/devices/{id}/metrics/history
-Status: draft
+Status: implemented
 Used by: /iot/devices/:id
 ```
 
@@ -288,6 +288,14 @@ Response data:
   ]
 }
 ```
+
+Week 3 implementation notes:
+
+- `metricKey` only accepts `voltage`, `current`, or `power`.
+- `startTime` and `endTime` use `yyyy-MM-dd HH:mm:ss` and are inclusive.
+- Omitting both time parameters returns all stored points for the selected metric.
+- Points are ordered by `time` ascending.
+- Telemetry is persisted in MySQL tables `iot_telemetry_raw` and `iot_metric_data`.
 
 ### 5.3 Mock Telemetry Report / HTTP 模拟上报
 

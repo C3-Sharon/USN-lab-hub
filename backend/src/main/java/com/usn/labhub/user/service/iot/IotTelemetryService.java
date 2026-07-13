@@ -6,6 +6,7 @@ import com.usn.labhub.user.domain.dto.iot.IotTelemetryReportDTO;
 import com.usn.labhub.user.domain.entity.iot.IotMetricDataRecord;
 import com.usn.labhub.user.domain.entity.iot.IotTelemetryRawRecord;
 import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
+import com.usn.labhub.user.domain.vo.iot.IotMetricHistoryVO;
 import com.usn.labhub.user.domain.vo.iot.IotTelemetryIngestResultVO;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -19,12 +20,10 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class IotTelemetryService {
@@ -46,11 +45,11 @@ public class IotTelemetryService {
     }
 
     private final ObjectMapper objectMapper;
-    private final List<IotTelemetryRawRecord> rawRecords = new CopyOnWriteArrayList<>();
-    private final List<IotMetricDataRecord> metricRecords = new CopyOnWriteArrayList<>();
+    private final IotTelemetryStore telemetryStore;
 
-    public IotTelemetryService(ObjectMapper objectMapper) {
+    public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore) {
         this.objectMapper = objectMapper;
+        this.telemetryStore = telemetryStore;
     }
 
     public IotTelemetryIngestResultVO ingestHttpReport(IotTelemetryReportDTO report) {
@@ -66,7 +65,9 @@ public class IotTelemetryService {
             IotTelemetryReportDTO report = objectMapper.readValue(payload, IotTelemetryReportDTO.class);
             return ingest(report, topic, payload);
         } catch (Exception e) {
-            rawRecords.add(new IotTelemetryRawRecord(null, topic, payload, "FAILED", e.getMessage(), LocalDateTime.now()));
+            telemetryStore.saveRaw(new IotTelemetryRawRecord(
+                    null, topic, payload, "FAILED", abbreviate(e.getMessage(), 500), LocalDateTime.now()
+            ));
             throw new IllegalArgumentException("MQTT telemetry payload parse failed: " + e.getMessage(), e);
         }
     }
@@ -74,40 +75,61 @@ public class IotTelemetryService {
     public IotLatestMetricsVO latest(Long deviceId) {
         ensurePm001Device(deviceId);
 
-        Optional<IotMetricDataRecord> latestMetric = metricRecords.stream()
-                .filter(record -> PM001_DEVICE_CODE.equals(record.getDeviceCode()))
-                .max(Comparator.comparing(IotMetricDataRecord::getReportedAt));
+        Optional<LocalDateTime> latestReportTime = telemetryStore.findLatestReportedAt(PM001_DEVICE_CODE);
 
         IotLatestMetricsVO latest = baseLatest();
-        if (latestMetric.isEmpty()) {
+        if (latestReportTime.isEmpty()) {
             latest.setStatus("OFFLINE");
             latest.setReportTime(null);
             latest.setMetrics(emptyMetrics());
             return latest;
         }
 
-        LocalDateTime reportTime = latestMetric.get().getReportedAt();
+        LocalDateTime reportTime = latestReportTime.get();
         latest.setReportTime(formatTime(reportTime));
         latest.setStatus(isOnline(reportTime) ? "ONLINE" : "OFFLINE");
         latest.setMetrics(metricValuesAt(reportTime));
         return latest;
     }
 
-    public List<IotTelemetryRawRecord> rawRecordsSnapshot() {
-        return List.copyOf(rawRecords);
-    }
+    public IotMetricHistoryVO history(Long deviceId, String metricKey, String startTime, String endTime) {
+        ensurePm001Device(deviceId);
+        MetricMeta metricMeta = METRIC_META.get(metricKey);
+        if (metricMeta == null) {
+            throw new IllegalArgumentException("metricKey must be voltage, current, or power");
+        }
 
-    public List<IotMetricDataRecord> metricRecordsSnapshot() {
-        return List.copyOf(metricRecords);
+        LocalDateTime parsedStart = parseOptionalQueryTime(startTime, "startTime");
+        LocalDateTime parsedEnd = parseOptionalQueryTime(endTime, "endTime");
+        if (parsedStart != null && parsedEnd != null && parsedStart.isAfter(parsedEnd)) {
+            throw new IllegalArgumentException("startTime must not be after endTime");
+        }
+
+        List<IotMetricHistoryVO.MetricPointVO> points = telemetryStore
+                .findHistory(deviceId, metricKey, parsedStart, parsedEnd)
+                .stream()
+                .map(record -> new IotMetricHistoryVO.MetricPointVO(
+                        formatTime(record.getReportedAt()), record.getMetricValue()
+                ))
+                .toList();
+
+        IotMetricHistoryVO history = new IotMetricHistoryVO();
+        history.setDeviceId(deviceId);
+        history.setMetricKey(metricKey);
+        history.setUnit(metricMeta.unit());
+        history.setPoints(points);
+        return history;
     }
 
     private IotTelemetryIngestResultVO ingest(IotTelemetryReportDTO report, String topic, String rawPayload) {
         validatePm001Report(report);
         LocalDateTime receivedAt = LocalDateTime.now();
         LocalDateTime reportedAt = parseReportTime(report);
-        rawRecords.add(new IotTelemetryRawRecord(report.getDeviceCode(), topic, rawPayload, "SUCCESS", null, receivedAt));
+        IotTelemetryRawRecord rawRecord = new IotTelemetryRawRecord(
+                report.getDeviceCode(), topic, rawPayload, "SUCCESS", null, receivedAt
+        );
 
-        int metricCount = 0;
+        List<IotMetricDataRecord> metricRecords = new ArrayList<>();
         for (String metricKey : METRIC_META.keySet()) {
             BigDecimal value = report.getMetrics().get(metricKey);
             if (value == null) {
@@ -123,8 +145,10 @@ public class IotTelemetryService {
                     reportedAt,
                     receivedAt
             ));
-            metricCount++;
         }
+
+        telemetryStore.saveTelemetry(rawRecord, metricRecords);
+        int metricCount = metricRecords.size();
 
         return new IotTelemetryIngestResultVO(PM001_DEVICE_CODE, formatTime(reportedAt), metricCount, metricCount > 0);
     }
@@ -182,17 +206,18 @@ public class IotTelemetryService {
     }
 
     private List<IotLatestMetricsVO.MetricValueVO> metricValuesAt(LocalDateTime reportTime) {
+        Map<String, BigDecimal> storedValues = telemetryStore.findAtReportTime(PM001_DEVICE_CODE, reportTime)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        IotMetricDataRecord::getMetricKey,
+                        IotMetricDataRecord::getMetricValue,
+                        (first, second) -> second
+                ));
         List<IotLatestMetricsVO.MetricValueVO> values = new ArrayList<>();
         for (Map.Entry<String, MetricMeta> entry : METRIC_META.entrySet()) {
             String metricKey = entry.getKey();
             MetricMeta meta = entry.getValue();
-            BigDecimal value = metricRecords.stream()
-                    .filter(record -> PM001_DEVICE_CODE.equals(record.getDeviceCode()))
-                    .filter(record -> metricKey.equals(record.getMetricKey()))
-                    .filter(record -> reportTime.equals(record.getReportedAt()))
-                    .reduce((first, second) -> second)
-                    .map(IotMetricDataRecord::getMetricValue)
-                    .orElse(null);
+            BigDecimal value = storedValues.get(metricKey);
             values.add(new IotLatestMetricsVO.MetricValueVO(metricKey, meta.metricName(), value, meta.unit()));
         }
         return values;
@@ -215,6 +240,24 @@ public class IotTelemetryService {
 
     private String formatTime(LocalDateTime time) {
         return time.format(DISPLAY_TIME_FORMATTER);
+    }
+
+    private LocalDateTime parseOptionalQueryTime(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value, DISPLAY_TIME_FORMATTER);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(fieldName + " must use yyyy-MM-dd HH:mm:ss");
+        }
+    }
+
+    private String abbreviate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private record MetricMeta(String metricName, String unit) {
