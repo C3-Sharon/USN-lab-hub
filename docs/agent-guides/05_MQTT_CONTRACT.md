@@ -16,7 +16,7 @@ MVP recommended broker:
 Telemetry:   iot/{projectCode}/{deviceCode}/telemetry
 Status:      iot/{projectCode}/{deviceCode}/status
 Command:     iot/{projectCode}/{deviceCode}/command
-Command ACK: iot/{projectCode}/{deviceCode}/command_ack
+Command ACK: iot/{projectCode}/{deviceCode}/ack
 ```
 
 Example:
@@ -25,7 +25,7 @@ Example:
 iot/power-monitor/PM-001/telemetry
 iot/power-monitor/PM-001/status
 iot/power-monitor/PM-001/command
-iot/power-monitor/PM-001/command_ack
+iot/power-monitor/PM-001/ack
 ```
 
 Week 1 status / 第一周状态：
@@ -153,7 +153,7 @@ Rules:
 Topic:
 
 ```text
-iot/{projectCode}/{deviceCode}/command_ack
+iot/{projectCode}/{deviceCode}/ack
 ```
 
 Payload:

@@ -253,12 +253,11 @@ Response data:
 
 Implementation boundary / 实现边界：
 
-- Week 1 implementation is backend code mock.
-- It does not read from database.
-- It does not consume MQTT yet.
-- It does not depend on `pm001_simulator.py`.
-- MQTT integration target for the next step is `iot/power-monitor/PM-001/telemetry`.
-- Online status rule after MQTT integration: `reportTime` within the latest 15 seconds means `ONLINE`; otherwise `OFFLINE`.
+- Week 2 implementation is driven by telemetry ingest.
+- `POST /api/iot/telemetry/mock-report` and MQTT topic `iot/power-monitor/PM-001/telemetry` write into the same backend ingest service.
+- Current week 2 storage is in-memory raw payload + parsed metric records for integration testing.
+- Formal MySQL/Flyway persistence should replace in-memory storage in a later backend step.
+- Online status rule: `reportTime` within the latest 15 seconds means `ONLINE`; otherwise `OFFLINE`.
 
 ### 5.2 Metric History / 历史数据
 
@@ -294,7 +293,7 @@ Response data:
 
 ```text
 POST /api/iot/telemetry/mock-report
-Status: draft
+Status: implemented
 Used by: backend/frontend testing fallback
 ```
 
@@ -302,14 +301,26 @@ Request body:
 
 ```json
 {
+  "projectCode": "power-monitor",
   "deviceCode": "PM-001",
-  "timestamp": 1783333800000,
+  "reportTime": "2026-07-10 10:45:00",
   "metrics": {
     "voltage": 220.3,
     "current": 0.42,
     "power": 92.5
   },
   "status": "online"
+}
+```
+
+Response data:
+
+```json
+{
+  "deviceCode": "PM-001",
+  "reportTime": "2026-07-10 10:45:00",
+  "metricCount": 3,
+  "latestUpdated": true
 }
 ```
 
