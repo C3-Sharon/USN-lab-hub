@@ -22,7 +22,7 @@ import logging
 import random
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import paho.mqtt.client as mqtt
 
@@ -49,9 +49,9 @@ TOPIC_STATUS = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/status"
 power_threshold = 100
 
 
-def get_current_report_time() -> str:
-    """生成后端契约使用的上报时间字符串。"""
-    return datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+def get_report_time() -> str:
+    """生成设备上报时间字符串，格式与产品契约一致：yyyy-MM-dd HH:mm:ss。"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def generate_telemetry(counter: int) -> dict:
@@ -70,7 +70,7 @@ def generate_telemetry(counter: int) -> dict:
     return {
         "projectCode": PROJECT_CODE,
         "deviceCode": DEVICE_CODE,
-        "reportTime": get_current_report_time(),
+        "reportTime": get_report_time(),
         "metrics": {
             "voltage": voltage,
             "current": current,
@@ -88,7 +88,7 @@ def handle_command(payload: dict) -> dict:
     ack = {
         "projectCode": PROJECT_CODE,
         "deviceCode": DEVICE_CODE,
-        "reportTime": get_current_report_time(),
+        "reportTime": get_report_time(),
         "commandId": payload.get("commandId"),
         "action": action,
         "status": "SUCCESS",
@@ -131,7 +131,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
         status = {
             "projectCode": PROJECT_CODE,
             "deviceCode": DEVICE_CODE,
-            "reportTime": get_current_report_time(),
+            "reportTime": get_report_time(),
             "status": "ONLINE",
         }
         client.publish(TOPIC_STATUS, json.dumps(status))
