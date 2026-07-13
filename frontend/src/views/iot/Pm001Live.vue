@@ -1,9 +1,10 @@
 <template>
   <div class="pm001-live">
     <h2>PM-001 实时数据监控</h2>
-    <p class="sub-title">本周最小闭环联调 — 只展示最新遥测数据</p>
+    <p class="sub-title">第二周 — MQTT 模拟器驱动的真实数据链路</p>
 
-    <el-card v-loading="loading" class="device-card">
+    <el-card v-loading="loading && !hasLoadedOnce" class="device-card">
+      <!-- 错误状态 -->
       <template v-if="error">
         <el-alert
           title="数据加载失败"
@@ -17,6 +18,23 @@
         </div>
       </template>
 
+      <!-- 等待数据上报 -->
+      <template v-else-if="!loading && !hasData">
+        <el-empty description="等待设备上报数据">
+          <template #image>
+            <el-icon :size="64" class="waiting-icon"><Loading /></el-icon>
+          </template>
+        </el-empty>
+        <div class="waiting-hint">
+          <el-icon><Timer /></el-icon>
+          <span>页面每 {{ POLL_INTERVAL }} 秒自动刷新，等待模拟器发送数据...</span>
+        </div>
+        <div style="text-align: center; margin-top: 12px">
+          <el-button type="primary" :loading="loading" @click="loadData">手动刷新</el-button>
+        </div>
+      </template>
+
+      <!-- 正常数据展示 -->
       <template v-else>
         <!-- 设备信息区 -->
         <div class="device-info">
@@ -37,7 +55,9 @@
             <el-tag :type="isOnline ? 'success' : 'info'" size="large" effect="dark">
               {{ isOnline ? '在线' : '离线' }}
             </el-tag>
-
+            <span v-if="!isOnline && reportTime" class="offline-reason">
+              （超过 15 秒未上报）
+            </span>
           </div>
           <div class="info-row">
             <span class="info-label">上报时间</span>
@@ -69,9 +89,14 @@
 
         <!-- 底部操作栏 -->
         <div class="footer-bar">
-          <span v-if="lastUpdateTime" class="last-update">
-            页面更新于 {{ lastUpdateTime }}
-          </span>
+          <div class="footer-left">
+            <span v-if="lastUpdateTime" class="last-update">
+              页面更新于 {{ lastUpdateTime }}
+            </span>
+            <el-tag v-if="loading" type="warning" size="small" effect="plain" class="polling-tag">
+              刷新中...
+            </el-tag>
+          </div>
           <el-button
             type="primary"
             :icon="Refresh"
@@ -84,7 +109,7 @@
       </template>
     </el-card>
 
-    <!-- 联调提示 -->
+    <!-- 联调说明 -->
     <el-alert
       title="联调说明"
       type="info"
@@ -92,21 +117,25 @@
       class="debug-hint"
     >
       <p>接口：GET /api/iot/devices/1/latest</p>
-      <p>当前模式：{{ USE_MOCK ? 'Mock 数据' : '真实接口' }}</p>
-      <p>自动刷新：每 10 秒</p>
-      <p>在线状态：直接展示后端 status 字段（第一周）</p>
+      <p>数据链路：模拟器 → MQTT → 后端入库 → 接口返回 → 前端展示</p>
+      <p>自动刷新：每 {{ POLL_INTERVAL }} 秒</p>
+      <p>在线判断：上报时间距当前 15 秒内为在线</p>
     </el-alert>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Cpu, Refresh, Lightning, Magnet, OfficeBuilding } from '@element-plus/icons-vue'
+import { Cpu, Refresh, Lightning, Magnet, OfficeBuilding, Timer, Loading } from '@element-plus/icons-vue'
 import { getLatestMetrics } from '@/api/iot'
-import { USE_MOCK } from '@/api/iot'
+
+// 第二周配置
+const POLL_INTERVAL = 5 // 轮询间隔（秒）
+const ONLINE_THRESHOLD = 15 // 在线判断阈值（秒）
 
 const loading = ref(false)
 const error = ref('')
+const hasLoadedOnce = ref(false)
 const latestData = ref({
   deviceCode: '',
   deviceName: '',
@@ -118,6 +147,11 @@ const latestData = ref({
 const lastUpdateTime = ref('')
 let pollTimer = null
 
+// 是否有数据
+const hasData = computed(() => {
+  return !!(latestData.value.deviceCode || latestData.value.metrics?.length)
+})
+
 // 指标图标映射
 const iconMap = {
   voltage: OfficeBuilding,
@@ -125,15 +159,18 @@ const iconMap = {
   power: Lightning
 }
 
-// 上报时间（兼容 reportTime / reportedAt 两种字段名）
+// 上报时间
 const reportTime = computed(() => {
   return latestData.value.reportTime || latestData.value.reportedAt || ''
 })
 
-// 第一周：直接展示后端返回的 status 字段（ONLINE/OFFLINE）
-// 第二阶段 MQTT 接入后，再改为按上报时间 15 秒动态判断
+// 在线状态：上报时间距当前 15 秒内为在线
 const isOnline = computed(() => {
-  return latestData.value.status === 'ONLINE'
+  const timeStr = reportTime.value
+  if (!timeStr) return false
+  const reportTs = new Date(timeStr.replace(' ', 'T')).getTime()
+  if (isNaN(reportTs)) return latestData.value.status === 'ONLINE'
+  return Date.now() - reportTs <= ONLINE_THRESHOLD * 1000
 })
 
 const metricsList = computed(() => {
@@ -153,18 +190,17 @@ async function loadData() {
   error.value = ''
   try {
     const res = await getLatestMetrics(1)
-    // mock 模式下 res = { code, message, data: {...} }, res.data 有效
-    // 真实接口模式下 axios 拦截器已解包，res 直接是内层数据
     const payload = res.data || res || {}
     latestData.value = {
       deviceCode: payload.deviceCode || '',
       deviceName: payload.deviceName || '',
       projectName: payload.projectName || '',
-      status: payload.status || 'UNKNOWN',
+      status: payload.status || '',
       reportTime: payload.reportTime || payload.reportedAt || '',
       metrics: payload.metrics || []
     }
     lastUpdateTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
+    hasLoadedOnce.value = true
   } catch (err) {
     console.error('加载最新数据失败', err)
     error.value = err.message || '接口请求失败，请检查后端服务是否启动'
@@ -177,7 +213,7 @@ function startPoll() {
   stopPoll()
   pollTimer = setInterval(() => {
     loadData()
-  }, 10000)
+  }, POLL_INTERVAL * 1000)
 }
 
 function stopPoll() {
@@ -211,6 +247,27 @@ onUnmounted(() => {
 
 .device-card {
   margin-bottom: 20px;
+}
+
+/* 等待状态 */
+.waiting-icon {
+  color: #c0c4cc;
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.waiting-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #909399;
+  font-size: 14px;
+  margin-top: 8px;
 }
 
 /* 设备信息区 */
@@ -330,9 +387,24 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .last-update {
   color: #7c8798;
   font-size: 13px;
+}
+
+.polling-tag {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .debug-hint {
