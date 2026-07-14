@@ -1,25 +1,26 @@
 <template>
   <div class="pm001-live">
     <h2>PM-001 实时数据监控</h2>
-    <p class="sub-title">第二周 — MQTT 模拟器驱动的真实数据链路</p>
+    <p class="sub-title">第三周 — latest 实时数据 + power 历史曲线</p>
 
-    <el-card v-loading="loading && !hasLoadedOnce" class="device-card">
+    <!-- ========== 最新数据卡片 ========== -->
+    <el-card v-loading="latestLoading && !latestLoaded" class="device-card">
       <!-- 错误状态 -->
-      <template v-if="error">
+      <template v-if="latestError">
         <el-alert
-          title="数据加载失败"
-          :description="error"
+          title="最新数据加载失败"
+          :description="latestError"
           type="error"
           :closable="false"
           show-icon
         />
         <div style="text-align: center; margin-top: 16px">
-          <el-button type="primary" @click="loadData">重试</el-button>
+          <el-button type="primary" @click="loadLatest">重试</el-button>
         </div>
       </template>
 
       <!-- 等待数据上报 -->
-      <template v-else-if="!loading && !hasData">
+      <template v-else-if="!latestLoading && !hasLatestData">
         <el-empty description="等待设备上报数据">
           <template #image>
             <el-icon :size="64" class="waiting-icon"><Loading /></el-icon>
@@ -27,16 +28,15 @@
         </el-empty>
         <div class="waiting-hint">
           <el-icon><Timer /></el-icon>
-          <span>页面每 {{ POLL_INTERVAL }} 秒自动刷新，等待模拟器发送数据...</span>
+          <span>页面每 {{ LATEST_INTERVAL }} 秒自动刷新，等待模拟器发送数据...</span>
         </div>
         <div style="text-align: center; margin-top: 12px">
-          <el-button type="primary" :loading="loading" @click="loadData">手动刷新</el-button>
+          <el-button type="primary" :loading="latestLoading" @click="loadLatest">手动刷新</el-button>
         </div>
       </template>
 
       <!-- 正常数据展示 -->
       <template v-else>
-        <!-- 设备信息区 -->
         <div class="device-info">
           <div class="info-row">
             <span class="info-label">项目名称</span>
@@ -55,9 +55,7 @@
             <el-tag :type="isOnline ? 'success' : 'info'" size="large" effect="dark">
               {{ isOnline ? '在线' : '离线' }}
             </el-tag>
-            <span v-if="!isOnline && reportTime" class="offline-reason">
-              （超过 15 秒未上报）
-            </span>
+            <span v-if="!isOnline && reportTime" class="offline-reason">（超过 15 秒未上报）</span>
           </div>
           <div class="info-row">
             <span class="info-label">上报时间</span>
@@ -67,7 +65,6 @@
 
         <el-divider />
 
-        <!-- 指标卡片 -->
         <el-row :gutter="20" class="metrics-row">
           <el-col :span="8" v-for="m in metricsList" :key="m.metricKey">
             <div class="metric-box" :class="m.metricKey">
@@ -87,55 +84,87 @@
 
         <el-divider />
 
-        <!-- 底部操作栏 -->
         <div class="footer-bar">
           <div class="footer-left">
-            <span v-if="lastUpdateTime" class="last-update">
-              页面更新于 {{ lastUpdateTime }}
-            </span>
-            <el-tag v-if="loading" type="warning" size="small" effect="plain" class="polling-tag">
+            <span v-if="lastUpdateTime" class="last-update">页面更新于 {{ lastUpdateTime }}</span>
+            <el-tag v-if="latestLoading" type="warning" size="small" effect="plain" class="polling-tag">
               刷新中...
             </el-tag>
           </div>
-          <el-button
-            type="primary"
-            :icon="Refresh"
-            :loading="loading"
-            @click="loadData"
-          >
+          <el-button type="primary" :icon="Refresh" :loading="latestLoading" @click="loadLatest">
             刷新数据
           </el-button>
         </div>
       </template>
     </el-card>
 
-    <!-- 联调说明 -->
-    <el-alert
-      title="联调说明"
-      type="info"
-      :closable="false"
-      class="debug-hint"
-    >
-      <p>接口：GET /api/iot/devices/1/latest</p>
-      <p>数据链路：模拟器 → MQTT → 后端入库 → 接口返回 → 前端展示</p>
-      <p>自动刷新：每 {{ POLL_INTERVAL }} 秒</p>
+    <!-- ========== 功率历史曲线 ========== -->
+    <el-card v-loading="historyLoading" class="section-card">
+      <template #header>
+        <div class="section-header">
+          <el-icon size="18"><TrendCharts /></el-icon>
+          <span>功率历史曲线</span>
+          <el-tag size="small" type="info">近1小时</el-tag>
+        </div>
+      </template>
+
+      <!-- 历史数据错误 -->
+      <template v-if="historyError && !chartData.length">
+        <el-alert
+          title="历史数据加载失败"
+          :description="historyError"
+          type="error"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        <div style="text-align: center">
+          <el-button type="primary" @click="loadHistory">重试</el-button>
+        </div>
+      </template>
+
+      <!-- 历史数据空状态 -->
+      <template v-else-if="!historyLoading && !chartData.length">
+        <el-empty description="暂无历史数据">
+          <template #image>
+            <el-icon :size="64" class="waiting-icon"><Loading /></el-icon>
+          </template>
+        </el-empty>
+        <div class="waiting-hint">
+          <el-icon><Timer /></el-icon>
+          <span>历史数据每 {{ HISTORY_INTERVAL }} 秒自动刷新...</span>
+        </div>
+      </template>
+
+      <!-- 历史数据图表 -->
+      <div v-show="chartData.length" ref="chartRef" class="chart-container"></div>
+    </el-card>
+
+    <!-- ========== 联调说明 ========== -->
+    <el-alert title="联调说明" type="info" :closable="false" class="debug-hint">
+      <p>latest 接口：GET /api/iot/devices/1/latest | history 接口：GET /api/iot/devices/1/metrics/history?metricKey=power</p>
+      <p>latest 自动刷新：每 {{ LATEST_INTERVAL }} 秒 | history 自动刷新：每 {{ HISTORY_INTERVAL }} 秒</p>
       <p>在线判断：上报时间距当前 15 秒内为在线</p>
     </el-alert>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Cpu, Refresh, Lightning, Magnet, OfficeBuilding, Timer, Loading } from '@element-plus/icons-vue'
-import { getLatestMetrics } from '@/api/iot'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { Cpu, Refresh, Lightning, Magnet, OfficeBuilding, Timer, Loading, TrendCharts } from '@element-plus/icons-vue'
+import { getLatestMetrics, getMetricHistory } from '@/api/iot'
+import * as echarts from 'echarts'
 
-// 第二周配置
-const POLL_INTERVAL = 5 // 轮询间隔（秒）
-const ONLINE_THRESHOLD = 15 // 在线判断阈值（秒）
+// ========== 配置 ==========
+const LATEST_INTERVAL = 5
+const HISTORY_INTERVAL = 30
+const ONLINE_THRESHOLD = 15
+const DEVICE_ID = 1
 
-const loading = ref(false)
-const error = ref('')
-const hasLoadedOnce = ref(false)
+// ========== 最新数据 ==========
+const latestLoading = ref(false)
+const latestError = ref('')
+const latestLoaded = ref(false)
 const latestData = ref({
   deviceCode: '',
   deviceName: '',
@@ -145,26 +174,22 @@ const latestData = ref({
   metrics: []
 })
 const lastUpdateTime = ref('')
-let pollTimer = null
+let latestPollTimer = null
 
-// 是否有数据
-const hasData = computed(() => {
+const hasLatestData = computed(() => {
   return !!(latestData.value.deviceCode || latestData.value.metrics?.length)
 })
 
-// 指标图标映射
 const iconMap = {
   voltage: OfficeBuilding,
   current: Magnet,
   power: Lightning
 }
 
-// 上报时间
 const reportTime = computed(() => {
   return latestData.value.reportTime || latestData.value.reportedAt || ''
 })
 
-// 在线状态：上报时间距当前 15 秒内为在线
 const isOnline = computed(() => {
   const timeStr = reportTime.value
   if (!timeStr) return false
@@ -185,11 +210,11 @@ function formatValue(val) {
   return val !== undefined && val !== null ? val.toFixed(2) : '--'
 }
 
-async function loadData() {
-  loading.value = true
-  error.value = ''
+async function loadLatest() {
+  latestLoading.value = true
+  latestError.value = ''
   try {
-    const res = await getLatestMetrics(1)
+    const res = await getLatestMetrics(DEVICE_ID)
     const payload = res.data || res || {}
     latestData.value = {
       deviceCode: payload.deviceCode || '',
@@ -200,36 +225,138 @@ async function loadData() {
       metrics: payload.metrics || []
     }
     lastUpdateTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
-    hasLoadedOnce.value = true
+    latestLoaded.value = true
   } catch (err) {
     console.error('加载最新数据失败', err)
-    error.value = err.message || '接口请求失败，请检查后端服务是否启动'
+    latestError.value = err.message || '接口请求失败，请检查后端服务是否启动'
   } finally {
-    loading.value = false
+    latestLoading.value = false
   }
 }
 
-function startPoll() {
-  stopPoll()
-  pollTimer = setInterval(() => {
-    loadData()
-  }, POLL_INTERVAL * 1000)
-}
+// ========== 历史曲线 ==========
+const chartRef = ref(null)
+let chartInstance = null
+const chartData = ref([])
+const historyLoading = ref(false)
+const historyError = ref('')
+let historyPollTimer = null
 
-function stopPoll() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+async function loadHistory() {
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    const res = await getMetricHistory(DEVICE_ID, { metricKey: 'power' })
+    // axios 拦截器已解包，res 直接是内层数据
+    const payload = res || {}
+    chartData.value = payload.points || []
+    if (chartData.value.length) {
+      nextTick(() => renderChart())
+    }
+  } catch (err) {
+    console.error('加载历史数据失败', err)
+    historyError.value = err.message || '历史数据接口请求失败'
+  } finally {
+    historyLoading.value = false
   }
 }
 
+function renderChart() {
+  if (!chartRef.value) return
+  if (!chartInstance) {
+    chartInstance = echarts.init(chartRef.value)
+  }
+  const points = chartData.value
+  chartInstance.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: points.map(p => p.time?.slice(11, 16) || ''),
+      axisLabel: { color: '#7c8798' }
+    },
+    yAxis: {
+      type: 'value',
+      name: '功率 (W)',
+      axisLabel: { color: '#7c8798' },
+      splitLine: { lineStyle: { color: '#f0f0f0' } }
+    },
+    series: [{
+      name: '功率',
+      type: 'line',
+      smooth: true,
+      data: points.map(p => p.value),
+      lineStyle: { color: '#409eff', width: 3 },
+      symbolSize: 8,
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(64,158,255,0.3)' },
+          { offset: 1, color: 'rgba(64,158,255,0.05)' }
+        ])
+      },
+      markLine: {
+        silent: true,
+        data: [{
+          yAxis: 100,
+          label: { formatter: '阈值 100W' },
+          lineStyle: { color: '#f56c6c', type: 'dashed' }
+        }]
+      }
+    }]
+  }, true)
+}
+
+// ========== resize 处理 ==========
+function onChartResize() {
+  chartInstance?.resize()
+}
+
+// ========== 轮询 ==========
+function startLatestPoll() {
+  stopLatestPoll()
+  latestPollTimer = setInterval(() => {
+    loadLatest()
+  }, LATEST_INTERVAL * 1000)
+}
+
+function stopLatestPoll() {
+  if (latestPollTimer) {
+    clearInterval(latestPollTimer)
+    latestPollTimer = null
+  }
+}
+
+function startHistoryPoll() {
+  stopHistoryPoll()
+  historyPollTimer = setInterval(() => {
+    loadHistory()
+  }, HISTORY_INTERVAL * 1000)
+}
+
+function stopHistoryPoll() {
+  if (historyPollTimer) {
+    clearInterval(historyPollTimer)
+    historyPollTimer = null
+  }
+}
+
+// ========== 生命周期 ==========
 onMounted(() => {
-  loadData()
-  startPoll()
+  loadLatest()
+  loadHistory()
+  startLatestPoll()
+  startHistoryPoll()
+  window.addEventListener('resize', onChartResize)
 })
 
 onUnmounted(() => {
-  stopPoll()
+  stopLatestPoll()
+  stopHistoryPoll()
+  window.removeEventListener('resize', onChartResize)
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 </script>
 
@@ -249,7 +376,19 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-/* 等待状态 */
+.section-card {
+  margin-bottom: 20px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #172033;
+}
+
 .waiting-icon {
   color: #c0c4cc;
   animation: rotate 2s linear infinite;
@@ -270,7 +409,6 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
-/* 设备信息区 */
 .device-info {
   display: flex;
   flex-direction: column;
@@ -312,7 +450,6 @@ onUnmounted(() => {
   margin-left: 8px;
 }
 
-/* 指标卡片 */
 .metrics-row {
   margin: 8px 0;
 }
@@ -378,7 +515,6 @@ onUnmounted(() => {
   margin-left: 4px;
 }
 
-/* 底部 */
 .footer-bar {
   display: flex;
   align-items: center;
@@ -407,6 +543,11 @@ onUnmounted(() => {
   50% { opacity: 0.5; }
 }
 
+.chart-container {
+  width: 100%;
+  height: 300px;
+}
+
 .debug-hint {
   margin-top: 16px;
 }
@@ -428,6 +569,10 @@ onUnmounted(() => {
 
   .info-label {
     width: 70px;
+  }
+
+  .chart-container {
+    height: 240px;
   }
 }
 </style>
