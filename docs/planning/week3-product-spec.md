@@ -26,7 +26,7 @@
 1. 后端把每次 MQTT telemetry 的原始 payload 保存到 `iot_telemetry_raw` 表。
 2. 后端把解析后的 `voltage / current / power` 保存到 `iot_metric_data` 表。
 3. `GET /api/iot/devices/1/latest` 从数据库读取最近一次上报，不再使用内存快照。
-4. 前端新增历史曲线页面/卡片，能展示最近 1 小时的 voltage / current / power 变化趋势。
+4. 前端新增历史曲线页面/卡片，默认展示最近 1 小时的 **power** 变化趋势。
 5. 提供 `GET /api/iot/devices/{deviceId}/metrics/history` 接口，支持按指标键和时间范围查询。
 6. 演示脚本包含：启动 Broker -> 启动后端 -> 启动模拟器 -> 前端查看实时卡片和历史曲线。
 
@@ -66,41 +66,51 @@ iot/power-monitor/PM-001/telemetry
 
 ## 4. 数据持久化范围
 
-第三周要求后端从内存切到 MySQL 持久化，使用 Flyway 管理表结构。
+第三周要求后端从内存切到 MySQL 持久化，使用 Flyway 管理表结构。迁移脚本按 `docs/backend/iot-schema-draft.md` 拆分为 `V2__create_iot_project_device_tables.sql` 和 `V3__create_iot_telemetry_tables.sql`。
 
 ### 4.1 必须建的两张表
 
+与 `docs/backend/iot-schema-draft.md` 保持一致：
+
 | 表名 | 作用 | 核心字段 |
 |---|---|---|
-| `iot_telemetry_raw` | 保存每次上报的原始 payload | `id`, `project_code`, `device_code`, `topic`, `payload_json`, `report_time`, `received_time`, `created_at` |
-| `iot_metric_data` | 保存解析后的指标 | `id`, `project_code`, `device_code`, `metric_key`, `metric_value`, `report_time`, `created_at` |
+| `iot_telemetry_raw` | 保存每次上报的原始 payload | `id`, `device_code`, `topic`, `payload`, `parse_status`, `error_message`, `received_at` |
+| `iot_metric_data` | 保存解析后的指标 | `id`, `device_id`, `metric_key`, `metric_value`, `unit`, `reported_at`, `received_at` |
+
+说明：
+
+- `iot_telemetry_raw` 用于排错和追溯，保留原始 JSON 与解析状态。
+- `iot_metric_data` 用于 latest 和 history 接口查询，按指标行存储。
+- `device_id` 通过 `PM-001` 等 device_code 映射获得，第三周不做完整设备管理。
 
 ### 4.2 不做的表
 
 第三周不建：
 
 - 告警表 / 告警规则表
+- 建议表
 - 指令表 / 指令历史表
-- 设备表 / 项目表（继续用硬编码或内存映射）
+- 操作日志表
 - 用户/权限相关表
 
 ## 5. API 契约冻结
 
 ### 5.1 latest 接口
 
-沿用第二周契约，但数据源改为数据库：
+沿用第二周契约，但数据源改为数据库。字段与 `docs/agent-guides/04_API_CONTRACT.md` 第 5.1 节保持一致：
 
 ```text
-GET /api/iot/devices/1/latest
+GET /api/iot/devices/{id}/latest
 ```
 
-返回字段不变：
+返回：
 
 ```json
 {
   "code": 200,
-  "message": "success",
+  "msg": "操作成功",
   "data": {
+    "deviceId": 1,
     "deviceCode": "PM-001",
     "deviceName": "实验室功耗监测仪 #1",
     "projectName": "实验室功耗监测",
@@ -117,29 +127,42 @@ GET /api/iot/devices/1/latest
 
 ### 5.2 history 接口（新增）
 
+与 `docs/agent-guides/04_API_CONTRACT.md` 第 5.2 节保持一致：
+
 ```text
-GET /api/iot/devices/{deviceId}/metrics/history?metricKey=voltage&startTime=2026-07-10T13:00:00&endTime=2026-07-10T15:00:00
+GET /api/iot/devices/{id}/metrics/history?metricKey=power&startTime=2026-07-13 11:00:00&endTime=2026-07-13 12:00:00
 ```
 
 参数：
 
 | 参数 | 必填 | 说明 |
 |---|---|---|
-| metricKey | 是 | 指标键：`voltage`、`current`、`power` |
-| startTime | 否 | 开始时间，ISO-8601 格式；默认 1 小时前 |
-| endTime | 否 | 结束时间，ISO-8601 格式；默认当前时间 |
+| metricKey | 是 | 指标键，只允许 `voltage`、`current`、`power` |
+| startTime | 否 | 开始时间，格式 `yyyy-MM-dd HH:mm:ss` |
+| endTime | 否 | 结束时间，格式 `yyyy-MM-dd HH:mm:ss` |
+
+参数规则：
+
+- `startTime` 不得晚于 `endTime`。
+- 时间范围包含 `startTime` 和 `endTime`。
+- 不传时间范围时，返回当前已保存的全部对应指标数据。
+- `points` 按 `time` 升序返回。
 
 返回：
 
 ```json
 {
   "code": 200,
-  "message": "success",
-  "data": [
-    { "reportTime": "2026-07-10 14:25:00", "metricValue": 220.1 },
-    { "reportTime": "2026-07-10 14:26:00", "metricValue": 220.3 },
-    { "reportTime": "2026-07-10 14:27:00", "metricValue": 220.2 }
-  ]
+  "msg": "操作成功",
+  "data": {
+    "deviceId": 1,
+    "metricKey": "power",
+    "unit": "W",
+    "points": [
+      { "time": "2026-07-13 11:17:44", "value": 88.1 },
+      { "time": "2026-07-13 11:22:44", "value": 96.4 }
+    ]
+  }
 }
 ```
 
@@ -148,7 +171,8 @@ GET /api/iot/devices/{deviceId}/metrics/history?metricKey=voltage&startTime=2026
 第三周前端在 PM-001 页面新增历史曲线区域，要求：
 
 - 使用 ECharts 折线图展示。
-- 同时支持展示 voltage / current / power 三条曲线，使用 Y 轴双轴或独立单位提示。
+- 默认展示 **power** 一条历史曲线，单位 `W`。
+- 支持手动切换指标为 `voltage` 或 `current`，每次只展示一条曲线。
 - 默认时间范围：最近 1 小时。
 - 刷新机制：每 30 秒自动刷新历史数据。
 - 无数据时显示空状态提示。
@@ -216,7 +240,7 @@ python scripts/pm001_simulator.py
 
 1. 实时卡片显示最新 voltage / current / power。
 2. 状态为 `在线`。
-3. 历史曲线区域展示最近 1 小时三条曲线。
+3. 历史曲线区域默认展示最近 1 小时 **power** 曲线，可切换为 voltage/current。
 4. 停止模拟器 15 秒后，实时卡片状态变为 `离线`。
 5. 重新启动模拟器，状态恢复在线，曲线继续更新。
 
@@ -225,12 +249,16 @@ python scripts/pm001_simulator.py
 第三周明确不做：
 
 - 告警规则与告警通知
+- 智能建议
 - 指令下发与 ACK
+- 操作日志
 - 多设备接入与设备管理
 - 用户权限与访客页
 - 数据导出与复杂报表
+- WebSocket / SSE 实时推送
+- Redis latest 缓存
 
-这些功能属于第四周及以后计划，若提前实现需经产品确认。
+这些功能属于**第四周**及以后计划。若第三周提前实现，需经产品确认并确保不影响本周主线验收。
 
 ## 11. 依赖与风险
 
@@ -242,6 +270,6 @@ python scripts/pm001_simulator.py
 
 ## 12. 需要配合
 
-- 后端：实现 Flyway 脚本、`iot_telemetry_raw` / `iot_metric_data` 存储、`latest` 和 `history` 接口。
-- 前端：新增历史曲线组件，调用 history 接口，保留实时卡片。
+- 后端：按 `docs/backend/iot-schema-draft.md` 实现 Flyway V2/V3 迁移、`iot_telemetry_raw` / `iot_metric_data` 存储、`latest` 和 `history` 接口；`history` 响应使用 `msg`、对象结构和 `time/value` 字段。
+- 前端：新增历史曲线组件，默认调用 `metricKey=power`，保留实时卡片；按 `04_API_CONTRACT.md` 使用 `msg` 和新的 history 响应结构。
 - 硬件/模拟器：继续按现有 Topic 和 payload 上报，无需改动。
