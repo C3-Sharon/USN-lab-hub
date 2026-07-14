@@ -66,7 +66,7 @@ iot/power-monitor/PM-001/telemetry
 
 ## 4. 数据持久化范围
 
-第三周要求后端从内存切到 MySQL 持久化，使用 Flyway 管理表结构。迁移脚本按 `docs/backend/iot-schema-draft.md` 拆分为 `V2__create_iot_project_device_tables.sql` 和 `V3__create_iot_telemetry_tables.sql`。
+第三周要求后端从内存切到 MySQL 持久化，使用 Flyway 管理表结构。本周实际迁移使用单个脚本 `V2__create_iot_telemetry_tables.sql`，一次创建 `iot_telemetry_raw` 与 `iot_metric_data` 两张表；项目/设备正式建表留到后续迁移。
 
 ### 4.1 必须建的两张表
 
@@ -75,7 +75,7 @@ iot/power-monitor/PM-001/telemetry
 | 表名 | 作用 | 核心字段 |
 |---|---|---|
 | `iot_telemetry_raw` | 保存每次上报的原始 payload | `id`, `device_code`, `topic`, `payload`, `parse_status`, `error_message`, `received_at` |
-| `iot_metric_data` | 保存解析后的指标 | `id`, `device_id`, `metric_key`, `metric_value`, `unit`, `reported_at`, `received_at` |
+| `iot_metric_data` | 保存解析后的指标 | `id`, `device_id`, `device_code`, `metric_key`, `metric_value`, `unit`, `reported_at`, `received_at` |
 
 说明：
 
@@ -270,6 +270,6 @@ python scripts/pm001_simulator.py
 
 ## 12. 需要配合
 
-- 后端：按 `docs/backend/iot-schema-draft.md` 实现 Flyway V2/V3 迁移、`iot_telemetry_raw` / `iot_metric_data` 存储、`latest` 和 `history` 接口；`history` 响应使用 `msg`、对象结构和 `time/value` 字段。
+- 后端：使用 Flyway `V2__create_iot_telemetry_tables.sql` 实现 `iot_telemetry_raw` / `iot_metric_data` 存储、`latest` 和 `history` 接口；`history` 响应使用 `msg`、对象结构和 `time/value` 字段。
 - 前端：新增历史曲线组件，默认调用 `metricKey=power`，保留实时卡片；按 `04_API_CONTRACT.md` 使用 `msg` 和新的 history 响应结构。
 - 硬件/模拟器：继续按现有 Topic 和 payload 上报，无需改动。
