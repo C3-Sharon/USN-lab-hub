@@ -75,6 +75,7 @@
 |---|---|---|
 | id | bigint | 主键 |
 | device_id | bigint | 设备 ID |
+| device_code | varchar(64) | 稳定设备编号，供接入和 latest 查询使用 |
 | metric_key | varchar(64) | 指标键 |
 | metric_value | decimal(18,4) | 指标值 |
 | unit | varchar(32) | 单位 |
