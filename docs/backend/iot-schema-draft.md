@@ -122,13 +122,14 @@
 | Field | Type | Note |
 |---|---|---|
 | id | bigint | 主键 |
-| command_id | varchar(64) | 指令编号，唯一 |
+| command_id | varchar(64) | 指令编号，全局唯一 |
 | device_id | bigint | 设备 ID |
-| command | varchar(100) | SET_SAMPLE_INTERVAL |
-| params_json | text | 指令参数 |
+| command | varchar(100) | 本周固定为 `SET_SAMPLE_INTERVAL` |
+| params_json | text | 指令参数，本周固定为 `{ "intervalSeconds": 5 }` |
 | status | varchar(32) | PENDING / SENT / ACKED / FAILED / TIMEOUT |
 | message | varchar(500) | ACK 或失败说明 |
 | created_by | bigint | 创建人 |
+| create_time | datetime | 创建时间 |
 | sent_at | datetime | 发送时间 |
 | acked_at | datetime | 回执时间 |
 
@@ -139,11 +140,11 @@
 | Field | Type | Note |
 |---|---|---|
 | id | bigint | 主键 |
-| operator_id | bigint | 操作人 |
+| operator_id | bigint | 操作人；系统触发可记录为 0 |
 | operator_name | varchar(100) | 操作人名称 |
-| action | varchar(64) | CREATE_DEVICE / SEND_COMMAND 等 |
-| target_type | varchar(64) | PROJECT / DEVICE / ALERT / COMMAND |
-| target_id | bigint | 目标 ID |
+| action | varchar(64) | HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK |
+| target_type | varchar(64) | ALERT / RECOMMENDATION / COMMAND |
+| target_id | varchar(64) | 目标 ID；告警/建议用数值 ID，指令用 `commandId` |
 | summary | varchar(500) | 摘要 |
 | created_at | datetime | 创建时间 |
 
