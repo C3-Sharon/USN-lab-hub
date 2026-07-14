@@ -22,11 +22,14 @@ public class IotMqttTelemetrySubscriber {
 
     private final IotMqttProperties properties;
     private final IotTelemetryService telemetryService;
+    private final IotOperationsService operationsService;
     private MqttClient client;
 
-    public IotMqttTelemetrySubscriber(IotMqttProperties properties, IotTelemetryService telemetryService) {
+    public IotMqttTelemetrySubscriber(IotMqttProperties properties, IotTelemetryService telemetryService,
+                                      IotOperationsService operationsService) {
         this.properties = properties;
         this.telemetryService = telemetryService;
+        this.operationsService = operationsService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -54,10 +57,15 @@ public class IotMqttTelemetrySubscriber {
                 public void messageArrived(String topic, MqttMessage message) {
                     String payload = new String(message.getPayload(), StandardCharsets.UTF_8);
                     try {
-                        telemetryService.ingestMqttPayload(topic, payload);
-                        log.info("PM-001 telemetry ingested from MQTT topic {}", topic);
+                        if (properties.getAckTopic().equals(topic)) {
+                            boolean updated = operationsService.ingestAck(payload);
+                            log.info("PM-001 command ACK received, stateUpdated={}", updated);
+                        } else {
+                            telemetryService.ingestMqttPayload(topic, payload);
+                            log.info("PM-001 telemetry ingested from MQTT topic {}", topic);
+                        }
                     } catch (IllegalArgumentException e) {
-                        log.warn("PM-001 telemetry ignored: {}", e.getMessage());
+                        log.warn("PM-001 MQTT message ignored: {}", e.getMessage());
                     }
                 }
 
@@ -68,8 +76,9 @@ public class IotMqttTelemetrySubscriber {
             });
 
             client.connect(options);
-            client.subscribe(properties.getTelemetryTopic());
-            log.info("IoT MQTT subscriber connected to {} and subscribed {}", properties.getBrokerUrl(), properties.getTelemetryTopic());
+            client.subscribe(new String[]{properties.getTelemetryTopic(), properties.getAckTopic()});
+            log.info("IoT MQTT subscriber connected to {} and subscribed {}, {}",
+                    properties.getBrokerUrl(), properties.getTelemetryTopic(), properties.getAckTopic());
         } catch (MqttException e) {
             log.warn("IoT MQTT subscriber not connected. Start local broker before backend for MQTT integration. reason={}", e.getMessage());
         }

@@ -32,4 +32,28 @@ class IotTelemetryMigrationTest {
                 Integer.class
         ));
     }
+
+    @Test
+    void v4MigrationCreatesOperationsTables() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:operations-migration-test;MODE=MySQL;DB_CLOSE_DELAY=-1",
+                "sa",
+                ""
+        );
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V4__create_iot_alert_command_log_tables.sql")
+        );
+        populator.execute(dataSource);
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        for (String table : new String[]{
+                "IOT_ALERT_RECORD", "IOT_RECOMMENDATION", "IOT_COMMAND_RECORD", "IOT_OPERATION_LOG"
+        }) {
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
+                    Integer.class,
+                    table
+            ));
+        }
+    }
 }
