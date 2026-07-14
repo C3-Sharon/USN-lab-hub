@@ -334,79 +334,220 @@ Response data:
 
 ## 6. Alert APIs / 告警接口
 
+Alert status / 告警状态：
+
+```text
+OPEN / HANDLED / IGNORED
+```
+
 ### 6.1 List Alerts / 告警列表
 
 ```text
-GET /api/iot/alerts
-Status: draft
-Used by: /iot/alerts, /iot/devices/:id
+GET /api/iot/devices/{deviceId}/alerts
+Status: changed
+Used by: /iot/devices/:id
 ```
 
-Response data record:
+Query params:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| status | string | no | OPEN / HANDLED / IGNORED；不传返回全部 |
+| metricKey | string | no | 指标键，例如 `power` |
+| page | number | no | 页码，默认 1 |
+| size | number | no | 每页条数，默认 20 |
+
+Response:
 
 ```json
 {
-  "id": 1,
-  "deviceId": 1,
-  "deviceCode": "PM-001",
-  "deviceName": "功耗检测设备 001",
-  "metricKey": "power",
-  "level": "WARNING",
-  "message": "功率超过阈值",
-  "triggerValue": 120.0,
-  "thresholdValue": 100.0,
-  "status": "OPEN",
-  "createdAt": "2026-07-06 20:06:00"
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": 1,
+        "deviceId": 1,
+        "deviceCode": "PM-001",
+        "metricKey": "power",
+        "level": "WARNING",
+        "message": "功率超过 100W，当前值为 110.5W",
+        "triggerValue": 110.5,
+        "thresholdValue": 100.0,
+        "status": "OPEN",
+        "createdAt": "2026-07-14 12:30:00",
+        "handledBy": null,
+        "handledAt": null
+      }
+    ]
+  }
 }
 ```
+
+Empty state / 空状态：`list` 为空数组。
+
+Error state / 异常状态：
+
+- 设备不存在：`code=404`，`msg=设备不存在`
+- 非法 `status`：`code=400`，`msg=非法的告警状态`
 
 ### 6.2 Handle Alert / 处理告警
 
 ```text
-POST /api/iot/alerts/{id}/handle
-Status: draft
+POST /api/iot/alerts/{alertId}/handle
+Status: changed
 ```
 
 Request body:
 
 ```json
 {
-  "status": "HANDLED",
-  "note": "已检查供电并下发采样周期调整指令"
+  "status": "HANDLED"
 }
 ```
 
-## 7. Recommendation APIs / 建议接口
+`status` 只允许 `HANDLED` 或 `IGNORED`。
 
-```text
-GET /api/iot/recommendations
-POST /api/iot/recommendations/{id}/confirm
-Status: draft
-```
-
-Recommendation record:
+Response:
 
 ```json
 {
-  "id": 1,
-  "source": "RULE",
-  "deviceId": 1,
-  "alertId": 1,
-  "title": "建议检查设备功耗",
-  "content": "当前功率超过阈值，建议降低负载或检查供电。",
-  "status": "PENDING",
-  "createdAt": "2026-07-06 20:06:10"
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "status": "HANDLED",
+    "handledAt": "2026-07-14 12:35:00"
+  }
 }
 ```
 
+Error state / 异常状态：
+
+- 告警不存在：`code=404`
+- 非 `OPEN` 告警不可处理：`code=400`，`msg=只能处理 OPEN 状态的告警`
+- 非法 `status`：`code=400`
+
+## 7. Recommendation APIs / 建议接口
+
+Recommendation status / 建议状态：
+
+```text
+PENDING / CONFIRMED / IGNORED
+```
+
+### 7.1 List Recommendations / 建议列表
+
+```text
+GET /api/iot/devices/{deviceId}/recommendations
+Status: changed
+Used by: /iot/devices/:id
+```
+
+Query params:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| status | string | no | PENDING / CONFIRMED / IGNORED；不传返回全部 |
+| page | number | no | 页码，默认 1 |
+| size | number | no | 每页条数，默认 20 |
+
+Response:
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": 1,
+        "deviceId": 1,
+        "deviceCode": "PM-001",
+        "alertId": 1,
+        "title": "缩短采样间隔",
+        "content": "当前功率 110.5W 超过 100W，建议将采样间隔调整为 5 秒，以便更密集地观察负载变化。",
+        "status": "PENDING",
+        "createdAt": "2026-07-14 12:30:01"
+      }
+    ]
+  }
+}
+```
+
+### 7.2 Confirm Recommendation / 确认建议
+
+```text
+POST /api/iot/recommendations/{recommendationId}/confirm
+Status: changed
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "status": "CONFIRMED"
+  }
+}
+```
+
+### 7.3 Ignore Recommendation / 忽略建议
+
+```text
+POST /api/iot/recommendations/{recommendationId}/ignore
+Status: changed
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "status": "IGNORED"
+  }
+}
+```
+
+Error state / 异常状态：
+
+- 建议不存在：`code=404`
+- 非 `PENDING` 建议不可操作：`code=400`
+
 ## 8. Command APIs / 指令接口
+
+Command status / 指令状态：
+
+```text
+PENDING / SENT / ACKED / FAILED / TIMEOUT
+```
+
+Week 4 only supports / 本周唯一指令：
+
+```text
+SET_SAMPLE_INTERVAL，参数固定为 intervalSeconds=5
+```
+
+ACK timeout / ACK 超时时间：
+
+```text
+10 秒
+```
 
 ### 8.1 Send Command / 下发指令
 
 ```text
-POST /api/iot/devices/{id}/commands
-Status: draft
-Used by: /iot/devices/:id, /iot/commands
+POST /api/iot/devices/{deviceId}/commands
+Status: changed
+Used by: /iot/devices/:id
 ```
 
 Request body:
@@ -420,53 +561,134 @@ Request body:
 }
 ```
 
-Response data:
+Parameter validation / 参数校验：
+
+- `command` 必须为 `SET_SAMPLE_INTERVAL`。
+- `params.intervalSeconds` 必须为 `5`。
+
+Response:
 
 ```json
 {
-  "commandId": "CMD-20260706-0001",
-  "deviceId": 1,
-  "deviceCode": "PM-001",
-  "command": "SET_SAMPLE_INTERVAL",
-  "status": "SENT",
-  "createdAt": "2026-07-06 20:07:00"
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "commandId": "cmd-20260714123045001",
+    "deviceId": 1,
+    "command": "SET_SAMPLE_INTERVAL",
+    "params": {
+      "intervalSeconds": 5
+    },
+    "status": "PENDING",
+    "message": null,
+    "createdAt": "2026-07-14 12:30:45",
+    "sentAt": null,
+    "ackedAt": null
+  }
 }
 ```
 
-### 8.2 List Commands / 指令记录
+Error state / 异常状态：
+
+- 非法 `command`：`code=400`，`msg=第四周仅支持 SET_SAMPLE_INTERVAL`
+- 非法参数：`code=400`，`msg=intervalSeconds 必须为 5`
+- 设备不存在：`code=404`
+
+### 8.2 Get Command / 指令详情
 
 ```text
-GET /api/iot/commands
-Status: draft
+GET /api/iot/commands/{commandId}
+Status: changed
 ```
 
-Command status:
+Response:
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "commandId": "cmd-20260714123045001",
+    "deviceId": 1,
+    "command": "SET_SAMPLE_INTERVAL",
+    "params": {
+      "intervalSeconds": 5
+    },
+    "status": "ACKED",
+    "message": null,
+    "createdAt": "2026-07-14 12:30:45",
+    "sentAt": "2026-07-14 12:30:45",
+    "ackedAt": "2026-07-14 12:30:46"
+  }
+}
+```
+
+### 8.3 List Commands / 指令记录
 
 ```text
-PENDING / SENT / ACKED / FAILED / TIMEOUT
+GET /api/iot/devices/{deviceId}/commands
+Status: changed
 ```
+
+Query params:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| status | string | no | PENDING / SENT / ACKED / FAILED / TIMEOUT |
+| page | number | no | 页码，默认 1 |
+| size | number | no | 每页条数，默认 20 |
+
+Response data uses the same `{ total, list }` structure as alerts. Record fields are the same as `8.2 Get Command`.
 
 ## 9. Operation Log APIs / 操作日志接口
 
+### 9.1 List Operation Logs / 操作日志列表
+
 ```text
-GET /api/iot/operation-logs
-Status: draft
-Used by: /iot/logs, /iot/devices/:id
+GET /api/iot/devices/{deviceId}/operation-logs
+Status: changed
+Used by: /iot/devices/:id
 ```
 
-Response data record:
+Query params:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| action | string | no | HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK |
+| targetType | string | no | ALERT / RECOMMENDATION / COMMAND |
+| page | number | no | 页码，默认 1 |
+| size | number | no | 每页条数，默认 20 |
+
+Response:
 
 ```json
 {
-  "id": 1,
-  "operatorId": 1,
-  "operatorName": "管理员",
-  "action": "SEND_COMMAND",
-  "targetType": "DEVICE",
-  "targetId": 1,
-  "summary": "向 PM-001 下发 SET_SAMPLE_INTERVAL 指令",
-  "createdAt": "2026-07-06 20:07:00"
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "total": 4,
+    "list": [
+      {
+        "id": 1,
+        "operatorId": 0,
+        "operatorName": "system",
+        "action": "SEND_COMMAND",
+        "targetType": "COMMAND",
+        "targetId": "cmd-20260714123045001",
+        "summary": "下发 SET_SAMPLE_INTERVAL，intervalSeconds=5",
+        "createdAt": "2026-07-14 12:30:45"
+      }
+    ]
+  }
 }
+```
+
+`targetId` may be a numeric alert/recommendation ID or a string `commandId`.
+
+Recorded actions / 记录行为：
+
+```text
+HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK
 ```
 
 ## 10. Change Log / 契约变更记录
@@ -474,3 +696,4 @@ Response data record:
 | Date | Change | Owner | Impact |
 |---|---|---|---|
 | 2026-07-06 | Initial API contract draft | Codex | Frontend/backend initial alignment |
+| 2026-07-14 | Freeze PM-001 alert/recommendation/command/log loop for Week 4 | Product | Alert/recommendation/command/log endpoints and statuses aligned with `week4-product-spec.md` |
