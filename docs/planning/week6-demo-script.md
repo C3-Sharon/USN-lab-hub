@@ -11,7 +11,7 @@ USN Lab Hub IoT · 一个半月 MVP 成果演示
 | 组件 | 地址/命令 | 状态要求 |
 |---|---|---|
 | MQTT Broker | `localhost:1883` | 已启动，可连接 |
-| MySQL | `localhost:3306/usn_lab_hub` | 已启动，V1 - V5 迁移完成 |
+| MySQL | `localhost:3306/usn_hub` | 已启动，V1 - V5 迁移完成 |
 | 后端 | `http://localhost:8080` | 已启动，健康检查 200 |
 | PM-001 模拟器 | `python scripts/pm001_simulator.py` | 已启动，每 5 秒上报 |
 | 前端 | `http://localhost:5173` | 已启动，可访问 |

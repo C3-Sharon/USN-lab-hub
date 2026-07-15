@@ -38,8 +38,8 @@ docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto
 |---|---|
 | 现象 | 后端启动报错 `FlywayException` 或表不存在 |
 | 常见原因 | 数据库未创建；迁移脚本冲突；已有脏数据 |
-| 检查命令 | `mysql -h localhost -u root -p -e "show tables;" usn_lab_hub` |
-| 兜底动作 | 在本地开发环境重建数据库：`DROP DATABASE usn_lab_hub; CREATE DATABASE usn_lab_hub;` 后重启后端；演示前备份生产数据 |
+| 检查命令 | `mysql -h localhost -u root -p -e "show tables;" usn_hub` |
+| 兜底动作 | 在本地开发环境重建数据库：`DROP DATABASE usn_hub; CREATE DATABASE usn_hub;` 后重启后端；演示前备份生产数据 |
 
 注意：重建数据库会清空数据，仅用于本地演示环境。
 
