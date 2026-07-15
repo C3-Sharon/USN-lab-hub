@@ -2,7 +2,7 @@ import request from '@/utils/request'
 
 // ========== Mock 开关 ==========
 // 后端接口未就绪时设为 true，使用 mock 数据
-export const USE_MOCK = false
+export const USE_MOCK = true
 
 // ========== Mock 数据 ==========
 const MOCK_PROJECTS = [
@@ -295,4 +295,58 @@ export function listCommands(deviceId, params) {
 export function listOperationLogs(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_OPERATION_LOGS)
   return request.get(`/api/iot/devices/${deviceId}/operation-logs`, { params })
+}
+
+// ========== Public APIs ==========
+
+const MOCK_PUBLIC_PROJECT = {
+  projectCode: 'power-monitor',
+  projectName: '实验室功耗监测',
+  description: '实验室功耗监测与 MQTT 联动演示项目',
+  status: 'ACTIVE',
+  deviceCount: 1,
+  onlineDeviceCount: 1,
+  device: {
+    id: 1,
+    deviceCode: 'PM-001',
+    deviceName: '实验室功耗监测仪 #1',
+    status: 'ONLINE',
+    reportTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    metrics: [
+      { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
+      { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
+      { metricKey: 'power', metricName: '功率', value: 92.5, unit: 'W' }
+    ],
+    health: {
+      score: 100,
+      level: 'HEALTHY',
+      reasons: [],
+      calculatedAt: '2026-07-15 10:30:01'
+    }
+  },
+  powerTrend: [
+    { time: '2026-07-15 10:24:00', value: 89.8 },
+    { time: '2026-07-15 10:24:30', value: 90.0 },
+    { time: '2026-07-15 10:25:00', value: 90.2 },
+    { time: '2026-07-15 10:25:30', value: 91.0 },
+    { time: '2026-07-15 10:26:00', value: 91.5 },
+    { time: '2026-07-15 10:26:30', value: 92.0 },
+    { time: '2026-07-15 10:27:00', value: 92.3 },
+    { time: '2026-07-15 10:27:30', value: 92.5 },
+    { time: '2026-07-15 10:28:00', value: 92.4 },
+    { time: '2026-07-15 10:28:30', value: 92.6 },
+    { time: '2026-07-15 10:29:00', value: 92.5 },
+    { time: '2026-07-15 10:29:30', value: 93.1 },
+    { time: '2026-07-15 10:30:00', value: 92.5 }
+  ],
+  updatedAt: '2026-07-15 10:30:01'
+}
+
+export function getPublicProject(projectCode, params) {
+  if (USE_MOCK) {
+    const data = { ...MOCK_PUBLIC_PROJECT }
+    data.device.lastSeenAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    return mockResponse(data)
+  }
+  return request.get(`/api/iot/public/projects/${projectCode}`, { params })
 }
