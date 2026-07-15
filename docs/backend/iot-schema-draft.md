@@ -1,6 +1,6 @@
 # IoT Schema Draft / IoT 数据库表草案
 
-> 第一周仅作为后端设计草案，不立即创建 Flyway 迁移。等产品字段、前端页面和硬件指标确认后，再整理为正式 SQL。
+> 第一周形成设计草案。`iot_telemetry_raw`、`iot_metric_data` 已由 V2 创建，告警/建议/指令/日志表已由 V4 创建，`lab_project`、`iot_device`、`iot_device_metric` 已由 V5 创建并初始化 PM-001 MVP 数据。
 
 ## 1. lab_project
 
