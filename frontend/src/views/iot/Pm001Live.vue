@@ -178,12 +178,17 @@
           <div class="rec-header">
             <span class="rec-title">{{ rec.title }}</span>
             <el-tag v-if="rec.status === 'PENDING'" type="warning" size="small">待确认</el-tag>
-            <el-tag v-else type="success" size="small">已确认</el-tag>
+            <el-tag v-else :type="rec.status === 'CONFIRMED' ? 'success' : 'info'" size="small">
+              {{ rec.status === 'CONFIRMED' ? '已确认' : '已忽略' }}
+            </el-tag>
           </div>
           <p class="rec-content">{{ rec.content }}</p>
           <div class="rec-footer">
             <span class="rec-time">{{ rec.createdAt }}</span>
-            <el-button v-if="rec.status === 'PENDING'" type="primary" size="small" :loading="recActionLoading[rec.id]" @click="doConfirmRec(rec.id)">确认建议</el-button>
+            <div v-if="rec.status === 'PENDING'" class="rec-actions">
+              <el-button type="primary" size="small" :loading="recActionLoading[rec.id] === 'confirm'" @click="doConfirmRec(rec.id)">确认并下发指令</el-button>
+              <el-button type="info" size="small" :loading="recActionLoading[rec.id] === 'ignore'" @click="doIgnoreRec(rec.id)">忽略建议</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -251,8 +256,8 @@
     <!-- ========== 联调说明 ========== -->
     <el-alert title="联调说明" type="info" :closable="false" class="debug-hint">
       <p>latest: GET /api/iot/devices/1/latest | history: GET /api/iot/devices/1/metrics/history?metricKey=power</p>
-      <p>alerts: GET /api/iot/alerts | recommendations: GET /api/iot/recommendations</p>
-      <p>commands: POST /api/iot/devices/1/commands | logs: GET /api/iot/operation-logs</p>
+      <p>alerts: GET /api/iot/devices/1/alerts | recommendations: GET /api/iot/devices/1/recommendations</p>
+      <p>commands: POST/GET /api/iot/devices/1/commands | logs: GET /api/iot/devices/1/operation-logs</p>
       <p>latest 每 {{ LATEST_INTERVAL }} 秒 | history 每 {{ HISTORY_INTERVAL }} 秒 | 告警/建议/指令/日志 每 {{ POLL_INTERVAL }} 秒</p>
     </el-alert>
   </div>
@@ -268,7 +273,7 @@ import {
 import {
   getLatestMetrics, getMetricHistory,
   listAlerts, handleAlert as apiHandleAlert,
-  listRecommendations, confirmRecommendation as apiConfirmRec,
+  listRecommendations, confirmRecommendation as apiConfirmRec, ignoreRecommendation as apiIgnoreRec,
   sendCommand as apiSendCommand, listCommands,
   listOperationLogs
 } from '@/api/iot'
@@ -416,26 +421,26 @@ async function pollData() {
   pollError.value = ''
   try {
     const [aRes, rRes, cRes, lRes] = await Promise.all([
-      listAlerts({ deviceId: DEVICE_ID }).catch(() => null),
-      listRecommendations({ deviceId: DEVICE_ID }).catch(() => null),
-      listCommands({ deviceId: DEVICE_ID }).catch(() => null),
-      listOperationLogs({ targetType: 'DEVICE', targetId: DEVICE_ID }).catch(() => null)
+      listAlerts(DEVICE_ID).catch(() => null),
+      listRecommendations(DEVICE_ID).catch(() => null),
+      listCommands(DEVICE_ID).catch(() => null),
+      listOperationLogs(DEVICE_ID).catch(() => null)
     ])
     if (aRes) {
       const payload = aRes.data || aRes || {}
-      alerts.value = payload.records || payload || []
+      alerts.value = payload.list || []
     }
     if (rRes) {
       const payload = rRes.data || rRes || {}
-      recommendations.value = payload.records || payload || []
+      recommendations.value = payload.list || []
     }
     if (cRes) {
       const payload = cRes.data || cRes || {}
-      commands.value = payload.records || payload || []
+      commands.value = payload.list || []
     }
     if (lRes) {
       const payload = lRes.data || lRes || {}
-      operationLogs.value = payload.records || payload || []
+      operationLogs.value = payload.list || []
     }
   } catch (err) {
     console.error('轮询数据失败', err)
@@ -475,15 +480,32 @@ async function doIgnoreAlert(id) {
 
 async function doConfirmRec(id) {
   if (recActionLoading.value[id]) return
-  recActionLoading.value[id] = true
+  recActionLoading.value[id] = 'confirm'
   try {
     await apiConfirmRec(id)
+    await apiSendCommand(DEVICE_ID, { command: 'SET_SAMPLE_INTERVAL', params: { intervalSeconds: 5 } })
     await pollData()
+    ElMessage.success('建议已确认，指令已下发')
   } catch (err) {
-    console.error('确认建议失败', err)
-    alertError('确认建议失败: ' + (err.message || '请重试'))
+    console.error('确认建议或下发指令失败', err)
+    alertError('确认建议或下发指令失败: ' + (err.message || '请重试'))
   } finally {
-    recActionLoading.value[id] = false
+    recActionLoading.value[id] = null
+  }
+}
+
+async function doIgnoreRec(id) {
+  if (recActionLoading.value[id]) return
+  recActionLoading.value[id] = 'ignore'
+  try {
+    await apiIgnoreRec(id)
+    await pollData()
+    ElMessage.success('建议已忽略')
+  } catch (err) {
+    console.error('忽略建议失败', err)
+    alertError('忽略建议失败: ' + (err.message || '请重试'))
+  } finally {
+    recActionLoading.value[id] = null
   }
 }
 
@@ -599,6 +621,7 @@ onUnmounted(() => {
 .rec-content { color: #606266; font-size: 14px; margin: 0 0 12px; line-height: 1.6; }
 .rec-footer { display: flex; align-items: center; justify-content: space-between; }
 .rec-time { color: #909399; font-size: 13px; }
+.rec-actions { display: flex; align-items: center; gap: 8px; }
 
 .command-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .command-desc { display: flex; align-items: center; gap: 8px; }
