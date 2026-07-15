@@ -300,52 +300,46 @@ export function listOperationLogs(deviceId, params) {
 // ========== Public APIs ==========
 
 const MOCK_PUBLIC_PROJECT = {
-  project: {
-    projectName: '功耗检测项目',
-    projectCode: 'power-monitor',
-    description: '用于演示功耗数据采集、告警、建议和控制闭环',
-    status: 'ACTIVE'
-  },
+  projectCode: 'power-monitor',
+  projectName: '实验室功耗监测',
+  description: '实验室功耗监测与 MQTT 联动演示项目',
+  status: 'ACTIVE',
+  deviceCount: 1,
+  onlineDeviceCount: 1,
   device: {
+    id: 1,
     deviceCode: 'PM-001',
-    deviceName: '功耗检测设备 001',
+    deviceName: '实验室功耗监测仪 #1',
     status: 'ONLINE',
-    lastSeenAt: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    reportTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    metrics: [
+      { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
+      { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
+      { metricKey: 'power', metricName: '功率', value: 92.5, unit: 'W' }
+    ],
+    health: {
+      score: 100,
+      level: 'HEALTHY',
+      reasons: [],
+      calculatedAt: '2026-07-15 10:30:01'
+    }
   },
-  latestMetrics: [
-    { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
-    { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
-    { metricKey: 'power', metricName: '功率', value: 92.5, unit: 'W' }
+  powerTrend: [
+    { time: '2026-07-15 10:29:00', value: 92.5 },
+    { time: '2026-07-15 10:29:30', value: 93.1 },
+    { time: '2026-07-15 10:30:00', value: 92.5 }
   ],
-  powerTrend: {
-    metricKey: 'power',
-    unit: 'W',
-    points: [
-      { time: '2026-07-09 13:00:00', value: 80.1 },
-      { time: '2026-07-09 13:05:00', value: 85.3 },
-      { time: '2026-07-09 13:10:00', value: 90.2 },
-      { time: '2026-07-09 13:15:00', value: 95.0 },
-      { time: '2026-07-09 13:20:00', value: 98.5 },
-      { time: '2026-07-09 13:25:00', value: 105.2 },
-      { time: '2026-07-09 13:30:00', value: 110.8 },
-      { time: '2026-07-09 13:35:00', value: 115.3 },
-      { time: '2026-07-09 13:40:00', value: 118.0 },
-      { time: '2026-07-09 13:45:00', value: 119.5 },
-      { time: '2026-07-09 13:50:00', value: 120.5 }
-    ]
-  },
-  healthScore: {
-    score: 87,
-    level: 'HEALTHY',
-    reasons: ['设备在线', '功率在合理范围', '告警已处理'],
-    calculatedAt: '2026-07-09 13:50:00'
-  }
+  updatedAt: '2026-07-15 10:30:01'
 }
 
 export function getPublicProject(projectCode, params) {
   if (USE_MOCK) {
     const data = { ...MOCK_PUBLIC_PROJECT }
-    data.device.lastSeenAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    data.device = {
+      ...MOCK_PUBLIC_PROJECT.device,
+      reportTime: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    }
+    data.updatedAt = data.device.reportTime
     return mockResponse(data)
   }
   return request.get(`/api/iot/public/projects/${projectCode}`, { params })

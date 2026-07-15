@@ -73,7 +73,7 @@
               </div>
               <div class="pm-item">
                 <span class="pm-label">上报时间</span>
-                <span class="pm-value">{{ device.lastSeenAt || '--' }}</span>
+                <span class="pm-value">{{ device.reportTime || '--' }}</span>
               </div>
               <div class="pm-item">
                 <span class="pm-label">健康等级</span>
@@ -109,11 +109,11 @@
       <el-card class="action-card">
         <div class="action-title">快速入口</div>
         <div class="action-buttons">
-          <router-link to="/iot/public">
+          <a href="/iot/public" target="_blank" rel="noopener noreferrer">
             <el-button type="primary" size="large">
               <el-icon><Monitor /></el-icon> 公开演示页
             </el-button>
-          </router-link>
+          </a>
           <router-link to="/iot/pm001">
             <el-button type="success" size="large">
               <el-icon><Cpu /></el-icon> PM-001 详情
@@ -129,13 +129,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Cpu, TrendCharts, Monitor, Refresh } from '@element-plus/icons-vue'
-import { getPublicProject, getLatestMetrics, listAlerts } from '@/api/iot'
+import { getPublicProject, listAlerts } from '@/api/iot'
 import * as echarts from 'echarts'
 
 const PROJECT_CODE = 'power-monitor'
 const DEVICE_ID = 1
 const REFRESH_INTERVAL = 30
-const ONLINE_THRESHOLD = 15
 
 // ========== 数据状态 ==========
 const loading = ref(false)
@@ -145,7 +144,7 @@ const error = ref('')
 const project = ref({})
 const device = ref({})
 const latestMetrics = ref([])
-const powerTrend = ref({})
+const powerTrend = ref([])
 const healthScore = ref({})
 const openAlertCount = ref(0)
 
@@ -155,8 +154,8 @@ const trendRef = ref(null)
 
 // ========== 计算属性 ==========
 const statProjectCount = computed(() => (project.value.projectName ? 1 : 0))
-const statDeviceCount = computed(() => (device.value.deviceCode ? 1 : 0))
-const statOnlineCount = computed(() => (isOnline.value ? 1 : 0))
+const statDeviceCount = computed(() => project.value.deviceCount || 0)
+const statOnlineCount = computed(() => project.value.onlineDeviceCount || 0)
 const statOpenAlertCount = computed(() => openAlertCount.value)
 
 const latestPower = computed(() => {
@@ -165,14 +164,10 @@ const latestPower = computed(() => {
 })
 
 const isOnline = computed(() => {
-  const timeStr = device.value.lastSeenAt
-  if (!timeStr) return false
-  const ts = new Date(timeStr.replace(' ', 'T')).getTime()
-  if (isNaN(ts)) return device.value.status === 'ONLINE'
-  return Date.now() - ts <= ONLINE_THRESHOLD * 1000
+  return device.value.status === 'ONLINE'
 })
 
-const trendPoints = computed(() => powerTrend.value.points || [])
+const trendPoints = computed(() => powerTrend.value || [])
 
 const healthLevelClass = computed(() => {
   const level = healthScore.value.level
@@ -194,35 +189,25 @@ async function loadData() {
   loading.value = true
   error.value = ''
   try {
-    // 并行获取公开项目数据、最新指标、告警
-    const [pubRes, latestRes, alertRes] = await Promise.all([
-      getPublicProject(PROJECT_CODE).catch(() => null),
-      getLatestMetrics(DEVICE_ID).catch(() => null),
+    const [pubRes, alertRes] = await Promise.all([
+      getPublicProject(PROJECT_CODE),
       listAlerts(DEVICE_ID).catch(() => null)
     ])
 
     if (pubRes) {
       const payload = pubRes.data || pubRes || {}
-      project.value = payload.project || {}
+      project.value = {
+        projectCode: payload.projectCode,
+        projectName: payload.projectName,
+        description: payload.description,
+        status: payload.status,
+        deviceCount: payload.deviceCount,
+        onlineDeviceCount: payload.onlineDeviceCount
+      }
       device.value = payload.device || {}
-      latestMetrics.value = payload.latestMetrics || []
-      powerTrend.value = payload.powerTrend || {}
-      healthScore.value = payload.healthScore || {}
-    }
-
-    if (latestRes) {
-      const payload = latestRes.data || latestRes || {}
-      if (payload.metrics?.length) {
-        latestMetrics.value = payload.metrics
-      }
-      if (payload.deviceCode) {
-        device.value = {
-          ...device.value,
-          deviceCode: payload.deviceCode,
-          deviceName: payload.deviceName,
-          lastSeenAt: payload.reportTime || payload.reportedAt
-        }
-      }
+      latestMetrics.value = payload.device?.metrics || []
+      powerTrend.value = payload.powerTrend || []
+      healthScore.value = payload.device?.health || {}
     }
 
     if (alertRes) {
