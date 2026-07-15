@@ -122,7 +122,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.public) {
-    return hasLogin() ? '/dashboard' : true
+    return true
   }
   if (!hasLogin()) {
     return { path: '/login', query: { redirect: to.fullPath } }
