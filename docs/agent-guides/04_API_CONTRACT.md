@@ -697,7 +697,7 @@ HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK
 
 ```text
 GET /api/iot/public/projects/power-monitor
-Status: changed
+Status: implemented
 Used by: /iot/public
 ```
 
@@ -762,6 +762,14 @@ Error state / 异常状态：
 - 后端异常：`code=500`
 
 安全约束：该接口不返回用户隐私、原始 MQTT payload、操作日志、指令控制入口或 Broker 凭证。
+
+Implementation notes / 实现说明：
+
+- 项目、设备和指标定义由 `V5__create_iot_asset_catalog.sql` 初始化。
+- 设备在线状态仍以最近 telemetry 是否在 15 秒内为准，不使用资产表中的静态状态替代。
+- 健康评分仅使用在线状态和 `OPEN + WARNING` 告警，符合第五周冻结公式。
+- `trendMinutes`、`pointCount` 小于等于 0 时使用默认值，大于 60 时截断为 60。
+- 项目不存在时同时返回 HTTP 404 和响应体 `code=404`。
 
 ## 11. Change Log / 契约变更记录
 
