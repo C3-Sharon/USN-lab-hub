@@ -344,7 +344,7 @@ OPEN / HANDLED / IGNORED
 
 ```text
 GET /api/iot/devices/{deviceId}/alerts
-Status: changed
+Status: implemented
 Used by: /iot/devices/:id
 ```
 
@@ -396,7 +396,7 @@ Error state / 异常状态：
 
 ```text
 POST /api/iot/alerts/{alertId}/handle
-Status: changed
+Status: implemented
 ```
 
 Request body:
@@ -441,7 +441,7 @@ PENDING / CONFIRMED / IGNORED
 
 ```text
 GET /api/iot/devices/{deviceId}/recommendations
-Status: changed
+Status: implemented
 Used by: /iot/devices/:id
 ```
 
@@ -481,7 +481,7 @@ Response:
 
 ```text
 POST /api/iot/recommendations/{recommendationId}/confirm
-Status: changed
+Status: implemented
 ```
 
 Response:
@@ -501,7 +501,7 @@ Response:
 
 ```text
 POST /api/iot/recommendations/{recommendationId}/ignore
-Status: changed
+Status: implemented
 ```
 
 Response:
@@ -546,7 +546,7 @@ ACK timeout / ACK 超时时间：
 
 ```text
 POST /api/iot/devices/{deviceId}/commands
-Status: changed
+Status: implemented
 Used by: /iot/devices/:id
 ```
 
@@ -598,7 +598,7 @@ Error state / 异常状态：
 
 ```text
 GET /api/iot/commands/{commandId}
-Status: changed
+Status: implemented
 ```
 
 Response:
@@ -627,7 +627,7 @@ Response:
 
 ```text
 GET /api/iot/devices/{deviceId}/commands
-Status: changed
+Status: implemented
 ```
 
 Query params:
@@ -646,7 +646,7 @@ Response data uses the same `{ total, list }` structure as alerts. Record fields
 
 ```text
 GET /api/iot/devices/{deviceId}/operation-logs
-Status: changed
+Status: implemented
 Used by: /iot/devices/:id
 ```
 

@@ -19,8 +19,12 @@ public class Result<T> {
 
     // 快捷失败方法
     public static <T> Result<T> error(String msg) {
+        return error(500, msg);
+    }
+
+    public static <T> Result<T> error(int code, String msg) {
         Result<T> result = new Result<>();
-        result.code = 500;
+        result.code = code;
         result.msg = msg;
         return result;
     }

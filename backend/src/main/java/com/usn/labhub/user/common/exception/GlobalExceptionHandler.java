@@ -1,6 +1,7 @@
 package com.usn.labhub.user.common.exception;
 
 import com.usn.labhub.user.common.result.Result;
+import com.usn.labhub.user.service.iot.IotApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -8,6 +9,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(IotApiException.class)
+    public Result<String> handleIotApiException(IotApiException e) {
+        return Result.error(e.getCode(), e.getMessage());
+    }
 
     /**
      * 捕获所有的 RuntimeException

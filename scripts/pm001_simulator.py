@@ -37,17 +37,13 @@ PROJECT_CODE = "power-monitor"
 DEVICE_CODE = "PM-001"
 BROKER_HOST = "127.0.0.1"
 BROKER_PORT = 1883
-TELEMETRY_INTERVAL = 5  # 秒
+telemetry_interval = 5  # 秒，可由第四周固定指令更新
 
 # MQTT Topic
 TOPIC_TELEMETRY = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/telemetry"
 TOPIC_COMMAND = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/command"
 TOPIC_ACK = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/ack"
 TOPIC_STATUS = f"iot/{PROJECT_CODE}/{DEVICE_CODE}/status"
-
-# 当前告警阈值（单位：W），可被 set_threshold 指令修改
-power_threshold = 100
-
 
 def get_report_time() -> str:
     """生成设备上报时间字符串，格式与产品契约一致：yyyy-MM-dd HH:mm:ss。"""
@@ -81,41 +77,33 @@ def generate_telemetry(counter: int) -> dict:
 
 def handle_command(payload: dict) -> dict:
     """处理来自后端的控制指令，返回 ACK  payload。"""
-    global power_threshold
+    global telemetry_interval
 
-    action = payload.get("action")
+    command = payload.get("command")
     params = payload.get("params", {})
     ack = {
-        "projectCode": PROJECT_CODE,
-        "deviceCode": DEVICE_CODE,
-        "reportTime": get_report_time(),
         "commandId": payload.get("commandId"),
-        "action": action,
-        "status": "SUCCESS",
-        "message": "指令已执行",
+        "command": command,
+        "status": "ACKED",
+        "result": {},
+        "ackedAt": get_report_time(),
     }
 
-    if action == "restart":
-        logger.info("收到 restart 指令，模拟设备重启...")
-        # 模拟重启耗时
-        time.sleep(0.5)
-        ack["message"] = "设备重启完成"
-
-    elif action == "set_threshold":
-        new_threshold = params.get("threshold")
-        if isinstance(new_threshold, (int, float)) and new_threshold > 0:
-            power_threshold = int(new_threshold)
-            ack["message"] = f"告警阈值已设置为 {power_threshold}W"
-            logger.info("告警阈值已设置为 %dW", power_threshold)
+    if command == "SET_SAMPLE_INTERVAL":
+        interval_seconds = params.get("intervalSeconds")
+        if interval_seconds == 5:
+            telemetry_interval = 5
+            ack["result"] = {"intervalSeconds": telemetry_interval}
+            logger.info("采样间隔已设置为 %d 秒", telemetry_interval)
         else:
             ack["status"] = "FAILED"
-            ack["message"] = "threshold 参数无效"
-            logger.warning("set_threshold 参数无效：%s", new_threshold)
+            ack["result"] = {"message": "intervalSeconds 必须为 5"}
+            logger.warning("SET_SAMPLE_INTERVAL 参数无效：%s", interval_seconds)
 
     else:
         ack["status"] = "FAILED"
-        ack["message"] = f"不支持的指令：{action}"
-        logger.warning("收到不支持的指令：%s", action)
+        ack["result"] = {"message": f"不支持的指令：{command}"}
+        logger.warning("收到不支持的指令：%s", command)
 
     return ack
 
@@ -169,7 +157,7 @@ def publish_telemetry_loop(client: mqtt.Client):
             counter += 1
         except Exception as e:
             logger.error("上报遥测时出错：%s", e)
-        time.sleep(TELEMETRY_INTERVAL)
+        time.sleep(telemetry_interval)
 
 
 def main():

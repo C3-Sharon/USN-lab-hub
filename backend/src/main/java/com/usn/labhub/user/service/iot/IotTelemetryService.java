@@ -9,6 +9,7 @@ import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
 import com.usn.labhub.user.domain.vo.iot.IotMetricHistoryVO;
 import com.usn.labhub.user.domain.vo.iot.IotTelemetryIngestResultVO;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -46,10 +47,18 @@ public class IotTelemetryService {
 
     private final ObjectMapper objectMapper;
     private final IotTelemetryStore telemetryStore;
+    private final IotOperationsService operationsService;
 
     public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore) {
+        this(objectMapper, telemetryStore, null);
+    }
+
+    @Autowired
+    public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore,
+                               IotOperationsService operationsService) {
         this.objectMapper = objectMapper;
         this.telemetryStore = telemetryStore;
+        this.operationsService = operationsService;
     }
 
     public IotTelemetryIngestResultVO ingestHttpReport(IotTelemetryReportDTO report) {
@@ -148,6 +157,9 @@ public class IotTelemetryService {
         }
 
         telemetryStore.saveTelemetry(rawRecord, metricRecords);
+        if (operationsService != null) {
+            operationsService.evaluatePower(report.getMetrics().get("power"), reportedAt);
+        }
         int metricCount = metricRecords.size();
 
         return new IotTelemetryIngestResultVO(PM001_DEVICE_CODE, formatTime(reportedAt), metricCount, metricCount > 0);

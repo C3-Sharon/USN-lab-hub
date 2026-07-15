@@ -90,6 +90,7 @@
 |---|---|---|
 | id | bigint | 主键 |
 | device_id | bigint | 设备 ID |
+| device_code | varchar(64) | 设备编号 |
 | metric_key | varchar(64) | 指标键 |
 | level | varchar(32) | INFO / WARNING / CRITICAL |
 | message | varchar(500) | 告警信息 |
@@ -97,6 +98,7 @@
 | threshold_value | decimal(18,4) | 阈值 |
 | status | varchar(32) | OPEN / HANDLED / IGNORED |
 | created_at | datetime | 创建时间 |
+| last_triggered_at | datetime | 最近一次触发时间，用于告警去重更新 |
 | handled_by | bigint | 处理人 |
 | handled_at | datetime | 处理时间 |
 
@@ -109,6 +111,7 @@
 | id | bigint | 主键 |
 | source | varchar(32) | RULE / AGENT |
 | device_id | bigint | 设备 ID |
+| device_code | varchar(64) | 设备编号 |
 | alert_id | bigint | 告警 ID |
 | title | varchar(100) | 建议标题 |
 | content | varchar(1000) | 建议内容 |
@@ -124,12 +127,13 @@
 | id | bigint | 主键 |
 | command_id | varchar(64) | 指令编号，全局唯一 |
 | device_id | bigint | 设备 ID |
+| device_code | varchar(64) | 设备编号 |
 | command | varchar(100) | 本周固定为 `SET_SAMPLE_INTERVAL` |
 | params_json | text | 指令参数，本周固定为 `{ "intervalSeconds": 5 }` |
 | status | varchar(32) | PENDING / SENT / ACKED / FAILED / TIMEOUT |
 | message | varchar(500) | ACK 或失败说明 |
 | created_by | bigint | 创建人 |
-| create_time | datetime | 创建时间 |
+| created_at | datetime | 创建时间 |
 | sent_at | datetime | 发送时间 |
 | acked_at | datetime | 回执时间 |
 
@@ -140,6 +144,7 @@
 | Field | Type | Note |
 |---|---|---|
 | id | bigint | 主键 |
+| device_id | bigint | 所属设备 ID，用于按设备查询日志 |
 | operator_id | bigint | 操作人；系统触发可记录为 0 |
 | operator_name | varchar(100) | 操作人名称 |
 | action | varchar(64) | HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK |

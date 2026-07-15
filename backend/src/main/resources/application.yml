@@ -33,11 +33,16 @@ usnhub:
     # 前端请求头中的名字
     token-name: Authorization
   iot:
+    operations:
+      timeout-enabled: true
+      timeout-check-delay-ms: 1000
     mqtt:
       enabled: true
       broker-url: tcp://127.0.0.1:1883
       client-id: usn-lab-hub-backend
       telemetry-topic: iot/power-monitor/PM-001/telemetry
+      command-topic: iot/power-monitor/PM-001/command
+      ack-topic: iot/power-monitor/PM-001/ack
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

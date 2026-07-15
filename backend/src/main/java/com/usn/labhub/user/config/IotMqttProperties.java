@@ -16,4 +16,8 @@ public class IotMqttProperties {
     private String clientId = "usn-lab-hub-backend";
 
     private String telemetryTopic = "iot/power-monitor/PM-001/telemetry";
+
+    private String commandTopic = "iot/power-monitor/PM-001/command";
+
+    private String ackTopic = "iot/power-monitor/PM-001/ack";
 }
