@@ -691,9 +691,82 @@ Recorded actions / 记录行为：
 HANDLE_ALERT / CONFIRM_RECOMMENDATION / SEND_COMMAND / RECEIVE_ACK
 ```
 
-## 10. Change Log / 契约变更记录
+## 10. Public Display API / 公开展示接口
+
+### 10.1 Get Public Project / 公开项目聚合数据
+
+```text
+GET /api/iot/public/projects/power-monitor
+Status: changed
+Used by: /iot/public
+```
+
+Query params:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| trendMinutes | number | no | 功率趋势时间窗，默认 30，最大 60 |
+| pointCount | number | no | 趋势点数，默认 30，最大 60 |
+
+说明：
+
+- 参数用于前端调整趋势图密度，后端按默认值兜底。
+- 参数超限时后端自动截断到最大值并返回 200，不报错。
+
+Response:
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "projectCode": "power-monitor",
+    "projectName": "实验室功耗监测",
+    "description": "实验室功耗监测与 MQTT 联动演示项目",
+    "status": "ACTIVE",
+    "deviceCount": 1,
+    "onlineDeviceCount": 1,
+    "device": {
+      "id": 1,
+      "deviceCode": "PM-001",
+      "deviceName": "实验室功耗监测仪 #1",
+      "status": "ONLINE",
+      "reportTime": "2026-07-15 10:30:00",
+      "metrics": [
+        { "metricKey": "voltage", "metricName": "电压", "value": 220.3, "unit": "V" },
+        { "metricKey": "current", "metricName": "电流", "value": 0.42, "unit": "A" },
+        { "metricKey": "power", "metricName": "功率", "value": 92.5, "unit": "W" }
+      ],
+      "health": {
+        "score": 100,
+        "level": "HEALTHY",
+        "reasons": [],
+        "calculatedAt": "2026-07-15 10:30:01"
+      }
+    },
+    "powerTrend": [
+      { "time": "2026-07-15 10:29:00", "value": 92.5 },
+      { "time": "2026-07-15 10:29:30", "value": 93.1 },
+      { "time": "2026-07-15 10:30:00", "value": 92.5 }
+    ],
+    "updatedAt": "2026-07-15 10:30:01"
+  }
+}
+```
+
+Empty state / 空状态：项目存在但设备从未上报时，`device.status=OFFLINE`、`metrics=[]`、`powerTrend=[]`，健康评分按离线规则返回。
+
+Error state / 异常状态：
+
+- 项目不存在：`code=404`，`msg=项目不存在`
+- 后端异常：`code=500`
+
+安全约束：该接口不返回用户隐私、原始 MQTT payload、操作日志、指令控制入口或 Broker 凭证。
+
+## 11. Change Log / 契约变更记录
 
 | Date | Change | Owner | Impact |
 |---|---|---|---|
 | 2026-07-06 | Initial API contract draft | Codex | Frontend/backend initial alignment |
 | 2026-07-14 | Freeze PM-001 alert/recommendation/command/log loop for Week 4 | Product | Alert/recommendation/command/log endpoints and statuses aligned with `week4-product-spec.md` |
+| 2026-07-15 | Freeze Week 5 public display and health score | Product | Added `GET /api/iot/public/projects/power-monitor` and health score contract aligned with `week5-product-spec.md` |
