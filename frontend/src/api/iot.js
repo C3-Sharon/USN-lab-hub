@@ -130,6 +130,22 @@ const MOCK_COMMANDS = [
     command: 'SET_SAMPLE_INTERVAL',
     status: 'ACKED',
     createdAt: '2026-07-09 13:30:00'
+  },
+  {
+    commandId: 'CMD-20260709-0002',
+    deviceId: 1,
+    deviceCode: 'PM-001',
+    command: 'SET_SAMPLE_INTERVAL',
+    status: 'FAILED',
+    createdAt: '2026-07-09 13:35:00'
+  },
+  {
+    commandId: 'CMD-20260709-0003',
+    deviceId: 1,
+    deviceCode: 'PM-001',
+    command: 'SET_SAMPLE_INTERVAL',
+    status: 'TIMEOUT',
+    createdAt: '2026-07-09 13:40:00'
   }
 ]
 
@@ -159,11 +175,8 @@ function mockPageResponse(records, total = records.length) {
     code: 200,
     message: 'success',
     data: {
-      records,
-      total,
-      size: 10,
-      current: 1,
-      pages: 1
+      list: records,
+      total
     }
   })
 }
@@ -210,26 +223,43 @@ export function getMetricHistory(deviceId, params) {
 
 // ========== Alert APIs ==========
 
-export function listAlerts(params) {
+export function listAlerts(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_ALERTS)
-  return request.get('/api/iot/alerts', { params })
+  return request.get(`/api/iot/devices/${deviceId}/alerts`, { params })
 }
 
 export function handleAlert(id, data) {
-  if (USE_MOCK) return mockResponse({ success: true })
+  if (USE_MOCK) {
+    const alert = MOCK_ALERTS.find(a => a.id === id)
+    if (alert) alert.status = data.status || 'HANDLED'
+    return mockResponse({ success: true })
+  }
   return request.post(`/api/iot/alerts/${id}/handle`, data)
 }
 
 // ========== Recommendation APIs ==========
 
-export function listRecommendations(params) {
+export function listRecommendations(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_RECOMMENDATIONS)
-  return request.get('/api/iot/recommendations', { params })
+  return request.get(`/api/iot/devices/${deviceId}/recommendations`, { params })
 }
 
 export function confirmRecommendation(id) {
-  if (USE_MOCK) return mockResponse({ success: true })
+  if (USE_MOCK) {
+    const rec = MOCK_RECOMMENDATIONS.find(r => r.id === id)
+    if (rec) rec.status = 'CONFIRMED'
+    return mockResponse({ success: true })
+  }
   return request.post(`/api/iot/recommendations/${id}/confirm`)
+}
+
+export function ignoreRecommendation(id) {
+  if (USE_MOCK) {
+    const rec = MOCK_RECOMMENDATIONS.find(r => r.id === id)
+    if (rec) rec.status = 'IGNORED'
+    return mockResponse({ success: true })
+  }
+  return request.post(`/api/iot/recommendations/${id}/ignore`)
 }
 
 // ========== Command APIs ==========
@@ -244,19 +274,25 @@ export function sendCommand(deviceId, data) {
       status: 'SENT',
       createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19)
     }
+    MOCK_COMMANDS.unshift(newCmd)
+    // 模拟 3 秒后自动 ACK
+    setTimeout(() => {
+      const cmd = MOCK_COMMANDS.find(c => c.commandId === newCmd.commandId)
+      if (cmd && cmd.status === 'SENT') cmd.status = 'ACKED'
+    }, 3000)
     return mockResponse(newCmd)
   }
   return request.post(`/api/iot/devices/${deviceId}/commands`, data)
 }
 
-export function listCommands(params) {
+export function listCommands(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_COMMANDS)
-  return request.get('/api/iot/commands', { params })
+  return request.get(`/api/iot/devices/${deviceId}/commands`, { params })
 }
 
 // ========== Operation Log APIs ==========
 
-export function listOperationLogs(params) {
+export function listOperationLogs(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_OPERATION_LOGS)
-  return request.get('/api/iot/operation-logs', { params })
+  return request.get(`/api/iot/devices/${deviceId}/operation-logs`, { params })
 }
