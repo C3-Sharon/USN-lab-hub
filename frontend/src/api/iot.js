@@ -296,3 +296,57 @@ export function listOperationLogs(deviceId, params) {
   if (USE_MOCK) return mockPageResponse(MOCK_OPERATION_LOGS)
   return request.get(`/api/iot/devices/${deviceId}/operation-logs`, { params })
 }
+
+// ========== Public APIs ==========
+
+const MOCK_PUBLIC_PROJECT = {
+  project: {
+    projectName: '功耗检测项目',
+    projectCode: 'power-monitor',
+    description: '用于演示功耗数据采集、告警、建议和控制闭环',
+    status: 'ACTIVE'
+  },
+  device: {
+    deviceCode: 'PM-001',
+    deviceName: '功耗检测设备 001',
+    status: 'ONLINE',
+    lastSeenAt: new Date().toISOString().replace('T', ' ').slice(0, 19)
+  },
+  latestMetrics: [
+    { metricKey: 'voltage', metricName: '电压', value: 220.3, unit: 'V' },
+    { metricKey: 'current', metricName: '电流', value: 0.42, unit: 'A' },
+    { metricKey: 'power', metricName: '功率', value: 92.5, unit: 'W' }
+  ],
+  powerTrend: {
+    metricKey: 'power',
+    unit: 'W',
+    points: [
+      { time: '2026-07-09 13:00:00', value: 80.1 },
+      { time: '2026-07-09 13:05:00', value: 85.3 },
+      { time: '2026-07-09 13:10:00', value: 90.2 },
+      { time: '2026-07-09 13:15:00', value: 95.0 },
+      { time: '2026-07-09 13:20:00', value: 98.5 },
+      { time: '2026-07-09 13:25:00', value: 105.2 },
+      { time: '2026-07-09 13:30:00', value: 110.8 },
+      { time: '2026-07-09 13:35:00', value: 115.3 },
+      { time: '2026-07-09 13:40:00', value: 118.0 },
+      { time: '2026-07-09 13:45:00', value: 119.5 },
+      { time: '2026-07-09 13:50:00', value: 120.5 }
+    ]
+  },
+  healthScore: {
+    score: 87,
+    level: 'HEALTHY',
+    reasons: ['设备在线', '功率在合理范围', '告警已处理'],
+    calculatedAt: '2026-07-09 13:50:00'
+  }
+}
+
+export function getPublicProject(projectCode, params) {
+  if (USE_MOCK) {
+    const data = { ...MOCK_PUBLIC_PROJECT }
+    data.device.lastSeenAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    return mockResponse(data)
+  }
+  return request.get(`/api/iot/public/projects/${projectCode}`, { params })
+}
