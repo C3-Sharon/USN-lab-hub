@@ -336,7 +336,7 @@ Response data:
 
 ```text
 GET /api/iot/public/devices/1/telemetry/stream
-Status: draft
+Status: implemented
 Used by: /iot/pm001
 Content-Type: text/event-stream; charset=UTF-8
 ```
@@ -346,6 +346,8 @@ Content-Type: text/event-stream; charset=UTF-8
 - 本端点为只读公开 SSE 接口，不校验登录态。
 - 仅服务固定设备 `PM-001`（deviceId=1）。
 - 服务端在收到 MQTT `iot/power-monitor/PM-001/telemetry` 并落库后，向所有订阅连接推送 `telemetry` 事件。
+- 新连接建立时立即发送一条当前 latest 快照，避免页面等待下一次 MQTT 上报。
+- 最近一次上报超过 15 秒、状态由 `ONLINE` 转为 `OFFLINE` 时，服务端使用相同结构补发一次 `telemetry` 事件；同一离线状态不重复推送。
 - 服务端可发送 `heartbeat` 事件维持连接，但心跳不表示设备在线。
 
 事件格式：
