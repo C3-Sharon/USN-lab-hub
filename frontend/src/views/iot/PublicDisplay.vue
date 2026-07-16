@@ -5,17 +5,8 @@
       <div class="header-inner">
         <div class="brand">
           <el-icon size="28" color="#409eff"><Monitor /></el-icon>
-          <span class="brand-name">USN Lab</span>
-          <el-tag size="small" type="info" effect="plain">公开演示</el-tag>
+          <span class="brand-name">USN Lab Hub IoT · 公开项目展示</span>
         </div>
-        <nav class="header-nav">
-          <router-link to="/iot/overview" class="nav-link">
-            <el-icon><DataLine /></el-icon> IoT 总览
-          </router-link>
-          <router-link to="/iot/pm001" class="nav-link">
-            <el-icon><Cpu /></el-icon> PM-001 详情
-          </router-link>
-        </nav>
       </div>
     </header>
 
@@ -74,9 +65,9 @@
                       <el-icon v-else><Warning /></el-icon>
                       {{ isOnline ? '在线' : '离线' }}
                     </el-tag>
-                    <span v-if="!isOnline && device.lastSeenAt" class="offline-hint">已离线</span>
+                    <span v-if="!isOnline && device.reportTime" class="offline-hint">已离线</span>
                   </div>
-                  <div class="last-seen">上报时间：{{ device.reportTime || device.lastSeenAt || '--' }}</div>
+                  <div class="last-seen">上报时间：{{ device.reportTime || '--' }}</div>
                 </div>
               </el-card>
             </el-col>
@@ -156,7 +147,8 @@
 
     <!-- ========== 页脚 ========== -->
     <footer class="public-footer">
-      <p>USN Lab 公开演示项目 · 数据仅供展示 · 如需控制请登录后访问 PM-001 详情页</p>
+      <p>USN Lab Hub IoT · 实验室硬件项目管理与智能运维平台</p>
+      <p v-if="updatedAt" class="updated-at">数据更新于 {{ updatedAt }}</p>
     </footer>
   </div>
 </template>
@@ -164,7 +156,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
-  Monitor, DataLine, Cpu, Loading, Refresh,
+  Monitor, Cpu, Loading, Refresh,
   CircleCheck, Warning, TrendCharts, FirstAidKit, Check,
   OfficeBuilding, Magnet, Lightning
 } from '@element-plus/icons-vue'
@@ -173,7 +165,6 @@ import * as echarts from 'echarts'
 
 const PROJECT_CODE = 'power-monitor'
 const REFRESH_INTERVAL = 30
-const ONLINE_THRESHOLD = 15
 
 // ========== 数据状态 ==========
 const loading = ref(false)
@@ -184,22 +175,19 @@ const errorTitle = ref('数据加载失败')
 const project = ref({})
 const device = ref({})
 const latestMetrics = ref([])
-const powerTrend = ref({})
+const powerTrend = ref([])
 const healthScore = ref({})
+const updatedAt = ref('')
 
 let refreshTimer = null
 let trendChartInstance = null
 const trendChartRef = ref(null)
 const trendError = ref('')
-const trendPoints = computed(() => powerTrend.value.points || [])
+const trendPoints = computed(() => powerTrend.value || [])
 
 // ========== 计算属性 ==========
 const isOnline = computed(() => {
-  const timeStr = device.value.reportTime || device.value.lastSeenAt
-  if (!timeStr) return false
-  const ts = new Date(timeStr.replace(' ', 'T')).getTime()
-  if (isNaN(ts)) return device.value.status === 'ONLINE'
-  return Date.now() - ts <= ONLINE_THRESHOLD * 1000
+  return device.value.status === 'ONLINE'
 })
 
 const iconMap = { voltage: OfficeBuilding, current: Magnet, power: Lightning }
@@ -237,15 +225,18 @@ async function loadData() {
     const payload = res.data || res || {}
 
     project.value = {
-      projectName: payload.projectName,
       projectCode: payload.projectCode,
+      projectName: payload.projectName,
       description: payload.description,
-      status: payload.status
+      status: payload.status,
+      deviceCount: payload.deviceCount,
+      onlineDeviceCount: payload.onlineDeviceCount
     }
     device.value = payload.device || {}
     latestMetrics.value = payload.device?.metrics || []
-    powerTrend.value = { points: payload.powerTrend || [] }
+    powerTrend.value = payload.powerTrend || []
     healthScore.value = payload.device?.health || {}
+    updatedAt.value = payload.updatedAt || ''
 
     loaded.value = true
 
@@ -340,9 +331,6 @@ onUnmounted(() => {
 .header-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-name { font-size: 20px; font-weight: 700; color: #172033; }
-.header-nav { display: flex; align-items: center; gap: 20px; }
-.nav-link { display: flex; align-items: center; gap: 6px; color: #606266; text-decoration: none; font-size: 14px; transition: color 0.2s; }
-.nav-link:hover { color: #409eff; }
 
 /* 主体 */
 .public-main { flex: 1; padding: 24px 16px; }
@@ -399,6 +387,7 @@ onUnmounted(() => {
 /* 页脚 */
 .public-footer { background: #fff; border-top: 1px solid #e4e7ed; padding: 20px 24px; text-align: center; }
 .public-footer p { margin: 0; color: #909399; font-size: 13px; }
+.public-footer .updated-at { margin-top: 6px; }
 
 /* 通用 */
 .waiting-icon { color: #c0c4cc; animation: rotate 2s linear infinite; }
@@ -407,7 +396,6 @@ onUnmounted(() => {
 /* 响应式 */
 @media (max-width: 768px) {
   .header-inner { padding: 0 12px; }
-  .header-nav { display: none; }
   .brand-name { font-size: 18px; }
   .project-title h1 { font-size: 20px; }
   .metric-big-value { font-size: 32px; }

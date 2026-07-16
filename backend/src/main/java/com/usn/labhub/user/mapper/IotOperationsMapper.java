@@ -76,6 +76,12 @@ public interface IotOperationsMapper {
                      @Param("status") String status,
                      @Param("metricKey") String metricKey);
 
+    @Select("""
+            SELECT COUNT(*) FROM iot_alert_record
+            WHERE device_id=#{deviceId} AND level='WARNING' AND status='OPEN'
+            """)
+    long countOpenWarningAlerts(@Param("deviceId") Long deviceId);
+
     @Update("""
             UPDATE iot_alert_record SET status=#{status}, handled_by=#{handledBy}, handled_at=#{handledAt}
             WHERE id=#{id} AND status='OPEN'

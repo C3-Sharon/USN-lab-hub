@@ -2,7 +2,7 @@ import request from '@/utils/request'
 
 // ========== Mock 开关 ==========
 // 后端接口未就绪时设为 true，使用 mock 数据
-export const USE_MOCK = true
+export const USE_MOCK = false
 
 // ========== Mock 数据 ==========
 const MOCK_PROJECTS = [
@@ -325,16 +325,6 @@ const MOCK_PUBLIC_PROJECT = {
     }
   },
   powerTrend: [
-    { time: '2026-07-15 10:24:00', value: 89.8 },
-    { time: '2026-07-15 10:24:30', value: 90.0 },
-    { time: '2026-07-15 10:25:00', value: 90.2 },
-    { time: '2026-07-15 10:25:30', value: 91.0 },
-    { time: '2026-07-15 10:26:00', value: 91.5 },
-    { time: '2026-07-15 10:26:30', value: 92.0 },
-    { time: '2026-07-15 10:27:00', value: 92.3 },
-    { time: '2026-07-15 10:27:30', value: 92.5 },
-    { time: '2026-07-15 10:28:00', value: 92.4 },
-    { time: '2026-07-15 10:28:30', value: 92.6 },
     { time: '2026-07-15 10:29:00', value: 92.5 },
     { time: '2026-07-15 10:29:30', value: 93.1 },
     { time: '2026-07-15 10:30:00', value: 92.5 }
@@ -345,7 +335,11 @@ const MOCK_PUBLIC_PROJECT = {
 export function getPublicProject(projectCode, params) {
   if (USE_MOCK) {
     const data = { ...MOCK_PUBLIC_PROJECT }
-    data.device.lastSeenAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    data.device = {
+      ...MOCK_PUBLIC_PROJECT.device,
+      reportTime: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    }
+    data.updatedAt = data.device.reportTime
     return mockResponse(data)
   }
   return request.get(`/api/iot/public/projects/${projectCode}`, { params })
