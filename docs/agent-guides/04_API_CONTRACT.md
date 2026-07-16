@@ -332,6 +332,56 @@ Response data:
 }
 ```
 
+## 5.4 SSE Real-time Telemetry / SSE 实时遥测
+
+```text
+GET /api/iot/public/devices/1/telemetry/stream
+Status: draft
+Used by: /iot/pm001
+Content-Type: text/event-stream; charset=UTF-8
+```
+
+说明：
+
+- 本端点为只读公开 SSE 接口，不校验登录态。
+- 仅服务固定设备 `PM-001`（deviceId=1）。
+- 服务端在收到 MQTT `iot/power-monitor/PM-001/telemetry` 并落库后，向所有订阅连接推送 `telemetry` 事件。
+- 服务端可发送 `heartbeat` 事件维持连接，但心跳不表示设备在线。
+
+事件格式：
+
+```text
+event: telemetry
+data: {"deviceId":1,"deviceCode":"PM-001","deviceName":"实验室功耗监测仪 #1","projectName":"实验室功耗监测","status":"ONLINE","reportTime":"2026-07-16 20:00:00","metrics":[{"metricKey":"voltage","metricName":"电压","value":220.3,"unit":"V"},{"metricKey":"current","metricName":"电流","value":0.42,"unit":"A"},{"metricKey":"power","metricName":"功率","value":92.5,"unit":"W"}]}
+
+```
+
+data 字段结构与 `GET /api/iot/devices/{id}/latest` 一致：
+
+```json
+{
+  "deviceId": 1,
+  "deviceCode": "PM-001",
+  "deviceName": "实验室功耗监测仪 #1",
+  "projectName": "实验室功耗监测",
+  "status": "ONLINE",
+  "reportTime": "2026-07-16 20:00:00",
+  "metrics": [
+    {"metricKey": "voltage", "metricName": "电压", "value": 220.3, "unit": "V"},
+    {"metricKey": "current", "metricName": "电流", "value": 0.42, "unit": "A"},
+    {"metricKey": "power", "metricName": "功率", "value": 92.5, "unit": "W"}
+  ]
+}
+```
+
+实现边界 / 实现边界：
+
+- 事件名固定为 `telemetry`。
+- `data` 仅包含 deviceId、deviceCode、deviceName、projectName、status、reportTime、metrics。
+- metrics 只包含 voltage、current、power，单位与 latest 接口一致。
+- 设备在线状态仍由后端 15 秒规则计算。
+- 前端在 SSE 断线约 10 秒后降级到 `GET /api/iot/devices/1/latest` 轮询；EventSource 自动重连成功后停止轮询。
+
 ## 6. Alert APIs / 告警接口
 
 Alert status / 告警状态：
@@ -778,3 +828,4 @@ Implementation notes / 实现说明：
 | 2026-07-06 | Initial API contract draft | Codex | Frontend/backend initial alignment |
 | 2026-07-14 | Freeze PM-001 alert/recommendation/command/log loop for Week 4 | Product | Alert/recommendation/command/log endpoints and statuses aligned with `week4-product-spec.md` |
 | 2026-07-15 | Freeze Week 5 public display and health score | Product | Added `GET /api/iot/public/projects/power-monitor` and health score contract aligned with `week5-product-spec.md` |
+| 2026-07-16 | Freeze Week 7 SSE real-time telemetry push | Product | Added `GET /api/iot/public/devices/1/telemetry/stream` and SSE event contract aligned with `week7-product-spec.md` |
