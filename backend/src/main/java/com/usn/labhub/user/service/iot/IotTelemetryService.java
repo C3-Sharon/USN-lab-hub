@@ -48,17 +48,24 @@ public class IotTelemetryService {
     private final ObjectMapper objectMapper;
     private final IotTelemetryStore telemetryStore;
     private final IotOperationsService operationsService;
+    private final IotTelemetrySseService sseService;
 
     public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore) {
-        this(objectMapper, telemetryStore, null);
+        this(objectMapper, telemetryStore, null, null);
+    }
+
+    public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore,
+                               IotOperationsService operationsService) {
+        this(objectMapper, telemetryStore, operationsService, null);
     }
 
     @Autowired
     public IotTelemetryService(ObjectMapper objectMapper, IotTelemetryStore telemetryStore,
-                               IotOperationsService operationsService) {
+                               IotOperationsService operationsService, IotTelemetrySseService sseService) {
         this.objectMapper = objectMapper;
         this.telemetryStore = telemetryStore;
         this.operationsService = operationsService;
+        this.sseService = sseService;
     }
 
     public IotTelemetryIngestResultVO ingestHttpReport(IotTelemetryReportDTO report) {
@@ -70,15 +77,20 @@ public class IotTelemetryService {
     }
 
     public IotTelemetryIngestResultVO ingestMqttPayload(String topic, String payload) {
+        IotTelemetryIngestResultVO result;
         try {
             IotTelemetryReportDTO report = objectMapper.readValue(payload, IotTelemetryReportDTO.class);
-            return ingest(report, topic, payload);
+            result = ingest(report, topic, payload);
         } catch (Exception e) {
             telemetryStore.saveRaw(new IotTelemetryRawRecord(
                     null, topic, payload, "FAILED", abbreviate(e.getMessage(), 500), LocalDateTime.now()
             ));
             throw new IllegalArgumentException("MQTT telemetry payload parse failed: " + e.getMessage(), e);
         }
+        if (sseService != null) {
+            sseService.publishTelemetry(latest(PM001_DEVICE_ID));
+        }
+        return result;
     }
 
     public IotLatestMetricsVO latest(Long deviceId) {
