@@ -1,7 +1,17 @@
 <template>
   <div class="pm001-live">
     <h2>PM-001 实时数据监控</h2>
-    <p class="sub-title">第四周 — 纵向闭环：latest + history + alert + recommendation + command + log</p>
+    <p class="sub-title">第七周 — SSE 实时遥测 + 轮询降级</p>
+
+    <!-- SSE 连接状态指示器 -->
+    <div v-if="sseStatus !== 'idle'" class="sse-status-bar">
+      <span class="sse-dot" :class="sseStatus"></span>
+      <span class="sse-label">{{
+        sseStatus === 'connected' ? '实时推送中' :
+        sseStatus === 'reconnecting' ? 'SSE 重连中…' :
+        sseStatus === 'polling' ? '已降级为轮询' : ''
+      }}</span>
+    </div>
 
     <!-- ========== 最新数据卡片 ========== -->
     <el-card v-loading="latestLoading && !latestLoaded" class="device-card">
@@ -255,10 +265,11 @@
 
     <!-- ========== 联调说明 ========== -->
     <el-alert title="联调说明" type="info" :closable="false" class="debug-hint">
+      <p>SSE: EventSource /api/iot/public/devices/1/telemetry/stream (telemetry 事件实时更新)</p>
       <p>latest: GET /api/iot/devices/1/latest | history: GET /api/iot/devices/1/metrics/history?metricKey=power</p>
       <p>alerts: GET /api/iot/devices/1/alerts | recommendations: GET /api/iot/devices/1/recommendations</p>
       <p>commands: POST/GET /api/iot/devices/1/commands | logs: GET /api/iot/devices/1/operation-logs</p>
-      <p>latest 每 {{ LATEST_INTERVAL }} 秒 | history 每 {{ HISTORY_INTERVAL }} 秒 | 告警/建议/指令/日志 每 {{ POLL_INTERVAL }} 秒</p>
+      <p>latest 每 {{ LATEST_INTERVAL }} 秒（SSE 降级时）| history 每 {{ HISTORY_INTERVAL }} 秒 | 告警/建议/指令/日志 每 {{ POLL_INTERVAL }} 秒</p>
     </el-alert>
   </div>
 </template>
@@ -277,6 +288,7 @@ import {
   sendCommand as apiSendCommand, listCommands,
   listOperationLogs
 } from '@/api/iot'
+import { DeviceTelemetrySSE, SSE_STATUS } from '@/api/sse'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 
@@ -294,16 +306,24 @@ const latestLoaded = ref(false)
 const latestData = ref({ deviceCode: '', deviceName: '', projectName: '', status: '', reportTime: '', metrics: [] })
 const lastUpdateTime = ref('')
 let latestPollTimer = null
+const sseStatus = ref(SSE_STATUS.IDLE)
+let sse = null
 
 const hasLatestData = computed(() => !!(latestData.value.deviceCode || latestData.value.metrics?.length))
 const iconMap = { voltage: OfficeBuilding, current: Magnet, power: Lightning }
 const reportTime = computed(() => latestData.value.reportTime || latestData.value.reportedAt || '')
 
 const isOnline = computed(() => {
+  // 优先信任后端计算的 status，不在前端自行根据时间计算在线状态
+  const status = latestData.value.status
+  if (status === 'ONLINE' || status === 'OFFLINE') {
+    return status === 'ONLINE'
+  }
+  // 兼容 fallback：旧数据或异常场景下保留时间判断
   const timeStr = reportTime.value
   if (!timeStr) return false
   const reportTs = new Date(timeStr.replace(' ', 'T')).getTime()
-  if (isNaN(reportTs)) return latestData.value.status === 'ONLINE'
+  if (isNaN(reportTs)) return false
   return Date.now() - reportTs <= ONLINE_THRESHOLD * 1000
 })
 
@@ -315,27 +335,57 @@ function formatValue(val) {
   return val !== undefined && val !== null ? val.toFixed(2) : '--'
 }
 
+function applyLatestPayload(payload) {
+  latestError.value = ''
+  latestData.value = {
+    deviceCode: payload.deviceCode || '',
+    deviceName: payload.deviceName || '',
+    projectName: payload.projectName || '',
+    status: payload.status || '',
+    reportTime: payload.reportTime || payload.reportedAt || '',
+    metrics: payload.metrics || []
+  }
+  lastUpdateTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
+  latestLoaded.value = true
+}
+
 async function loadLatest() {
   latestLoading.value = true
   latestError.value = ''
   try {
     const res = await getLatestMetrics(DEVICE_ID)
     const payload = res.data || res || {}
-    latestData.value = {
-      deviceCode: payload.deviceCode || '',
-      deviceName: payload.deviceName || '',
-      projectName: payload.projectName || '',
-      status: payload.status || '',
-      reportTime: payload.reportTime || payload.reportedAt || '',
-      metrics: payload.metrics || []
-    }
-    lastUpdateTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
-    latestLoaded.value = true
+    applyLatestPayload(payload)
   } catch (err) {
     console.error('加载最新数据失败', err)
     latestError.value = err.message || '接口请求失败，请检查后端服务是否启动'
   } finally {
     latestLoading.value = false
+  }
+}
+
+// ========== SSE 实时推送 ==========
+function initSSE() {
+  sse = new DeviceTelemetrySSE({
+    onTelemetry: (data) => {
+      applyLatestPayload(data)
+    },
+    onStatusChange: (status) => {
+      sseStatus.value = status
+      if (status === SSE_STATUS.POLLING) {
+        startLatestPoll()
+      } else if (status === SSE_STATUS.CONNECTED) {
+        stopLatestPoll()
+      }
+    }
+  })
+  sse.connect()
+}
+
+function closeSSE() {
+  if (sse) {
+    sse.close()
+    sse = null
   }
 }
 
@@ -558,15 +608,16 @@ function stopPoll() {
 // ========== 生命周期 ==========
 onMounted(() => {
   loadLatest()
+  initSSE()
   loadHistory()
   pollData()
-  startLatestPoll()
   startHistoryPoll()
   startPoll()
   window.addEventListener('resize', onChartResize)
 })
 
 onUnmounted(() => {
+  closeSSE()
   stopLatestPoll()
   stopHistoryPoll()
   stopPoll()
@@ -634,6 +685,14 @@ onUnmounted(() => {
 
 .debug-hint { margin-top: 16px; }
 .debug-hint p { margin: 4px 0; font-size: 13px; }
+
+.sse-status-bar { display: flex; align-items: center; gap: 8px; margin: -4px 0 16px; padding: 8px 12px; background: #f6f8fc; border-radius: 6px; width: fit-content; }
+.sse-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.sse-dot.connected { background: #67c23a; }
+.sse-dot.reconnecting { background: #e6a23c; animation: sse-pulse 1s ease-in-out infinite; }
+.sse-dot.polling { background: #909399; }
+.sse-label { font-size: 13px; color: #606266; }
+@keyframes sse-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 @media (max-width: 768px) {
   .metric-value { font-size: 28px; }
