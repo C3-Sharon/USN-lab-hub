@@ -12,7 +12,7 @@ USN Lab Hub IoT · 一个半月 MVP 验收
 
 ```text
 MQTT Broker: localhost:1883
-MySQL: localhost:3306/usn_lab_hub
+MySQL: localhost:3306/usn_hub
 后端: http://localhost:8080
 前端: http://localhost:5173
 模拟器: scripts/pm001_simulator.py

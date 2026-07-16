@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: dev   # 默认激活 dev，部署时可通过参数覆盖
+    active: ${SPRING_PROFILES_ACTIVE:dev}   # 默认激活 dev，部署时可通过参数覆盖
   jackson:
     time-zone: Asia/Shanghai
   flyway:
@@ -34,15 +34,15 @@ usnhub:
     token-name: Authorization
   iot:
     operations:
-      timeout-enabled: true
-      timeout-check-delay-ms: 1000
+      timeout-enabled: ${IOT_COMMAND_TIMEOUT_ENABLED:true}
+      timeout-check-delay-ms: ${IOT_COMMAND_TIMEOUT_CHECK_DELAY_MS:1000}
     mqtt:
-      enabled: true
-      broker-url: tcp://127.0.0.1:1883
-      client-id: usn-lab-hub-backend
-      telemetry-topic: iot/power-monitor/PM-001/telemetry
-      command-topic: iot/power-monitor/PM-001/command
-      ack-topic: iot/power-monitor/PM-001/ack
+      enabled: ${IOT_MQTT_ENABLED:true}
+      broker-url: ${IOT_MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+      client-id: ${IOT_MQTT_CLIENT_ID:usn-lab-hub-backend}
+      telemetry-topic: ${IOT_MQTT_TELEMETRY_TOPIC:iot/power-monitor/PM-001/telemetry}
+      command-topic: ${IOT_MQTT_COMMAND_TOPIC:iot/power-monitor/PM-001/command}
+      ack-topic: ${IOT_MQTT_ACK_TOPIC:iot/power-monitor/PM-001/ack}
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -52,3 +52,15 @@ springdoc:
 
 server:
   port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  health:
+    redis:
+      enabled: false
