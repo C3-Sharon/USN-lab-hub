@@ -33,6 +33,9 @@ usnhub:
     # 前端请求头中的名字
     token-name: Authorization
   iot:
+    sse:
+      heartbeat-delay-ms: ${IOT_SSE_HEARTBEAT_DELAY_MS:10000}
+      status-check-delay-ms: ${IOT_SSE_STATUS_CHECK_DELAY_MS:1000}
     operations:
       timeout-enabled: ${IOT_COMMAND_TIMEOUT_ENABLED:true}
       timeout-check-delay-ms: ${IOT_COMMAND_TIMEOUT_CHECK_DELAY_MS:1000}

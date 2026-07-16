@@ -21,7 +21,7 @@ SSE 端点：GET /api/iot/public/devices/1/telemetry/stream
 Content-Type：text/event-stream
 事件名：telemetry
 data：复用 latest 数据结构（deviceId / deviceCode / deviceName / projectName / status / reportTime / metrics）
-触发时机：MQTT telemetry 到达并写入后端后
+触发时机：连接建立时发送当前快照；MQTT telemetry 到达并写入后端后推送；在线转离线时补发一次
 心跳：服务端可发送，但心跳不表示设备在线
 前端三态：实时连接 / 重新连接 / 轮询降级
 SSE 断线约 10 秒后恢复 latest 轮询
@@ -115,6 +115,8 @@ data: {"ts":"2026-07-16 20:00:05"}
 3. 计算设备在线状态（15 秒规则）。
 4. 组装 latest 结构。
 
+连接建立时先发送一条当前 latest 快照。若之后 15 秒内没有新上报、状态由 `ONLINE` 转为 `OFFLINE`，后端使用同一 `telemetry` 结构主动补发一次离线快照；保持离线期间不重复推送。
+
 同一 telemetry 只推送一次；如果同一秒存在重复上报，后端按实际落库结果推送。
 
 ---
@@ -198,7 +200,7 @@ data: {"ts":"2026-07-16 20:00:05"}
 - MQTT simulator 每 5 秒上报一次，SSE 约每 5 秒收到一次 `telemetry` 事件。
 - `telemetry` 事件 data 字段与 `GET /api/iot/devices/1/latest` 返回的 data 结构一致。
 - 心跳事件不影响前端状态与卡片内容。
-- 断开 simulator 超过 15 秒后，下一条 `telemetry` 事件中的 `status` 变为 `OFFLINE`。
+- 断开 simulator 超过 15 秒后，SSE 主动收到一条 `status=OFFLINE` 的 `telemetry` 事件，且保持离线期间不重复发送该转换事件。
 
 ### 6.2 前端验收
 
