@@ -1,7 +1,7 @@
 # USN Lab Hub 当前状态
 
-> 事实基线：`origin/dev` commit `4930b3a`  
-> 更新规则：仅在功能合入 `dev` 且完成验证后更新  
+> 事实基线：`origin/dev` commit `4930b3a`
+> 更新规则：仅在功能合入 `dev` 且完成验证后更新
 > 禁止：把计划、mock、未合并 PR 或口头完成写成已完成
 
 ## 已验证能力
