@@ -18,6 +18,8 @@ USN Lab Hub 是面向中国高校小型硬件实验室的项目协作、学习�
 6. `docs/contracts/CONTRACT_INDEX.md` 指向的相关契约
 7. `docs/governance/QUALITY_GATES.md`
 
+涉及第 18-23 周知识、RAG、来源同步或 Agent 建议时，额外必读 `docs/superpowers/specs/2026-08-21-knowledge-radar-design.md`。该专项规格与总体规格共同约束实现。
+
 角色指南：
 
 - 产品：`docs/agent-guides/10_PRODUCT_LONG_TERM_AGENT.md`
@@ -52,7 +54,7 @@ USN Lab Hub 是面向中国高校小型硬件实验室的项目协作、学习�
 1. 实际完成内容与未完成内容。
 2. 修改文件清单。
 3. 运行命令、测试结果、构建结果和人工检查结果。
-4. API、MQTT、数据库、权限、UI 字段的契约影响。
+4. API、MQTT、数据库、权限、UI 字段、知识来源和检索范围的契约影响。
 5. 联调步骤、已知风险和需要另一角色确认的事项。
 6. 建议提交信息和 PR 文案要点。
 
@@ -62,6 +64,9 @@ Agent 不得：
 - 未经产品契约修改接口字段、状态枚举、页面术语或权限范围。
 - 用微服务、Kafka、Kubernetes、GraphRAG 等扩大范围来代替完成当前业务。
 - 让模型直接连接 MQTT Broker 或绕过后端控制权限。
+- 让 Agent 自行启用知识来源、批准候选、下载资料、发布知识或扩大可见范围。
+- 把未审核候选、网页内容或公众号文章直接放入正式 RAG 检索。
+- 自动监控/批量抓取微信公众号，或绕过登录、验证码、robots 和来源访问限制。
 - 在测试输入和代码未变化时反复运行同一全量套件。
 - 用截图文件哈希完全相等判断 UI 正确。
 

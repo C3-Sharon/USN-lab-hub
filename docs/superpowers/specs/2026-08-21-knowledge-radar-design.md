@@ -1,6 +1,6 @@
 # USN Lab Hub Knowledge Radar 设计规格
 
-> 状态：讨论确认，等待团队书面审阅
+> 状态：已审阅确认，待随总体规划 PR 合入 `dev`
 > 日期：2026-08-21
 > 交付约束：Knowledge Radar 属于六个月完整成品，不作为周期外增强项
 

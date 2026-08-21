@@ -20,6 +20,7 @@
 | 首轮 MQTT | `docs/agent-guides/05_MQTT_CONTRACT.md` | ACTIVE_LEGACY | PM-001 telemetry/command/ack |
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |
 | 总体产品与架构 | `docs/superpowers/specs/2026-08-19-usn-lab-hub-platform-design.md` | ACTIVE | 六个月目标和不可突破边界 |
+| Knowledge Radar 设计 | `docs/superpowers/specs/2026-08-21-knowledge-radar-design.md` | ACTIVE_DESIGN | 来源、候选、审批、版本、通知和 Agent 权限边界 |
 | 周业务契约 | `docs/weekly/2026-WNN.md` | WEEK_SCOPED | 当周字段、样例、错误和验收 |
 
 `ACTIVE_LEGACY` 表示当前运行代码仍遵守该契约，但它不能直接代表第 16-17 周通用 IoT 目标已完成。通用契约建立后必须记录替代关系和迁移窗口。
@@ -32,7 +33,7 @@
 - 学习实验和模板 Schema：第 5-7 周。
 - 采购、库存和资产状态机：第 8-12 周。
 - 硬件版本、BOM、装配和通用 MQTT：第 13-17 周。
-- Knowledge Resource、摄取、RAG Trace：第 18-21 周。
+- Knowledge Resource、Radar 来源/候选/审批、摄取、RAG Trace：第 18-21 周。
 - Git Adapter、Agent Tool、Pending Action：第 22-24 周。
 
 契约文件应包含：目标、鉴权、请求、响应、枚举、状态转换、错误、幂等键、权限矩阵、正常样例、空状态、失败样例和版本兼容说明。
