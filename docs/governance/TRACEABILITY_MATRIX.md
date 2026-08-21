@@ -18,6 +18,7 @@
 | 多设备模板、动态指标和 SSE | 16 | - | - | - | - | - | PLANNED |
 | 通用告警、指令、ACK 和审计 | 17 | - | - | - | - | - | PLANNED |
 | 知识 CRUD、版本、删除恢复和 ACL | 18 | - | - | - | - | - | PLANNED |
+| Knowledge Radar 来源、候选、审批和通知 | 18-21 | - | - | - | - | - | PLANNED |
 | 摄取、失败恢复和 ACTIVE 切换 | 19 | - | - | - | - | - | PLANNED |
 | Hybrid RAG、引用和无答案 | 20 | - | - | - | - | - | PLANNED |
 | Inspector、黄金集和评测门 | 21 | - | - | - | - | - | PLANNED |

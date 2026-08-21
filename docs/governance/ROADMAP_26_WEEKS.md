@@ -36,10 +36,10 @@
 | 15 | 装配、损耗、返修规则 | 装配工单和实例页 | 扣料事务、板卡实例追溯 | 物料批次到板卡闭环 | NOT_STARTED |
 | 16 | 设备模板和协议样例 | 通用设备页面和模拟器 | 泛化 MQTT、指标和 latest | PM-001 不再被业务硬编码 | NOT_STARTED |
 | 17 | 告警、控制、风险文案 | 告警控制审计 UI、第二模拟器 | 通用规则、指令、ACK | 第二类真实硬件接入 | NOT_STARTED |
-| 18 | 知识类型、审核、权限 | 知识 CRUD | Resource/Version/MinIO | CRUD、删除恢复、ACL 正确 | NOT_STARTED |
-| 19 | 摄取状态和失败文案 | 摄取状态、失败和重试 | Parser、Chunk、Job | 失败不破坏 ACTIVE 版本 | NOT_STARTED |
-| 20 | 评测问题、答案与证据 | 问答、引用和无答案态 | BM25、Dense、RRF | 手册问答引用真实来源 | NOT_STARTED |
-| 21 | 黄金集标注和准入结论 | RAG Inspector | Trace、Citation、Evaluation | 两场景达到冻结指标 | NOT_STARTED |
+| 18 | 知识类型、来源、审核、权限 | 知识 CRUD、来源管理 | Resource/Version、白名单、ACL、MinIO | 手工资料 CRUD 与权限正确 | NOT_STARTED |
+| 19 | 候选、差异、通知、微信规则 | 候选箱、审核、同步任务 | Connector SPI、游标、变化检测、下载、摄取 | 官方来源和微信链接经审批入库 | NOT_STARTED |
+| 20 | 评测问题、答案与证据 | 问答、引用、资料版本 | BM25、Dense、RRF、Radar 对接 | 新资料有引用，历史绑定用旧版 | NOT_STARTED |
+| 21 | 雷达/RAG 黄金集和准入结论 | Inspector、失败恢复 | Trace、Citation、Evaluation、双实例协调 | 两场景和知识雷达完整通过 | NOT_STARTED |
 | 22 | 连接、同步、降级规则 | Git 连接设置和同步状态 | GitHub/GitLab/搜索 Adapter | GitLab 离线不拖垮项目页 | NOT_STARTED |
 | 23 | Agent 工具和风险清单 | 助手侧栏和专业模式 | Tool、权限、诊断编排 | 回答结合业务与知识证据 | NOT_STARTED |
 | 24 | 确认、拒绝、审计脚本 | Pending Action UI | 风险校验、幂等、ACK | 高风险未确认不能执行 | NOT_STARTED |
