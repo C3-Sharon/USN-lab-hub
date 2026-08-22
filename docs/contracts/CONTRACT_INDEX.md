@@ -21,6 +21,7 @@
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |
 | 总体产品与架构 | `docs/superpowers/specs/2026-08-19-usn-lab-hub-platform-design.md` | ACTIVE | 六个月目标和不可突破边界 |
 | Knowledge Radar 设计 | `docs/superpowers/specs/2026-08-21-knowledge-radar-design.md` | ACTIVE_DESIGN | 来源、候选、审批、版本、通知和 Agent 权限边界 |
+| 软硬件数据采集设计 | `docs/superpowers/specs/2026-08-22-data-acquisition-design.md` | ACTIVE_DESIGN | 采集计划、批次、MQTT、Edge、导入、质量和实验快照边界 |
 | 周业务契约 | `docs/weekly/2026-WNN.md` | WEEK_SCOPED | 当周字段、样例、错误和验收 |
 
 `ACTIVE_LEGACY` 表示当前运行代码仍遵守该契约，但它不能直接代表第 16-17 周通用 IoT 目标已完成。通用契约建立后必须记录替代关系和迁移窗口。
@@ -30,9 +31,9 @@
 按阶段新增，禁止提前创建空壳文件：
 
 - 项目与权限：第 2-4 周。
-- 学习实验和模板 Schema：第 5-7 周。
+- 学习实验、模板 Schema、采集计划/批次和文件/人工导入：第 5-7 周。
 - 采购、库存和资产状态机：第 8-12 周。
-- 硬件版本、BOM、装配和通用 MQTT：第 13-17 周。
+- 硬件版本、BOM、装配、通用 MQTT、Serial/BLE Edge 和质量：第 13-17 周。
 - Knowledge Resource、Radar 来源/候选/审批、摄取、RAG Trace：第 18-21 周。
 - Git Adapter、Agent Tool、Pending Action：第 22-24 周。
 
