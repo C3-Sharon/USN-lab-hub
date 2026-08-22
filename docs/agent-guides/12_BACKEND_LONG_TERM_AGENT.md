@@ -2,7 +2,7 @@
 
 ## 1. 你的职责
 
-你负责模块边界、Flyway、API、全局与项目权限、采购库存事务、硬件追溯、MQTT、缓存、异步任务、Knowledge Radar、Java RAG Kernel、Agent Tool、双实例、监控、压测、容灾和备份。
+你负责模块边界、Flyway、API、全局与项目权限、采购库存事务、硬件追溯、采集计划/批次、MQTT 与 Edge 摄取、缓存、异步任务、Knowledge Radar、Java RAG Kernel、Agent Tool、双实例、监控、压测、容灾和备份。
 
 Java 技术深度必须来自真实业务：库存防超扣需要事务和条件更新，MQTT 需要幂等与乱序策略，知识摄取需要有界线程池和版本切换，双实例需要协调和降级。禁止为了展示技术先拆微服务。
 
@@ -65,6 +65,17 @@ Java 技术深度必须来自真实业务：库存防超扣需要事务和条件
 - 下载网关校验协议、DNS、每次重定向、域名、IP 范围、MIME、大小、压缩展开、超时和速率，防止 SSRF。
 - Agent 只拥有查询覆盖和创建 SOURCE_PROPOSAL 的工具，不拥有批准、下载、发布或白名单工具。
 
+### 软硬件数据采集
+
+- 第 7、16、17、25 周必读 `2026-08-22-data-acquisition-design.md`。
+- 持续 telemetry、CollectionPlan、CollectionBatch、实验 Snapshot 和 latest 是不同事实；完成批次及实验引用不能被后续数据覆盖。
+- PM-001 v1 兼容适配器继续可用；MQTT v2、Serial/BLE Edge、文件和人工记录统一规范化，但保留 sourceType、rawReference 和 parserVersion。
+- MQTT/Edge 使用 deviceId+messageId、批量幂等键、唯一约束和序号范围处理重复/重传；乱序合法数据进入历史但不倒退 latest。
+- Collector 使用独立凭据和设备/项目范围，不直接写 Mapper/数据库，不拥有普通用户权限。
+- 文件导入先预览映射再确认，正式记录异步写入；相同文件/映射重复提交复用任务。
+- 数据质量显式输出重复、乱序、缺口、时钟偏差、单位、越界、解析和缓冲问题；未知单位不能自动猜测。
+- 原始事实进入 MySQL/MinIO；Redis、SSE 和聚合统计均可丢失或重建，不能成为唯一事实源。
+
 ## 5. 测试组合
 
 - 领域规则：纯单元测试。
@@ -74,6 +85,7 @@ Java 技术深度必须来自真实业务：库存防超扣需要事务和条件
 - 库存/审批/指令：并发测试与审计验证。
 - 双实例：两个端口、共享 MySQL/Redis/Broker 的场景测试。
 - Knowledge Radar：重复候选/审批、游标续跑、双实例抢占、重定向越界、非法 MIME/大小、来源超时、摄取失败和旧 ACTIVE 保留。
+- 数据采集：计划状态、重复开始、MQTT v1/v2兼容、Edge 批量重传、乱序/迟到、断线缓冲、文件映射、质量报告、实验快照和权限隔离。
 
 H2 不能证明 MySQL 的锁、唯一约束、JSON、索引和事务语义。高风险数据库逻辑必须在 MySQL 上验证。
 

@@ -20,6 +20,8 @@ USN Lab Hub 是面向中国高校小型硬件实验室的项目协作、学习�
 
 涉及第 18-23 周知识、RAG、来源同步或 Agent 建议时，额外必读 `docs/superpowers/specs/2026-08-21-knowledge-radar-design.md`。该专项规格与总体规格共同约束实现。
 
+涉及采集计划、实验数据、MQTT v2、Serial/Bluetooth、Edge Collector、文件导入或数据质量时，额外必读 `docs/superpowers/specs/2026-08-22-data-acquisition-design.md`。
+
 角色指南：
 
 - 产品：`docs/agent-guides/10_PRODUCT_LONG_TERM_AGENT.md`
@@ -67,6 +69,9 @@ Agent 不得：
 - 让 Agent 自行启用知识来源、批准候选、下载资料、发布知识或扩大可见范围。
 - 把未审核候选、网页内容或公众号文章直接放入正式 RAG 检索。
 - 自动监控/批量抓取微信公众号，或绕过登录、验证码、robots 和来源访问限制。
+- 让 Vue 浏览器承担正式的长期串口/蓝牙采集，或让 Edge Collector 直接写数据库和执行业务审批。
+- 把设备在线、Collector 在线、采集批次运行和数据质量正常混为同一个状态。
+- 静默修正未知单位、伪造缺失记录、覆盖完成批次或把不断变化的 latest 作为实验固定证据。
 - 在测试输入和代码未变化时反复运行同一全量套件。
 - 用截图文件哈希完全相等判断 UI 正确。
 
