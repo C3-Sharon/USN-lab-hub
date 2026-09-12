@@ -1,4 +1,4 @@
-﻿# USN Lab Hub 26 周路线
+# USN Lab Hub 26 周路线
 
 > 状态值：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`VERIFIED`
 > `VERIFIED` 只在三个角色 PR 合入 `dev` 且周验收通过后填写。
