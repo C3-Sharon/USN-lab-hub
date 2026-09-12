@@ -222,7 +222,7 @@ async function loadData() {
   trendError.value = ''
   try {
     const res = await getPublicProject(PROJECT_CODE)
-    const payload = res.data || res || {}
+    const payload = res || {}
 
     project.value = {
       projectCode: payload.projectCode,

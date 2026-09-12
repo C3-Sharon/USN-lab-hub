@@ -93,7 +93,7 @@ function statusTagType(status) {
 async function loadProjects() {
   try {
     const res = await listProjects({ pageSize: 100 })
-    projectOptions.value = res.data.records || []
+    projectOptions.value = res.records || []
   } catch (err) {
     console.error('加载项目选项失败', err)
   }
@@ -106,8 +106,8 @@ async function loadData() {
     // 清除空值
     Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
     const res = await listDevices(params)
-    devices.value = res.data.records || []
-    total.value = res.data.total || 0
+    devices.value = res.records || []
+    total.value = res.total || 0
   } catch (err) {
     console.error('加载设备列表失败', err)
     devices.value = []

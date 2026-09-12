@@ -1,0 +1,52 @@
+/*
+ * Design tokens / 设计 token
+ *
+ * 来源：M01-W01 占位规范，UI_SPEC 冻结后会接管。
+ * 当前阶段不引入 Element Plus 主题覆盖，仅在 :root 暴露 CSS 变量。
+ * 任何页面在 scoped style 里引用 var(--brand-primary) 即可。
+ */
+
+:root {
+  /* 品牌色（侧栏背景、强调色） */
+  --brand-sidebar-bg: #172033;
+  --brand-sidebar-fg: #ffffff;
+  --brand-accent: #f5c542;
+  --brand-accent-fg: #172033;
+
+  /* 文字 */
+  --text-primary: #172033;
+  --text-secondary: #606266;
+  --text-muted: #7c8798;
+  --text-placeholder: #909399;
+
+  /* 背景与分隔 */
+  --bg-page: #f4f7fb;
+  --bg-card: #ffffff;
+  --border-soft: #e7ecf3;
+
+  /* 状态色（与 Element Plus type=success/warning/danger/info 对齐） */
+  --status-healthy: #67c23a;
+  --status-attention: #e6a23c;
+  --status-risk: #f56c6c;
+  --status-info: #909399;
+  --status-online: #67c23a;
+  --status-offline: #909399;
+  --status-alert: #f56c6c;
+  --status-maintenance: #e6a23c;
+
+  /* 角色色（PR #28 之后正式落定，目前先占位） */
+  --role-admin: #f56c6c;
+  --role-teacher: #409eff;
+  --role-student: #67c23a;
+
+  /* 尺寸 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}

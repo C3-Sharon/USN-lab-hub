@@ -31,7 +31,7 @@ async function loadData() {
   loading.value = true
   try {
     const res = await listCommands()
-    commands.value = res.data.records || []
+    commands.value = res.records || []
   } catch (err) {
     console.error('加载指令记录失败', err)
   } finally {

@@ -93,8 +93,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await listOperationLogs(query.value)
-    logs.value = res.data.records || []
-    total.value = res.data.total || 0
+    logs.value = res.records || []
+    total.value = res.total || 0
   } catch (err) {
     console.error('加载操作日志失败', err)
     logs.value = []

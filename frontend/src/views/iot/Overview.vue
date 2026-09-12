@@ -195,7 +195,7 @@ async function loadData() {
     ])
 
     if (pubRes) {
-      const payload = pubRes.data || pubRes || {}
+      const payload = pubRes || {}
       project.value = {
         projectCode: payload.projectCode,
         projectName: payload.projectName,
@@ -211,8 +211,7 @@ async function loadData() {
     }
 
     if (alertRes) {
-      const payload = alertRes.data || alertRes || {}
-      const list = payload.list || []
+      const list = alertRes.records || alertRes.list || []
       openAlertCount.value = list.filter(a => a.status === 'OPEN').length
     }
 

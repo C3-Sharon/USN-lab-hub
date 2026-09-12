@@ -45,7 +45,7 @@ async function loadData() {
   loading.value = true
   try {
     const res = await listAlerts()
-    alerts.value = res.data.records || []
+    alerts.value = res.records || []
   } catch (err) {
     console.error('加载告警失败', err)
   } finally {

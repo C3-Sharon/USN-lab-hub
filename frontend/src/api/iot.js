@@ -165,7 +165,7 @@ const MOCK_OPERATION_LOGS = [
 function mockResponse(data) {
   return Promise.resolve({
     code: 200,
-    message: 'success',
+    msg: 'success',
     data
   })
 }
@@ -173,10 +173,13 @@ function mockResponse(data) {
 function mockPageResponse(records, total = records.length) {
   return Promise.resolve({
     code: 200,
-    message: 'success',
+    msg: 'success',
     data: {
-      list: records,
-      total
+      records,
+      total,
+      size: 10,
+      current: 1,
+      pages: 1
     }
   })
 }

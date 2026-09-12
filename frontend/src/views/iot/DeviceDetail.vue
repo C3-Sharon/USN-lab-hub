@@ -296,7 +296,7 @@ async function loadHistory() {
   historyError.value = ''
   try {
     const res = await getMetricHistory(deviceId, { metricKey: 'power' })
-    historyData.value = res.data || { points: [] }
+    historyData.value = res || { points: [] }
     await nextTick()
     renderChart()
   } catch (err) {
@@ -368,8 +368,8 @@ async function loadRecommendations() {
   recommendationsLoading.value = true
   recommendationsError.value = ''
   try {
-    const res = await listRecommendations({ deviceId })
-    recommendations.value = res.data.records || []
+    const res = await listRecommendations(deviceId)
+    recommendations.value = res.records || []
   } catch (err) {
     console.error('加载建议失败', err)
     recommendationsError.value = err.message || '接口请求失败'
@@ -419,8 +419,8 @@ async function handleSendCommand() {
 async function loadOperationLogs() {
   logsError.value = ''
   try {
-    const res = await listOperationLogs({ targetId: deviceId, targetType: 'DEVICE' })
-    operationLogs.value = res.data.records || []
+    const res = await listOperationLogs(deviceId, { targetType: 'DEVICE' })
+    operationLogs.value = res.records || []
   } catch (err) {
     console.error('加载操作日志失败', err)
     logsError.value = err.message || '接口请求失败'
