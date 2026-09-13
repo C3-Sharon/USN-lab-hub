@@ -211,7 +211,7 @@ async function loadData() {
     }
 
     if (alertRes) {
-      const list = alertRes.records || alertRes.list || []
+      const list = alertRes.list || []
       openAlertCount.value = list.filter(a => a.status === 'OPEN').length
     }
 

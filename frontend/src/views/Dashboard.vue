@@ -1,203 +1,367 @@
 <template>
-  <div class="page-shell">
-    <section class="hero-panel">
+  <div class="workbench-page">
+    <header class="workbench-page__header">
       <div>
-        <h2>欢迎回来，{{ userInfo.username || '同学' }}</h2>
-        <p>{{ userInfo.memberId || '-' }} · {{ userInfo.groupName || '未分组' }}</p>
+        <h1 class="page-title">个人工作台</h1>
+        <p class="page-subtitle muted">今日考勤、进行中项目、本周任务、学习、设备提醒</p>
       </div>
-      <el-tag size="large" effect="dark" :type="attendanceTag.type">{{ attendanceTag.label }}</el-tag>
-    </section>
-
-    <el-row :gutter="18">
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>姓名</span>
-          <strong>{{ userInfo.username || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>专业</span>
-          <strong>{{ userInfo.majorName || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>身份</span>
-          <strong>{{ userInfo.identity || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>学院</span>
-          <strong>{{ userInfo.facultyName || '-' }}</strong>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="18">
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="metric-card">
-          <span>本周学时</span>
-          <strong>{{ formatHours(attendance.weekHours) }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="metric-card">
-          <span>本学期学时</span>
-          <strong>{{ formatHours(attendance.semesterHours) }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="action-card">
-          <el-button
-            class="attendance-button"
-            :type="actionButton.type"
-            size="large"
-            :loading="submitting"
-            :disabled="submitting || !actionButton.actionType"
-            @click="handleAttendanceAction"
-          >
-            {{ actionButton.text }}
-          </el-button>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <section class="data-panel">
-      <div class="page-heading table-heading">
-        <div>
-          <h3 class="page-title">今日打卡明细</h3>
-          <p class="page-subtitle">签到、签退和单次累计时长</p>
-        </div>
+      <div class="header-meta">
+        <el-tag :type="roleMeta.tagType" size="large" effect="dark" class="role-tag">
+          {{ roleMeta.name }}
+        </el-tag>
+        <span class="muted text-help">欢迎回来，{{ user?.username || '同学' }}</span>
       </div>
-      <el-table :data="attendance.todayRecords || []" empty-text="今日暂无打卡记录">
-        <el-table-column prop="inTime" label="签到时间" min-width="140" />
-        <el-table-column prop="outTime" label="签退时间" min-width="140" />
-        <el-table-column label="时长累计" min-width="140">
-          <template #default="{ row }">{{ formatMinutes(row.durationMins) }}</template>
-        </el-table-column>
-      </el-table>
-    </section>
+    </header>
+
+    <div v-loading="overviewLoading" class="workbench-grid">
+      <section class="region region--attendance">
+        <header class="region__head">
+          <h2 class="region__title">今日考勤</h2>
+          <span class="region__sub muted text-help">签到/签退/累计时长</span>
+        </header>
+        <RegionState
+          :state="attendanceState"
+          :variant="'card'"
+          :error-message="overviewError"
+          @retry="loadOverview"
+        >
+          <div v-if="attendance" class="attendance-content">
+            <div class="attendance-content__hero">
+              <el-tag :type="attendance.tagType" effect="dark" size="large">
+                {{ attendance.statusLabel }}
+              </el-tag>
+              <div class="attendance-content__hours">
+                <span class="muted text-help">本周学时</span>
+                <strong>{{ formatHours(attendance.weekHours) }}</strong>
+              </div>
+              <div class="attendance-content__hours">
+                <span class="muted text-help">本学期学时</span>
+                <strong>{{ formatHours(attendance.semesterHours) }}</strong>
+              </div>
+            </div>
+            <el-table :data="attendance.todayRecords || []" size="small" empty-text="今日暂无打卡记录">
+              <el-table-column prop="inTime" label="签到时间" min-width="120" />
+              <el-table-column prop="outTime" label="签退时间" min-width="120" />
+              <el-table-column label="时长累计" min-width="100">
+                <template #default="{ row }">{{ formatMinutes(row.durationMins) }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </RegionState>
+      </section>
+
+      <section class="region region--projects">
+        <header class="region__head">
+          <h2 class="region__title">我参与的项目</h2>
+          <span class="region__sub muted text-help">{{ projectsHint }}</span>
+        </header>
+        <RegionState :state="projectsState" :variant="'list'" :description="projectsHint" />
+      </section>
+
+      <section class="region region--tasks">
+        <header class="region__head">
+          <h2 class="region__title">本周任务</h2>
+          <span class="region__sub muted text-help">{{ tasksHint }}</span>
+        </header>
+        <RegionState :state="tasksState" :variant="'list'" :description="tasksHint" />
+      </section>
+
+      <section class="region region--learning">
+        <header class="region__head">
+          <h2 class="region__title">学习实验</h2>
+          <span class="region__sub muted text-help">{{ learningHint }}</span>
+        </header>
+        <RegionState :state="learningState" :variant="'list'" :description="learningHint" />
+      </section>
+
+      <section class="region region--notifications">
+        <header class="region__head">
+          <h2 class="region__title">待处理事项</h2>
+          <span class="region__sub muted text-help">{{ notificationsHint }}</span>
+        </header>
+        <RegionState :state="notificationsState" :variant="'list'" :description="notificationsHint" />
+      </section>
+
+      <section class="region region--device">
+        <header class="region__head">
+          <h2 class="region__title">设备提醒</h2>
+          <span class="region__sub muted text-help">设备在线与告警汇总</span>
+        </header>
+        <RegionState
+          :state="deviceState"
+          :variant="'card'"
+          :error-message="deviceError"
+          @retry="loadDeviceReminder"
+        >
+          <div v-if="deviceReminder" class="device-content">
+            <div class="device-content__metric">
+              <span class="muted text-help">在线设备</span>
+              <strong>{{ deviceReminder.onlineCount }}</strong>
+            </div>
+            <div class="device-content__metric">
+              <span class="muted text-help">告警数</span>
+              <strong>{{ deviceReminder.alertCount }}</strong>
+            </div>
+            <div class="device-content__metric">
+              <span class="muted text-help">总设备</span>
+              <strong>{{ deviceReminder.totalCount }}</strong>
+            </div>
+          </div>
+        </RegionState>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { doAttendanceAction } from '@/api/attendance'
 import { userStore } from '@/store/user'
+import { currentPrimaryRole, currentRoles } from '@/store/user'
+import { ROLE_META, ROLE } from '@/utils/permission'
+import { fetchWorkbenchOverview } from '@/api/workbench'
+import { fetchDeviceReminder } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
+import RegionState from '@/components/RegionState.vue'
 
-const submitting = ref(false)
+const route = useRoute()
 
-const userInfo = computed(() => userStore.userInfo || {})
-const attendance = computed(() => userStore.todayAttendance || { todayStatus: 0, todayRecords: [] })
+const user = computed(() => userStore.userInfo || {})
+const primaryRole = computed(() => currentPrimaryRole() || ROLE.MEMBER)
+const roleMeta = computed(() => ROLE_META[primaryRole.value] || ROLE_META[ROLE.MEMBER])
 
-const attendanceTag = computed(() => {
-  if (attendance.value.todayStatus === 1) {
-    return { label: '进行中', type: 'warning' }
-  }
-  if (attendance.value.todayStatus === 2) {
-    return { label: '已签退', type: 'success' }
-  }
-  return { label: '未签到', type: 'info' }
+const overviewLoading = ref(false)
+const overviewError = ref('')
+const overview = ref(null)
+const deviceError = ref('')
+const deviceReminder = ref(null)
+
+const attendance = computed(() => overview.value?.attendance?.data || null)
+const attendanceState = computed(() => {
+  if (overviewError.value) return 'error'
+  if (overview.value?.attendance?.status === 'NOT_AVAILABLE') return 'not-available'
+  if (overview.value?.attendance?.status === 'READY') return 'success'
+  if (overviewLoading.value) return 'loading'
+  return 'empty'
 })
 
-const actionButton = computed(() => {
-  if (attendance.value.todayStatus === 1) {
-    return { text: '执行签退', type: 'warning', actionType: 2 }
-  }
-  return { text: '执行签到', type: 'primary', actionType: 1 }
+const projectsHint = computed(() => {
+  const r = overview.value?.projects
+  if (r?.status === 'NOT_AVAILABLE') return '尚未开放'
+  if (!r) return '加载中'
+  return ''
+})
+const projectsState = computed(() => {
+  if (overviewError.value) return 'error'
+  if (overviewLoading.value && !overview.value) return 'loading'
+  if (!overview.value) return 'loading'
+  if (overview.value.projects?.status === 'NOT_AVAILABLE') return 'not-available'
+  if (overview.value.projects?.status === 'READY') return 'success'
+  return 'empty'
 })
 
-async function handleAttendanceAction() {
-  submitting.value = true
+const tasksHint = computed(() => regionHint(overview.value?.tasks))
+const tasksState = computed(() => regionState(overview.value?.tasks))
+
+const learningHint = computed(() => regionHint(overview.value?.learning))
+const learningState = computed(() => regionState(overview.value?.learning))
+
+const notificationsHint = computed(() => regionHint(overview.value?.notifications))
+const notificationsState = computed(() => regionState(overview.value?.notifications))
+
+const deviceState = computed(() => {
+  if (deviceError.value && !deviceReminder.value) return 'error'
+  if (!deviceReminder.value) return 'loading'
+  return 'success'
+})
+
+function regionHint(region) {
+  if (!region) return '加载中'
+  if (region.status === 'NOT_AVAILABLE') return '尚未开放'
+  return ''
+}
+
+function regionState(region) {
+  if (overviewError.value) return 'error'
+  if (overviewLoading.value && !overview.value) return 'loading'
+  if (!region) return 'loading'
+  if (region.status === 'NOT_AVAILABLE') return 'not-available'
+  if (region.status === 'READY') return 'success'
+  return 'empty'
+}
+
+async function loadOverview() {
+  overviewLoading.value = true
+  overviewError.value = ''
   try {
-    const newAttendance = await doAttendanceAction(actionButton.value.actionType)
-    userStore.setAttendance(newAttendance)
-    ElMessage.success('考勤状态已更新')
+    overview.value = await fetchWorkbenchOverview()
+  } catch (err) {
+    overviewError.value = err?.msg || err?.message || '工作台数据加载失败'
+    if (err?.code === 403 || err?.code === 'ACCESS_DENIED') {
+      ElMessage.warning('当前账号无权访问工作台')
+    }
   } finally {
-    submitting.value = false
+    overviewLoading.value = false
   }
 }
+
+async function loadDeviceReminder() {
+  deviceError.value = ''
+  try {
+    deviceReminder.value = await fetchDeviceReminder()
+  } catch (err) {
+    deviceError.value = err?.msg || err?.message || '设备提醒加载失败'
+  }
+}
+
+onMounted(() => {
+  loadOverview()
+  loadDeviceReminder()
+  if (route.query.reason === 'ACCOUNT_DISABLED') {
+    ElMessage.error('账号已被禁用，请联系管理员')
+  } else if (route.query.reason) {
+    ElMessage.warning('登录状态已失效，请重新登录')
+  }
+})
+
+defineExpose({ currentRoles })
 </script>
 
 <style scoped>
-.hero-panel {
-  min-height: 142px;
+.workbench-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+  max-width: var(--usn-content-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.workbench-page__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 28px;
-  border-radius: 8px;
-  color: #fff;
-  background:
-    linear-gradient(rgba(23, 32, 51, 0.68), rgba(23, 32, 51, 0.78)),
-    url("https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80") center / cover;
+  gap: var(--usn-space-4);
+  flex-wrap: wrap;
 }
 
-.hero-panel h2 {
-  margin: 0 0 10px;
-  font-size: 28px;
-  letter-spacing: 0;
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
 }
 
-.hero-panel p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.82);
+.role-tag {
+  font-weight: 600;
 }
 
-.info-card,
-.metric-card,
-.action-card {
-  height: 132px;
-  border-radius: 8px;
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--usn-space-4);
+  width: 100%;
 }
 
-.info-card :deep(.el-card__body),
-.metric-card :deep(.el-card__body),
-.action-card :deep(.el-card__body) {
-  height: 100%;
+.region {
+  background: var(--usn-surface);
+  border: 1px solid var(--usn-line);
+  border-radius: var(--usn-radius-md);
+  padding: var(--usn-space-4);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: var(--usn-space-3);
+  box-shadow: var(--usn-shadow-panel);
+  min-height: 240px;
 }
 
-.info-card span,
-.metric-card span {
-  color: #7c8798;
-  font-size: 14px;
+.region--attendance {
+  grid-column: span 2;
 }
 
-.info-card strong {
-  margin-top: 10px;
+.region__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--usn-space-3);
+  flex-wrap: wrap;
+}
+
+.region__title {
+  margin: 0;
+  font-size: var(--usn-font-size-panel-title);
+  font-weight: 700;
+  color: var(--usn-ink-900);
+}
+
+.region__sub {
+  font-size: var(--usn-font-size-help);
+}
+
+.attendance-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.attendance-content__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-6);
+  flex-wrap: wrap;
+}
+
+.attendance-content__hours {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attendance-content__hours strong {
   font-size: 20px;
-  color: #172033;
-}
-
-.metric-card strong {
-  margin-top: 12px;
-  font-size: 34px;
-  color: #1d4f91;
-}
-
-.attendance-button {
-  width: 100%;
-  height: 56px;
-  font-size: 18px;
+  color: var(--usn-blue-700);
   font-weight: 700;
 }
 
-.table-heading {
-  margin-bottom: 16px;
+.device-content {
+  display: flex;
+  gap: var(--usn-space-6);
+  flex-wrap: wrap;
+}
+
+.device-content__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-content__metric strong {
+  font-size: 24px;
+  color: var(--usn-blue-700);
+  font-weight: 700;
+}
+
+@media (max-width: 1280px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .region--attendance {
+    grid-column: span 1;
+  }
 }
 
 @media (max-width: 768px) {
-  .hero-panel {
-    align-items: flex-start;
+  .workbench-page__header {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .attendance-content__hero,
+  .device-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--usn-space-3);
   }
 }
 </style>

@@ -1,68 +1,53 @@
 <template>
   <el-container class="app-layout">
-    <el-aside class="sidebar" width="232px">
+    <el-aside class="sidebar" :width="sidebarWidth">
       <div class="sidebar-brand">
-        <span>USN</span>
-        <strong>lab-hub</strong>
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22">
+            <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M6 16 Q 12 9 16 16 T 26 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <circle cx="16" cy="16" r="2" fill="currentColor" />
+          </svg>
+        </span>
+        <div class="brand-text">
+          <strong>USN lab-hub</strong>
+          <span class="text-help muted">个人工作台</span>
+        </div>
       </div>
-      <el-menu :default-active="activePath" router class="sidebar-menu">
-        <el-menu-item index="/dashboard">
-          <el-icon><DataBoard /></el-icon>
-          <span>个人考勤</span>
-        </el-menu-item>
-        <template v-if="isAdminUser">
-          <el-menu-item index="/admin/members">
-            <el-icon><UserFilled /></el-icon>
-            <span>成员管理</span>
-          </el-menu-item>
-          <el-menu-item index="/admin/attendance">
-            <el-icon><DocumentChecked /></el-icon>
-            <span>考勤检查</span>
+
+      <el-menu :default-active="activePath" router class="sidebar-menu" background-color="transparent" text-color="rgba(255,255,255,0.78)" active-text-color="#ffffff">
+        <template v-for="item in menuItems" :key="item.index">
+          <el-sub-menu v-if="item.children" :index="item.index">
+            <template #title>
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </template>
+            <el-menu-item v-for="child in item.children" :key="child.index" :index="child.index">
+              <el-icon><component :is="child.icon" /></el-icon>
+              <span>{{ child.title }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="item.index">
+            <el-icon><component :is="item.icon" /></el-icon>
+            <span>{{ item.title }}</span>
           </el-menu-item>
         </template>
-        <el-sub-menu index="/iot">
-          <template #title>
-            <el-icon><Cpu /></el-icon>
-            <span>IoT 管理</span>
-          </template>
-          <el-menu-item index="/iot/overview">
-            <el-icon><Monitor /></el-icon>
-            <span>IoT 总览</span>
-          </el-menu-item>
-          <el-menu-item index="/iot/projects">
-            <el-icon><FolderOpened /></el-icon>
-            <span>项目列表</span>
-          </el-menu-item>
-          <el-menu-item index="/iot/devices">
-            <el-icon><Cpu /></el-icon>
-            <span>设备列表</span>
-          </el-menu-item>
-          <el-menu-item index="/iot/alerts">
-            <el-icon><Bell /></el-icon>
-            <span>告警中心</span>
-          </el-menu-item>
-          <el-menu-item index="/iot/commands">
-            <el-icon><SetUp /></el-icon>
-            <span>指令控制台</span>
-          </el-menu-item>
-          <el-menu-item index="/iot/logs">
-            <el-icon><Document /></el-icon>
-            <span>操作日志</span>
-          </el-menu-item>
-        </el-sub-menu>
       </el-menu>
     </el-aside>
 
     <el-container>
       <el-header class="topbar">
-        <div>
-          <h1>{{ route.meta.title || 'USN-lab-hub' }}</h1>
-          <p>实验室考勤与人员管理系统</p>
+        <div class="topbar-info">
+          <h1 class="topbar-title">{{ route.meta.title || 'USN-lab-hub' }}</h1>
+          <p class="text-help muted">{{ pageSubtitle }}</p>
         </div>
         <div class="user-actions">
-          <el-avatar :size="36">{{ usernameInitial }}</el-avatar>
-          <span>{{ userStore.userInfo?.username || '未命名用户' }}</span>
-          <el-button :icon="SwitchButton" @click="handleLogout">退出</el-button>
+          <el-tag :type="roleMeta.tagType" effect="dark" class="role-tag" size="small">
+            {{ roleMeta.name }}
+          </el-tag>
+          <el-avatar :size="32" class="user-avatar">{{ usernameInitial }}</el-avatar>
+          <span class="user-name">{{ userStore.userInfo?.username || '未命名用户' }}</span>
+          <el-button :icon="SwitchButton" size="small" plain @click="handleLogout">退出</el-button>
         </div>
       </el-header>
 
@@ -74,17 +59,94 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, h, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document } from '@element-plus/icons-vue'
-import { userStore } from '@/store/user'
+import { userStore, hasAnyRole } from '@/store/user'
+import { ROLE } from '@/utils/permission'
 
 const route = useRoute()
 const router = useRouter()
 
+const sidebarWidth = '224px'
+
 const activePath = computed(() => route.path)
-const isAdminUser = computed(() => userStore.userInfo?.role === 'admin')
 const usernameInitial = computed(() => (userStore.userInfo?.username || 'U').slice(0, 1))
+const primaryRole = computed(() => userStore.userInfo?.primaryRoleKey || 'MEMBER')
+const roleMeta = computed(() => {
+  const map = {
+    SYSTEM_ADMIN: { name: '系统管理员', tagType: 'danger' },
+    TEACHER: { name: '老师', tagType: 'primary' },
+    STOCK_KEEPER: { name: '库存管理员', tagType: 'warning' },
+    MEMBER: { name: '普通成员', tagType: 'info' }
+  }
+  return map[primaryRole.value] || map.MEMBER
+})
+
+const pageSubtitle = computed(() => {
+  if (route.path.startsWith('/dashboard')) return '今日考勤、进行中项目、本周任务、学习、设备提醒'
+  if (route.path.startsWith('/admin')) return '实验室成员与考勤检查'
+  if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
+  return ''
+})
+
+const ICON = markRaw({
+  dashboard: DataBoard,
+  member: UserFilled,
+  attendance: DocumentChecked,
+  iot: Cpu,
+  overview: Monitor,
+  folder: FolderOpened,
+  device: Cpu,
+  bell: Bell,
+  command: SetUp,
+  document: Document
+})
+
+const menuItems = computed(() => {
+  const all = [
+    {
+      index: '/dashboard',
+      title: '个人工作台',
+      icon: ICON.dashboard,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
+    },
+    {
+      index: '/admin',
+      title: '实验室管理',
+      icon: ICON.member,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER],
+      children: [
+        { index: '/admin/members', title: '成员管理', icon: ICON.member, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] },
+        { index: '/admin/attendance', title: '考勤检查', icon: ICON.attendance, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
+      ]
+    },
+    {
+      index: '/iot',
+      title: 'IoT 管理',
+      icon: ICON.iot,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
+      children: [
+        { index: '/iot/overview', title: 'IoT 总览', icon: ICON.overview, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/iot/projects', title: '项目列表', icon: ICON.folder, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/iot/devices', title: '设备列表', icon: ICON.device, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/iot/alerts', title: '告警中心', icon: ICON.bell, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER] },
+        { index: '/iot/commands', title: '指令控制台', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN] },
+        { index: '/iot/logs', title: '操作日志', icon: ICON.document, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
+      ]
+    }
+  ]
+
+  return all
+    .filter((item) => hasAnyRole(item.roles))
+    .map((item) => {
+      if (!item.children) return item
+      const children = item.children.filter((c) => hasAnyRole(c.roles))
+      if (children.length === 0) return null
+      return { ...item, children }
+    })
+    .filter(Boolean)
+})
 
 function handleLogout() {
   userStore.logout()
@@ -95,110 +157,161 @@ function handleLogout() {
 <style scoped>
 .app-layout {
   min-height: 100vh;
-  background: #f4f7fb;
+  background: var(--usn-canvas);
 }
 
 .sidebar {
-  background: #172033;
+  background: var(--usn-ink-900);
   color: #fff;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-brand {
-  height: 64px;
+  height: 56px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.sidebar-brand span {
+.brand-mark {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: #f5c542;
-  color: #172033;
-  font-weight: 800;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--usn-radius-sm);
+  background: var(--usn-blue-700);
+  color: #ffffff;
 }
 
-.sidebar-brand strong {
-  font-size: 18px;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-text strong {
+  font-size: 15px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.brand-text .text-help {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .sidebar-menu {
   border-right: none;
   background: transparent;
+  flex: 1;
+  padding-top: 8px;
 }
 
 .sidebar-menu :deep(.el-menu-item) {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.78);
+  height: 40px;
+  line-height: 40px;
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active),
 .sidebar-menu :deep(.el-menu-item:hover) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-menu :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .topbar {
-  height: 72px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  background: #fff;
-  border-bottom: 1px solid #e7ecf3;
+  gap: var(--usn-space-4);
+  padding: 0 var(--usn-space-6);
+  background: var(--usn-surface);
+  border-bottom: 1px solid var(--usn-line);
 }
 
-.topbar h1 {
+.topbar-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-}
-
-.topbar p {
-  margin: 4px 0 0;
-  color: #7c8798;
-  font-size: 13px;
+  color: var(--usn-ink-900);
+  line-height: 1.2;
 }
 
 .user-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--usn-space-3);
   white-space: nowrap;
 }
 
-.main-content {
-  padding: 24px;
+.user-avatar {
+  background: var(--usn-blue-100);
+  color: var(--usn-blue-700);
+  font-weight: 700;
 }
 
-@media (max-width: 860px) {
+.user-name {
+  font-size: var(--usn-font-size-body);
+  color: var(--usn-ink-700);
+}
+
+.role-tag {
+  font-weight: 600;
+}
+
+.main-content {
+  padding: var(--usn-space-6);
+}
+
+@media (max-width: 1024px) {
   .app-layout {
     flex-direction: column;
   }
 
   .sidebar {
     width: 100% !important;
+    height: auto;
+  }
+
+  .sidebar-brand {
+    height: 48px;
   }
 
   .sidebar-menu {
     display: flex;
     overflow-x: auto;
+    padding-top: 0;
+  }
+
+  .sidebar-menu :deep(.el-menu-item),
+  .sidebar-menu :deep(.el-sub-menu__title) {
+    height: 44px;
+    line-height: 44px;
+    flex: 0 0 auto;
   }
 
   .topbar {
     height: auto;
-    padding: 14px 16px;
+    padding: var(--usn-space-3) var(--usn-space-4);
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .user-actions {
+    flex-wrap: wrap;
+  }
+
   .main-content {
-    padding: 16px;
+    padding: var(--usn-space-4);
   }
 }
 </style>

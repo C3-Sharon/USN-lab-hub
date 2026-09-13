@@ -1,50 +1,67 @@
 import { reactive } from 'vue'
+import { getUserRoles, getPrimaryRole } from '@/utils/permission'
 
 const STORAGE_KEY = 'usn_lab_hub_auth'
 
 function parseStorage() {
   const raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY)
-  if (!raw) {
-    return {}
-  }
+  if (!raw) return {}
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw) || {}
   } catch {
     return {}
   }
 }
 
+function persistAll(payload, remember) {
+  const targetStorage = remember ? localStorage : sessionStorage
+  const otherStorage = remember ? sessionStorage : localStorage
+  targetStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  targetStorage.setItem('token', payload.token || '')
+  otherStorage.removeItem(STORAGE_KEY)
+  otherStorage.removeItem('token')
+}
+
 const cached = parseStorage()
+
+function normalizeUser(raw) {
+  if (!raw) return null
+  const primaryRoleKey = raw.primaryRoleKey || raw.roleKey || (raw.role === 'admin' ? 'SYSTEM_ADMIN' : 'MEMBER')
+  const primaryRoleName = raw.primaryRoleName || raw.roleName || (primaryRoleKey === 'SYSTEM_ADMIN' ? '系统管理员' : '普通成员')
+  const roles = Array.isArray(raw.roles) && raw.roles.length
+    ? raw.roles
+    : (raw.role === 'admin' ? ['SYSTEM_ADMIN'] : ['MEMBER'])
+  return {
+    ...raw,
+    primaryRoleKey,
+    primaryRoleName,
+    roles
+  }
+}
 
 export const userStore = reactive({
   token: cached.token || localStorage.getItem('token') || sessionStorage.getItem('token') || '',
-  userInfo: cached.userInfo || null,
+  userInfo: normalizeUser(cached.userInfo),
   todayAttendance: cached.todayAttendance || null,
 
   setLoginData(loginData, remember = true) {
     this.token = loginData?.token || ''
-    this.userInfo = loginData?.user || null
+    this.userInfo = normalizeUser(loginData?.user || null)
     this.todayAttendance = loginData?.attendance || null
-    this.persist(remember)
+    persistAll({
+      token: this.token,
+      userInfo: this.userInfo,
+      todayAttendance: this.todayAttendance
+    }, remember)
   },
 
   setAttendance(attendance) {
     this.todayAttendance = attendance || null
-    this.persist(true)
-  },
-
-  persist(remember = true) {
-    const targetStorage = remember ? localStorage : sessionStorage
-    const otherStorage = remember ? sessionStorage : localStorage
-    const payload = JSON.stringify({
+    persistAll({
       token: this.token,
       userInfo: this.userInfo,
       todayAttendance: this.todayAttendance
-    })
-    targetStorage.setItem(STORAGE_KEY, payload)
-    targetStorage.setItem('token', this.token)
-    otherStorage.removeItem(STORAGE_KEY)
-    otherStorage.removeItem('token')
+    }, true)
   },
 
   logout() {
@@ -59,9 +76,21 @@ export const userStore = reactive({
 })
 
 export function hasLogin() {
-  return Boolean(userStore.token)
+  return Boolean(userStore.token && userStore.userInfo)
+}
+
+export function currentRoles() {
+  return getUserRoles(userStore.userInfo)
+}
+
+export function currentPrimaryRole() {
+  return getPrimaryRole(userStore.userInfo)
+}
+
+export function hasAnyRole(requiredRoles) {
+  return getUserRoles(userStore.userInfo).some((r) => requiredRoles.includes(r))
 }
 
 export function isAdmin() {
-  return userStore.userInfo?.role === 'admin'
+  return hasAnyRole(['SYSTEM_ADMIN'])
 }

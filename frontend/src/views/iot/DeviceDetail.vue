@@ -381,8 +381,8 @@ async function loadRecommendations() {
 async function loadCommands() {
   commandsError.value = ''
   try {
-    const res = await listCommands({ deviceId })
-    commands.value = res.data.records || []
+    const res = await listCommands(deviceId)
+    commands.value = res.list || []
   } catch (err) {
     console.error('加载指令记录失败', err)
     commandsError.value = err.message || '接口请求失败'
@@ -420,7 +420,7 @@ async function loadOperationLogs() {
   logsError.value = ''
   try {
     const res = await listOperationLogs(deviceId, { targetType: 'DEVICE' })
-    operationLogs.value = res.records || []
+    operationLogs.value = res.list || []
   } catch (err) {
     console.error('加载操作日志失败', err)
     logsError.value = err.message || '接口请求失败'

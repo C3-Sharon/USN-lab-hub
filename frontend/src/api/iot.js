@@ -227,7 +227,7 @@ export function getMetricHistory(deviceId, params) {
 // ========== Alert APIs ==========
 
 export function listAlerts(deviceId, params) {
-  if (USE_MOCK) return mockPageResponse(MOCK_ALERTS)
+  if (USE_MOCK) return mockListPageResponse(MOCK_ALERTS)
   return request.get(`/api/iot/devices/${deviceId}/alerts`, { params })
 }
 
@@ -243,7 +243,7 @@ export function handleAlert(id, data) {
 // ========== Recommendation APIs ==========
 
 export function listRecommendations(deviceId, params) {
-  if (USE_MOCK) return mockPageResponse(MOCK_RECOMMENDATIONS)
+  if (USE_MOCK) return mockListPageResponse(MOCK_RECOMMENDATIONS)
   return request.get(`/api/iot/devices/${deviceId}/recommendations`, { params })
 }
 
@@ -296,7 +296,7 @@ export function listCommands(deviceId, params) {
 // ========== Operation Log APIs ==========
 
 export function listOperationLogs(deviceId, params) {
-  if (USE_MOCK) return mockPageResponse(MOCK_OPERATION_LOGS)
+  if (USE_MOCK) return mockListPageResponse(MOCK_OPERATION_LOGS)
   return request.get(`/api/iot/devices/${deviceId}/operation-logs`, { params })
 }
 
