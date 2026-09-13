@@ -129,4 +129,4 @@
 - [ ] Validate V6 against the configured MySQL instance and record the result without committing credentials.
 - [x] Verify the public SSE endpoint remains reachable without a token.
 - [x] Review the final diff for contract drift, secrets, generated files, and unrelated changes.
-- [ ] Commit and push `feature/m01-w02-backend-auth-roles`.
+- [x] Commit and push `feature/m01-w02-backend-auth-roles`.
