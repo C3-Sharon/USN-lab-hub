@@ -2,6 +2,7 @@ package com.usn.labhub.user.controller;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.AttendanceQueryDTO;
 import com.usn.labhub.user.domain.vo.AttendanceExportVO;
@@ -25,6 +26,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/attendance")
+@RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
 @Tag(name = "考勤总列表", description = "考勤分页多条件检索与 Excel 导出")
 public class AdminAttendanceController {
 

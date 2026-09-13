@@ -3,6 +3,9 @@ package com.usn.labhub.user.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.usn.labhub.user.common.auth.AuthException;
+import com.usn.labhub.user.common.auth.AuthReason;
+import com.usn.labhub.user.common.auth.LoginAccount;
 import com.usn.labhub.user.common.utils.JwtUtils;
 import com.usn.labhub.user.domain.dto.LoginDTO;
 import com.usn.labhub.user.domain.dto.MemberQueryDTO;
@@ -11,59 +14,76 @@ import com.usn.labhub.user.domain.dto.MemberUpdateDTO;
 import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.domain.vo.MemberVO;
+import com.usn.labhub.user.domain.vo.RoleInfoVO;
 import com.usn.labhub.user.mapper.SysUserMapper;
 import com.usn.labhub.user.service.IAttendanceService;
 import com.usn.labhub.user.service.ISysUserService;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 public class ISysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements ISysUserService {
 
-    private static final int STUDENT_ROLE_ID = 2;
+    private static final String MEMBER_ROLE_KEY = "MEMBER";
 
-    @Autowired
-    private IAttendanceService attendanceService;
+    private final IAttendanceService attendanceService;
+    private final JwtUtils jwtUtils;
+    private final PasswordEncoder passwordEncoder;
+    private final SysUserMapper userMapper;
 
-    @Autowired
-    private JwtUtils jwtUtils;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private SysUserMapper userMapper;
+    public ISysUserServiceImpl(IAttendanceService attendanceService, JwtUtils jwtUtils,
+                               PasswordEncoder passwordEncoder, SysUserMapper userMapper) {
+        this.attendanceService = attendanceService;
+        this.jwtUtils = jwtUtils;
+        this.passwordEncoder = passwordEncoder;
+        this.userMapper = userMapper;
+    }
 
     @Override
     public LoginVO login(LoginDTO loginDTO) {
-        Map<String, Object> userMap = userMapper.selectRole(loginDTO.getMemberId());
-        if (userMap == null) {
-            throw new RuntimeException("该用户不存在");
+        LoginAccount account = userMapper.selectLoginUser(loginDTO.getMemberId());
+        if (account == null) {
+            throw AuthException.unauthorized(AuthReason.TOKEN_INVALID, "账号或密码错误");
         }
-        String dbPassword = (String) userMap.get("password");
-        if (!passwordEncoder.matches(loginDTO.getPassword(), dbPassword)) {
-            throw new RuntimeException("密码错误");
+        if (!passwordEncoder.matches(loginDTO.getPassword(), account.getPassword())) {
+            throw AuthException.unauthorized(AuthReason.TOKEN_INVALID, "账号或密码错误");
         }
 
-        String roleKey = (String) userMap.get("roleKey");
-        Long userId = Long.valueOf(userMap.get("id").toString());
-        String token = jwtUtils.createToken(loginDTO.getMemberId(), roleKey, userId);
+        Long userId = account.getId();
+        if (account.getStatus() == null || account.getStatus() != 1) {
+            throw AuthException.unauthorized(AuthReason.ACCOUNT_DISABLED, "账号已被禁用，请联系管理员");
+        }
+        List<RoleInfoVO> roles = userMapper.selectRolesByUserId(userId).stream()
+                .map(this::normalizeRole)
+                .toList();
+        if (roles.isEmpty()) {
+            throw AuthException.forbidden(AuthReason.ACCESS_DENIED, "账号未分配可用角色");
+        }
+        RoleInfoVO primaryRole = roles.stream()
+                .min(Comparator.comparingInt(role -> rolePriority(role.getRoleKey())))
+                .orElseThrow();
+        String token = jwtUtils.createToken(loginDTO.getMemberId(), primaryRole.getRoleKey(), userId);
 
         LoginVO vo = new LoginVO();
         vo.setToken(token);
         LoginVO.UserInfo userInfo = new LoginVO.UserInfo();
-        userInfo.setUsername((String) userMap.get("username"));
-        userInfo.setMemberId((String) userMap.get("member_id"));
-        userInfo.setRole(roleKey);
-        userInfo.setFacultyName((String) userMap.get("collegeName"));
-        userInfo.setMajorName((String) userMap.get("majorName"));
-        userInfo.setGroupName((String) userMap.get("groupName"));
-        userInfo.setIdentity((String) userMap.get("identityName"));
+        userInfo.setId(userId);
+        userInfo.setUsername(account.getUsername());
+        userInfo.setMemberId(account.getMemberId());
+        userInfo.setRoles(roles);
+        userInfo.setPrimaryRoleKey(primaryRole.getRoleKey());
+        userInfo.setPrimaryRoleName(primaryRole.getRoleName());
+        userInfo.setRoleKey(primaryRole.getRoleKey());
+        userInfo.setRole(primaryRole.getRoleKey());
+        userInfo.setFacultyName(account.getCollegeName());
+        userInfo.setMajorName(account.getMajorName());
+        userInfo.setGroupName(account.getGroupName());
+        userInfo.setIdentity(account.getIdentityName());
         vo.setUser(userInfo);
         vo.setAttendance(attendanceService.getOverview(userId));
         return vo;
@@ -84,8 +104,12 @@ public class ISysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> imp
         if (user.getStatus() == null) {
             user.setStatus((byte) 1);
         }
-        save(user);
-        userMapper.insertUserRole(user.getId(), STUDENT_ROLE_ID);
+        userMapper.insert(user);
+        Integer memberRoleId = userMapper.selectRoleIdByKey(MEMBER_ROLE_KEY);
+        if (memberRoleId == null) {
+            throw new IllegalStateException("MEMBER role is not initialized");
+        }
+        userMapper.insertUserRole(user.getId(), memberRoleId);
     }
 
     @Override
@@ -112,5 +136,23 @@ public class ISysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> imp
         if (!updated) {
             throw new RuntimeException("成员不存在");
         }
+    }
+
+    private RoleInfoVO normalizeRole(RoleInfoVO role) {
+        return switch (role.getRoleKey()) {
+            case "admin" -> new RoleInfoVO("SYSTEM_ADMIN", "系统管理员");
+            case "student" -> new RoleInfoVO("MEMBER", "普通成员");
+            default -> role;
+        };
+    }
+
+    private int rolePriority(String roleKey) {
+        return switch (roleKey) {
+            case "SYSTEM_ADMIN" -> 1;
+            case "TEACHER" -> 2;
+            case "STOCK_KEEPER" -> 3;
+            case "MEMBER" -> 4;
+            default -> 99;
+        };
     }
 }

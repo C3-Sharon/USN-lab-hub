@@ -46,7 +46,7 @@ class IotWeek6ReadinessIntegrationTest {
                 .map(Object::toString)
                 .toList();
 
-        assertEquals(List.of("1", "2", "4", "5"), versions);
+        assertEquals(List.of("1", "2", "4", "5", "6"), versions);
     }
 
     @Test

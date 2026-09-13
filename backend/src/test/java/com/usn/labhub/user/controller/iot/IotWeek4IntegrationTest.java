@@ -1,8 +1,12 @@
 package com.usn.labhub.user.controller.iot;
 
 import com.usn.labhub.user.UsnHubApplication;
+import com.usn.labhub.user.common.auth.AuthenticatedAccount;
+import com.usn.labhub.user.common.auth.AuthenticationService;
+import com.usn.labhub.user.common.utils.JwtUtils;
 import com.usn.labhub.user.service.iot.IotCommandPublisher;
 import com.usn.labhub.user.service.iot.IotOperationsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,17 +14,20 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(
         classes = UsnHubApplication.class,
@@ -45,8 +52,20 @@ class IotWeek4IntegrationTest {
     @Autowired
     private IotOperationsService operationsService;
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
     @MockBean
     private IotCommandPublisher commandPublisher;
+
+    @MockBean
+    private AuthenticationService authenticationService;
+
+    @BeforeEach
+    void authenticateAsSystemAdmin() {
+        when(authenticationService.authenticate(1L, "admin"))
+                .thenReturn(new AuthenticatedAccount(1L, "admin", Set.of("SYSTEM_ADMIN")));
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -106,13 +125,20 @@ class IotWeek4IntegrationTest {
     }
 
     private ResponseEntity<Map> get(String path) {
-        return rest.getForEntity(path, Map.class);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken());
+        return rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
     }
 
     private ResponseEntity<Map> post(String path, Object body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken());
         return rest.postForEntity(path, new HttpEntity<>(body, headers), Map.class);
+    }
+
+    private String adminToken() {
+        return jwtUtils.createToken("admin", "SYSTEM_ADMIN", 1L);
     }
 
     @SuppressWarnings("unchecked")

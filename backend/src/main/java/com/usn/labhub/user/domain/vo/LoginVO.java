@@ -24,13 +24,28 @@ public class LoginVO {
      */
     @Data
     public static class UserInfo {
+        @Schema(description = "用户 ID")
+        private Long id;
+
         @Schema(description = "真实姓名")
         private String username;
 
         @Schema(description = "学号/工号")
         private String memberId;
 
-        @Schema(description = "角色标识 (admin/student)")
+        @Schema(description = "用户拥有的全部全局角色")
+        private List<RoleInfoVO> roles;
+
+        @Schema(description = "用于展示的主角色标识")
+        private String primaryRoleKey;
+
+        @Schema(description = "用于展示的主角色名称")
+        private String primaryRoleName;
+
+        @Schema(description = "兼容字段，等于 primaryRoleKey")
+        private String roleKey;
+
+        @Schema(description = "兼容字段，等于 primaryRoleKey")
         private String role;
 
         @Schema(description = "身份 (本科/硕士/博士/老师)")

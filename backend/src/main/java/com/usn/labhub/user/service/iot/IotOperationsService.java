@@ -111,6 +111,11 @@ public class IotOperationsService {
         );
     }
 
+    public long countOpenWarningAlerts(Long deviceId) {
+        ensureDevice(deviceId);
+        return mapper.countOpenWarningAlerts(deviceId);
+    }
+
     @Transactional
     public IotAlertVO handleAlert(Long alertId, String status) {
         if (!Set.of("HANDLED", "IGNORED").contains(status)) {
