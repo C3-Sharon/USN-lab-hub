@@ -1,7 +1,11 @@
 package com.usn.labhub.user.controller.iot;
 
 import com.usn.labhub.user.UsnHubApplication;
+import com.usn.labhub.user.common.auth.AuthenticatedAccount;
+import com.usn.labhub.user.common.auth.AuthenticationService;
+import com.usn.labhub.user.common.utils.JwtUtils;
 import com.usn.labhub.user.service.iot.IotCommandPublisher;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,11 +21,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(
         classes = UsnHubApplication.class,
@@ -45,8 +51,20 @@ class IotWeek5PublicIntegrationTest {
     @Autowired
     private TestRestTemplate rest;
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
     @MockBean
     private IotCommandPublisher commandPublisher;
+
+    @MockBean
+    private AuthenticationService authenticationService;
+
+    @BeforeEach
+    void authenticateTelemetrySetupAsSystemAdmin() {
+        when(authenticationService.authenticate(1L, "admin"))
+                .thenReturn(new AuthenticatedAccount(1L, "admin", Set.of("SYSTEM_ADMIN")));
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -110,6 +128,7 @@ class IotWeek5PublicIntegrationTest {
     private ResponseEntity<Map> post(String path, Object body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(jwtUtils.createToken("admin", "SYSTEM_ADMIN", 1L));
         return rest.postForEntity(path, new HttpEntity<>(body, headers), Map.class);
     }
 

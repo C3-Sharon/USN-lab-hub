@@ -1,6 +1,7 @@
 package com.usn.labhub.user.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.MemberQueryDTO;
 import com.usn.labhub.user.domain.dto.MemberSaveDTO;
@@ -31,18 +32,21 @@ public class AdminMemberController {
     private ISysUserService userService;
 
     @PostMapping("/page")
+    @RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
     @Operation(summary = "分页多条件查询成员")
     public Result<IPage<MemberVO>> page(@Valid @RequestBody MemberQueryDTO queryDTO) {
         return Result.success(userService.pageMembers(queryDTO));
     }
 
     @GetMapping("/page")
+    @RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
     @Operation(summary = "分页多条件查询成员")
     public Result<IPage<MemberVO>> pageByQuery(@Valid MemberQueryDTO queryDTO) {
         return Result.success(userService.pageMembers(queryDTO));
     }
 
     @PostMapping("/save")
+    @RequireRoles("SYSTEM_ADMIN")
     @Operation(summary = "新增成员")
     public Result<Void> save(@Valid @RequestBody MemberSaveDTO saveDTO) {
         userService.saveMember(saveDTO);
@@ -50,6 +54,7 @@ public class AdminMemberController {
     }
 
     @PostMapping("/update")
+    @RequireRoles("SYSTEM_ADMIN")
     @Operation(summary = "更新成员")
     public Result<Void> update(@Valid @RequestBody MemberUpdateDTO updateDTO) {
         userService.updateMember(updateDTO);
@@ -57,6 +62,7 @@ public class AdminMemberController {
     }
 
     @PostMapping("/status/{id}/{status}")
+    @RequireRoles("SYSTEM_ADMIN")
     @Operation(summary = "切换成员状态")
     public Result<Void> updateStatus(@PathVariable @NotNull Long id, @PathVariable @NotNull Byte status) {
         userService.updateMemberStatus(id, status);
@@ -64,6 +70,7 @@ public class AdminMemberController {
     }
 
     @PutMapping("/status/{id}/{status}")
+    @RequireRoles("SYSTEM_ADMIN")
     @Operation(summary = "切换成员状态")
     public Result<Void> putStatus(@PathVariable @NotNull Long id, @PathVariable @NotNull Byte status) {
         userService.updateMemberStatus(id, status);
