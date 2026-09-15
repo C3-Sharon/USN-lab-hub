@@ -31,7 +31,7 @@
 - Consumes: the approved design in `docs/superpowers/specs/2026-09-15-backend-incremental-delivery-design.md`.
 - Produces: the only template for future `docs/backend/execution/2026-WNN.md` ledgers.
 
-- [ ] **Step 1: Verify the template does not already exist**
+- [x] **Step 1: Verify the template does not already exist**
 
 Run:
 
@@ -41,7 +41,7 @@ Test-Path docs/backend/WEEKLY_EXECUTION_TEMPLATE.md
 
 Expected: `False`.
 
-- [ ] **Step 2: Create the template with fixed metadata and checkpoint sections**
+- [x] **Step 2: Create the template with fixed metadata and checkpoint sections**
 
 The document must start with this structure:
 
@@ -75,7 +75,7 @@ The document must start with this structure:
 
 Continue with a work-block table using the exact columns `ID`, `工作块`, `状态`, `预计工时`, `风险`, `进入条件`, and `提交`.
 
-- [ ] **Step 3: Add one reusable execution-card skeleton**
+- [x] **Step 3: Add one reusable execution-card skeleton**
 
 The template must include these exact headings for every copied block:
 
@@ -98,7 +98,7 @@ The template must include these exact headings for every copied block:
 - 实际结果：尚未开始
 ```
 
-- [ ] **Step 4: Add decision, PR-readiness, and result sections**
+- [x] **Step 4: Add decision, PR-readiness, and result sections**
 
 Include:
 
@@ -111,7 +111,7 @@ Include:
 
 The PR checklist must cover work-block state, contract drift, targeted tests, one full test run, one skipped-test package build, real dependencies, secrets/generated files, startup/migration, rollback or recovery, frontend handoff, and unresolved blockers.
 
-- [ ] **Step 5: Verify required fields and prohibited placeholders**
+- [x] **Step 5: Verify required fields and prohibited placeholders**
 
 Run:
 
@@ -122,7 +122,7 @@ rg -n "TBD|TODO|完善功能|优化代码|补充测试" docs/backend/WEEKLY_EXEC
 
 Expected: the first command finds every required section; the second command returns no matches.
 
-- [ ] **Step 6: Commit the template**
+- [x] **Step 6: Commit the template**
 
 ```bash
 git add docs/backend/WEEKLY_EXECUTION_TEMPLATE.md
