@@ -287,7 +287,7 @@ git commit -m "docs(agent): require checkpointed backend work blocks"
 - Consumes: all prior governance edits.
 - Produces: one consistent quality gate for per-block evidence and final PR readiness.
 
-- [ ] **Step 1: Prove quality gates do not yet distinguish block evidence from PR-wide evidence**
+- [x] **Step 1: Prove quality gates do not yet distinguish block evidence from PR-wide evidence**
 
 Run:
 
@@ -297,19 +297,19 @@ rg -n "工作块|执行台账|Draft PR" docs/governance/QUALITY_GATES.md
 
 Expected: no complete work-block gate is found.
 
-- [ ] **Step 2: Add work-block quality gates**
+- [x] **Step 2: Add work-block quality gates**
 
 Add rules requiring each block to have a bounded result, direct evidence, affected-neighbor regression, diff review, an updated ledger result, and no unexplained failure before `VERIFIED`.
 
-- [ ] **Step 3: Clarify high-risk gate timing**
+- [x] **Step 3: Clarify high-risk gate timing**
 
 State that high-risk design must be shown before applying migrations or external-state changes, and its real MySQL/MQTT/Redis or dual-instance evidence must be present before the PR becomes Ready. Missing credentials or infrastructure remains an explicit blocker, not a reported success.
 
-- [ ] **Step 4: Preserve and connect the anti-infinite-test rule**
+- [x] **Step 4: Preserve and connect the anti-infinite-test rule**
 
 Add one reference from the work-block gate to the existing stop criteria. Do not duplicate the full anti-repetition section or weaken its five stopping conditions.
 
-- [ ] **Step 5: Run final consistency checks**
+- [x] **Step 5: Run final consistency checks**
 
 Run:
 
@@ -330,7 +330,7 @@ git diff --check
 
 Expected: every path exists, all five states appear in the template, shared rules are discoverable, and `git diff --check` reports no errors.
 
-- [ ] **Step 6: Review for duplicated authority and placeholders**
+- [x] **Step 6: Review for duplicated authority and placeholders**
 
 Run:
 
@@ -340,7 +340,7 @@ rg -n "TBD|TODO|待定|之后补充|完善功能|优化代码|补充测试" AGEN
 
 Expected: no new placeholder or vague work-block language. Mentions inside explicit prohibition examples are acceptable only when clearly described as forbidden wording.
 
-- [ ] **Step 7: Commit quality-gate alignment**
+- [x] **Step 7: Commit quality-gate alignment**
 
 ```bash
 git add docs/governance/QUALITY_GATES.md
