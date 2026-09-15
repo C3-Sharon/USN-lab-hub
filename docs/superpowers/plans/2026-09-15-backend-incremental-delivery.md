@@ -209,7 +209,7 @@ git commit -m "docs(governance): add incremental backend delivery flow"
 - Consumes: the team workflow and backend template.
 - Produces: a short mandatory entry rule plus detailed backend Agent behavior for kickoff, block reporting, pausing, resuming, and finishing.
 
-- [ ] **Step 1: Verify neither entry currently requires a weekly execution ledger**
+- [x] **Step 1: Verify neither entry currently requires a weekly execution ledger**
 
 Run:
 
@@ -219,7 +219,7 @@ rg -n "WEEKLY_EXECUTION_TEMPLATE|backend/execution|Draft PR|工作块" AGENTS.md
 
 Expected: the complete requirement is absent.
 
-- [ ] **Step 2: Add the shortest enforceable rule to `AGENTS.md`**
+- [x] **Step 2: Add the shortest enforceable rule to `AGENTS.md`**
 
 Add a subsection under Agent behavior that requires Java backend Agents to:
 
@@ -233,11 +233,11 @@ Add a subsection under Agent behavior that requires Java backend Agents to:
 
 Keep this entry concise and link to the playbook and backend guide for details.
 
-- [ ] **Step 3: Rewrite the backend start prompt around block execution**
+- [x] **Step 3: Rewrite the backend start prompt around block execution**
 
 Require its opening output to include the execution-ledger path, current checkpoint, block list, the current block's expected result, modification boundary, contract effect, test level, and whether its exit is automatic or approval-gated.
 
-- [ ] **Step 4: Add detailed backend block behavior**
+- [x] **Step 4: Add detailed backend block behavior**
 
 The backend guide must say:
 
@@ -250,11 +250,11 @@ On resume, read the ledger checkpoint before rescanning the repository.
 
 Express these rules in Chinese and preserve all existing Java architecture, consistency, caching, RAG, acquisition, and testing guidance.
 
-- [ ] **Step 5: Add the three fixed user updates**
+- [x] **Step 5: Add the three fixed user updates**
 
 Define `开始更新`, `完成更新`, and `下一步更新`, with concise fields matching the design. Clarify that long-running commands only report meaningful changes and full logs do not enter the ledger.
 
-- [ ] **Step 6: Verify the root and role rules agree**
+- [x] **Step 6: Verify the root and role rules agree**
 
 Run:
 
@@ -264,7 +264,7 @@ rg -n "3.?6|同一时间|Draft PR|当前检查点|暂停确认|自动继续" AGE
 
 Expected: both files point to the same workflow, with detail concentrated in the backend guide.
 
-- [ ] **Step 7: Commit Agent instruction updates**
+- [x] **Step 7: Commit Agent instruction updates**
 
 ```bash
 git add AGENTS.md docs/agent-guides/12_BACKEND_LONG_TERM_AGENT.md
