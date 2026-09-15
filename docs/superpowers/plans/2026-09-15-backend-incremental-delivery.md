@@ -140,7 +140,7 @@ git commit -m "docs(backend): add weekly execution ledger template"
 - Consumes: `docs/backend/WEEKLY_EXECUTION_TEMPLATE.md`.
 - Produces: the authoritative team sequence from frozen product contract through backend Draft PR, block delivery, frontend integration, and closeout.
 
-- [ ] **Step 1: Prove the current playbook lacks the new lifecycle**
+- [x] **Step 1: Prove the current playbook lacks the new lifecycle**
 
 Run:
 
@@ -150,7 +150,7 @@ rg -n "Draft PR|当前检查点|高风险阶段门|自动继续" docs/governance
 
 Expected: no complete lifecycle is found.
 
-- [ ] **Step 2: Extend the fixed weekly rhythm without replacing the three-role flow**
+- [x] **Step 2: Extend the fixed weekly rhythm without replacing the three-role flow**
 
 Add a backend row or note stating:
 
@@ -160,7 +160,7 @@ Add a backend row or note stating:
 
 Keep the existing product -> backend -> frontend merge order.
 
-- [ ] **Step 3: Add a dedicated backend block-execution section**
+- [x] **Step 3: Add a dedicated backend block-execution section**
 
 The section must define this sequence exactly once:
 
@@ -172,15 +172,15 @@ The section must define this sequence exactly once:
 
 It must also say that each week uses 3 to 6 blocks, only one is in progress, and the ledger is updated only at start, completion, blocking, or scope change.
 
-- [ ] **Step 4: Add mixed approval gates**
+- [x] **Step 4: Add mixed approval gates**
 
 Define automatic continuation for direct contract-preserving work whose targeted tests pass. Define mandatory confirmation for Flyway migrations, permissions, transaction/concurrency decisions, irreversible data changes, contract deviations, new infrastructure, invalidated assumptions, scope growth above 25%, and unknown local changes.
 
-- [ ] **Step 5: Add Draft PR and commit rules**
+- [x] **Step 5: Add Draft PR and commit rules**
 
 State that there is still one backend PR per week, one meaningful commit normally corresponds to one verified block, empty commits are forbidden, and GitHub outages do not invalidate the local ledger and commit history.
 
-- [ ] **Step 6: Verify no workflow contradiction was introduced**
+- [x] **Step 6: Verify no workflow contradiction was introduced**
 
 Run:
 
@@ -190,7 +190,7 @@ rg -n "产品.*后端.*前端|Draft PR|3 至 6|IN_PROGRESS|25%|Ready for review"
 
 Expected: all terms are present, and the original merge order remains present.
 
-- [ ] **Step 7: Commit the playbook update**
+- [x] **Step 7: Commit the playbook update**
 
 ```bash
 git add docs/governance/WEEKLY_DELIVERY_PLAYBOOK.md
