@@ -347,7 +347,7 @@ git add docs/governance/QUALITY_GATES.md
 git commit -m "docs(quality): add backend work block gates"
 ```
 
-- [ ] **Step 8: Verify branch scope and push**
+- [x] **Step 8: Verify branch scope and push**
 
 Run:
 
