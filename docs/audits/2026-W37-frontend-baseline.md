@@ -6,7 +6,7 @@
 > 基准 commit：`78a83b6`（产品 PR：week 1 baseline）
 > 初次清点日期：2026-09-07
 > 修正提交日期：2026-09-09
-> 状态：清点完成，等待后端基线 PR 合入 dev 后建立前端基线 PR
+> 状态：清点完成，后端基线已合入 dev，前端基线待同步最新 dev 后建立 PR
 
 > 修正说明（2026-09-09 追加提交）：本版本针对团队评审反馈逐项修正——
 > ① 重新采集 11/12 截图（去除 Edge 500 错误页）；
@@ -28,7 +28,7 @@
 | 状态管理 | 自研 `store/user.js`（reactive + localStorage/sessionStorage 持久化） |
 | 图表 | `echarts 6.1`，当前以 `* as echarts` 方式在 4 个页面中按需初始化 |
 | 真实接口开关 | `frontend/src/api/iot.js` 中 `USE_MOCK = false`（已切换到真实后端，页面内 mock 数据保留为兜底常量） |
-| 业务页总数 | 14 个 = 2 个公开 + 1 个登录 + 12 个受保护（外加 1 个 404 重定向路由） |
+| 业务页总数 | 14 个 = 2 个公开（含登录页）+ 12 个受保护（外加 1 个 404 重定向路由） |
 | 视图组件 | 14 个 SFC（`views/` 下），均未抽取为可复用公共组件 |
 | 已实现 | 考勤闭环、IoT 单设备闭环（latest/history/alerts/recommendations/commands/logs）、PM-001 SSE 第七周集成、IoT 总览 + 公开项目展示 |
 | 未实现 | 个人工作台聚合、项目工作台、学习实验台、资源管理、自研硬件、知识与 Agent、PM-001 之外的设备接入 |
@@ -41,7 +41,7 @@
 
 > 全部路由定义于 `frontend/src/router/index.js`。
 > 视图组件集中于 `frontend/src/views/`，按模块拆为 `views/`（顶层）、`views/admin/`、`views/iot/` 三个子目录。
-> 业务页共 14 个：2 公开 + 1 登录 + 12 受保护（含 2 个 admin 页）。
+> 业务页共 14 个：2 个公开页（`/login`、`/iot/public`）+ 12 个受保护页（含 2 个 admin 页）。
 
 ### 1.1 公开页面（不要求登录；登录用户访问也不自动跳走）
 
@@ -232,17 +232,17 @@
 > 仅记录**前端已发现、与 `docs/agent-guides/04_API_CONTRACT.md` 不一致**的契约使用点。不动代码，纳入 W2 前端契约议题。
 > 关键前置：`request.js` 已把响应解包为 `payload.data`，所以 `await listXxx()` 拿到的 `res` 实际就是 `payload.data`；读 `res.data.records` 等价于"在 `payload.data` 上再读 `.data.records`"，**通常 `payload.data` 本身没有 `.data` 字段，列表分页的 `records` / `list` 都在第一层**。下表已按"在 `payload.data` 上一层 / 内层"两种来源分别核对。
 
-### 4.1 与契约一致（5 处）
+### 4.1 与契约不一致：项目、设备与项目详情（5 处，需要 W2 修复）
 
-| 序号 | 文件 | 调用接口 | 实际使用 | 契约结构 |
-|---|---|---|---|---|
-| API-1 | `views/iot/Projects.vue:119-120` | `listProjects` | `res.data.records / .total` | `{ records, total }` |
-| API-2 | `views/iot/DeviceList.vue:96` | `listProjects`（项目下拉） | `res.data.records` | `{ records, total }` |
-| API-3 | `views/iot/DeviceList.vue:109-110` | `listDevices` | `res.data.records / .total` | `{ records, total }` |
-| API-4 | `views/iot/ProjectDetail.vue:79` | `listDevices` | `res.data.records` | `{ records, total }` |
-| API-5 | `views/iot/ProjectDetail.vue:65-67` | `getProjectDetail` | `res.data \|\| {}` / `res.data.devices \|\| []` | `data`（含 `devices` 字段） |
+| 序号 | 文件 | 调用接口 | 当前实际使用 | 解包后的正确取值 | 影响 |
+|---|---|---|---|---|---|
+| API-1 | `views/iot/Projects.vue:119-120` | `listProjects` | `res.data.records / .total` | `res.records / res.total` | 真实接口下项目列表和总数取不到 |
+| API-2 | `views/iot/DeviceList.vue:96` | `listProjects`（项目下拉） | `res.data.records` | `res.records` | 真实接口下项目筛选项为空 |
+| API-3 | `views/iot/DeviceList.vue:109-110` | `listDevices` | `res.data.records / .total` | `res.records / res.total` | 真实接口下设备列表和总数取不到 |
+| API-4 | `views/iot/ProjectDetail.vue:79` | `listDevices` | `res.data.records` | `res.records` | 真实接口下项目关联设备为空 |
+| API-5 | `views/iot/ProjectDetail.vue:65-67` | `getProjectDetail` | `res.data \|\| {}` / `res.data.devices \|\| []` | `res \|\| {}` / `res.devices \|\| []` | 真实接口下项目详情和内嵌设备取不到 |
 
-### 4.2 与契约不一致（4 处，需要 W2 修复）
+### 4.2 与契约不一致：告警、指令、建议与日志（4 组，需要 W2 修复）
 
 | 序号 | 文件 | 调用接口 | 实际使用 | 契约结构 | 影响 |
 |---|---|---|---|---|---|
@@ -253,24 +253,29 @@
 
 > API-6~API-9 修复方向：把 `res.data.records` 改为 `res.list`、把 `res.data.total` 改为 `res.total`。**注意：Projects / Devices 仍是 `records` 体系，与 Alerts / Commands / Recommendations / Logs 的 `list` 体系是两套**，不能笼统统一为 `data.list`。
 
-### 4.3 取值混用（兼容写法，6 处，不算错但建议统一）
+### 4.3 与契约不一致：设备详情单体接口（1 组，需要 W2 修复）
+
+| 序号 | 文件 | 调用接口 | 当前实际使用 | 解包后的正确取值 | 影响 |
+|---|---|---|---|---|---|
+| API-10 | `views/iot/DeviceDetail.vue:271, 285, 299` | `getDeviceDetail / getLatestMetrics / getMetricHistory` | `res.data \|\| {}` | `res \|\| {}` | 真实接口下设备详情、最新指标和历史指标取不到 |
+
+### 4.4 取值混用（兼容写法，5 处，不算错但建议统一）
 
 | 序号 | 文件 | 调用接口 | 实际使用 | 说明 |
 |---|---|---|---|---|
-| API-10 | `views/iot/Overview.vue:198-199, 214-215` | `getPublicProject` + `listAlerts` | `res.data \|\| pubRes \|\| {}`、再读 `payload.list` | 兼容拦截器解包前后的两层结构；取值正确 |
-| API-11 | `views/iot/PublicDisplay.vue:225` | `getPublicProject` | `res.data \|\| res \|\| {}` | 兼容双形态，公开页推荐保留兜底 |
-| API-12 | `views/iot/Pm001Live.vue:357, 405` | `getLatestMetrics` / `getMetricHistory` | `res.data \|\| res \|\| {}` | latest / history 是单体对象，无 `list` 字段，混用不会出错 |
-| API-13 | `views/iot/Pm001Live.vue:480-493` | `listAlerts / listRecommendations / listCommands / listOperationLogs` | `res.data \|\| res \|\| {}`，再读 `payload.list` | 实际读 `list`，是正确写法 |
-| API-14 | `views/iot/DeviceDetail.vue:271, 285, 299` | `getDeviceDetail / getLatestMetrics / getMetricHistory` | `res.data \|\| {}` | 单体对象，取值正确 |
+| API-11 | `views/iot/Overview.vue:198-199, 214-215` | `getPublicProject` + `listAlerts` | `res.data \|\| pubRes \|\| {}`、再读 `payload.list` | 兼容拦截器解包前后的两层结构；取值正确 |
+| API-12 | `views/iot/PublicDisplay.vue:225` | `getPublicProject` | `res.data \|\| res \|\| {}` | 兼容双形态，公开页推荐保留兜底 |
+| API-13 | `views/iot/Pm001Live.vue:357, 405` | `getLatestMetrics` / `getMetricHistory` | `res.data \|\| res \|\| {}` | latest / history 是单体对象，无 `list` 字段，混用不会出错 |
+| API-14 | `views/iot/Pm001Live.vue:480-493` | `listAlerts / listRecommendations / listCommands / listOperationLogs` | `res.data \|\| res \|\| {}`，再读 `payload.list` | 实际读 `list`，是正确写法 |
 | API-15 | `views/iot/Overview.vue:194` | `listAlerts(DEVICE_ID)` 调用形态 | 第一参数是 deviceId | 与契约 `listAlerts(deviceId, params)` 一致 |
 
-### 4.4 参数形态不一致（1 处，需要 W2 与后端确认）
+### 4.5 参数形态不一致（1 处，需要 W2 与后端确认）
 
 | 序号 | 文件 | 调用 | 实际写法 | 建议写法 |
 |---|---|---|---|---|
 | API-16 | `views/iot/DeviceDetail.vue:357, 371, 384, 422` | `listAlerts / listRecommendations / listCommands / listOperationLogs` | `listAlerts({ deviceId })`（对象参数） | `listAlerts(deviceId, { … })`（deviceId 走第一参） |
 
-### 4.5 admin 模块（MemberManage / AttendanceRecord）的接口取数
+### 4.6 admin 模块（MemberManage / AttendanceRecord）的接口取数
 
 - 接口：`/admin/member/page`（GET）、`/admin/attendance/page`（POST）、`/admin/attendance/export`（POST）。
 - 写法：页面里 `const result = await fetchMemberPage(...)`，`result.records` / `result.total`。
@@ -328,7 +333,7 @@
 - 每个关键页面提交 3 视口截图（1440x900 / 1280x800 / 390x844）。
 - 每个页面补齐 loading / empty / error / permission 四态截图。
 - 跑 `npm run build` 与 `node src/api/__tests__/sse-test-node.mjs`，记录通过/失败数量。
-- 修复 §4.2 中的 4 处契约不一致（API-6~API-9），确保真实接口下 `alerts / recommendations / commands / logs` 4 类分页数据可渲染。
+- 修复 §4.1~§4.3 的数据取值问题（API-1~API-10）及 §4.5 的参数形态问题（API-16），确保项目、设备、详情及 `alerts / recommendations / commands / logs` 数据均可按解包后的结构渲染。
 
 ---
 
@@ -350,7 +355,7 @@
 |---|---|---|
 | UI_SPEC Token 未落地 | 后续重构成本大、视觉一致性差 | W2 起冻结 Token，先替换 Layout / Dashboard |
 | Login / Dashboard 引入 Unsplash 外链 | 公网资源失效风险、与 UI_SPEC §5/§6 冲突 | W2 必修 |
-| 4 个 IoT 分页接口用 `data.records`（API-6~API-9） | 真实接口下分页数据为 `undefined` | W2 前端契约修复 |
+| 项目、设备、详情及 4 类 IoT 列表存在二次读取 `res.data`（API-1~API-10） | 真实接口下列表、详情或指标数据为 `undefined` | W2 前端契约修复 |
 | 详情页（`/iot/projects/:id`、`/iot/devices/:id`）未截图、未做错误态 | W2 联调必须补 | W2 |
 | ECharts 与 Element Plus 全量打包，主 chunk > 2.4 MB | 首屏白屏时间偏长 | W3 引入 `manualChunks` / `unplugin-vue-components` |
 | 应用外壳断点 768/860/900 不统一 | 多视口布局破损 | W2 收敛到 1280/768/390 |
@@ -375,7 +380,7 @@
 
 - 本报告即 M01-W01 前端清点输出，落地后随 `feature/m01-w01-frontend-baseline` PR 一并提交。
 - 后续：等后端基线 PR 合入 dev 后，前端再基于最新 dev 重新对一遍路由与 API 状态，必要时微调。
-- W2 输入：W2 周文档冻结后，按本报告 §3.2/§3.3 抽取公共组件 + 落地 UI_SPEC Token + 替换 Unsplash 外链 + 修复 §4.2 中 API-6~API-9 契约一致性问题 + 补抓 §5.2 缺口截图。
+- W2 输入：W2 周文档冻结后，按本报告 §3.2/§3.3 抽取公共组件 + 落地 UI_SPEC Token + 替换 Unsplash 外链 + 修复 §4.1~§4.3 的 API-1~API-10 数据取值问题与 §4.5 的 API-16 参数问题 + 补抓 §5.2 缺口截图。
 
 ---
 

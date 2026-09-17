@@ -16,6 +16,7 @@
 
 | 契约 | 文件 | 状态 | 用途 |
 |---|---|---|---|
+| 全局角色与个人工作台 V1 | `docs/contracts/AUTH_WORKBENCH_V1.md` | FROZEN | 五档全局角色、权限矩阵、鉴权 Header、401/403、首页聚合接口 |
 | 首轮 IoT API | `docs/agent-guides/04_API_CONTRACT.md` | ACTIVE_LEGACY | PM-001 latest/history/告警/指令等基线 |
 | 首轮 MQTT | `docs/agent-guides/05_MQTT_CONTRACT.md` | ACTIVE_LEGACY | PM-001 telemetry/command/ack |
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |

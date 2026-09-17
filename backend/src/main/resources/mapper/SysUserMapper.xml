@@ -1,22 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.usn.labhub.user.mapper.SysUserMapper">
-    <select id="selectRole" resultType="map">
+    <resultMap id="loginAccountMap" type="com.usn.labhub.user.common.auth.LoginAccount">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="member_id" property="memberId"/>
+        <result column="status" property="status"/>
+        <result column="identity_name" property="identityName"/>
+        <result column="group_name" property="groupName"/>
+        <result column="college_name" property="collegeName"/>
+        <result column="major_name" property="majorName"/>
+    </resultMap>
+
+    <select id="selectLoginUser" resultMap="loginAccountMap">
         SELECT
-            u.id, u.username, u.password, u.member_id,
-            r.role_key as roleKey,
-            i.identity_name as identityName,
-            g.group_name as groupName,
-            f.college_name as collegeName,
-            f.major_name as majorName
+            u.id, u.username, u.password, u.member_id, u.status,
+            i.identity_name,
+            g.group_name,
+            f.college_name,
+            f.major_name
         FROM sys_user u
-                 LEFT JOIN sys_user_role ur ON u.id = ur.user_id
-                 LEFT JOIN sys_role r ON ur.role_id = r.id
                  LEFT JOIN sys_identity i ON u.identity_id = i.id
                  LEFT JOIN sys_group g ON u.group_id = g.id
                  LEFT JOIN sys_faculty_major f ON u.faculty_id = f.id
         WHERE u.member_id = #{memberId}
         LIMIT 1
+    </select>
+
+    <select id="selectRolesByUserId" resultType="com.usn.labhub.user.domain.vo.RoleInfoVO">
+        SELECT r.role_key AS roleKey, r.role_name AS roleName
+        FROM sys_user_role ur
+        INNER JOIN sys_role r ON r.id = ur.role_id
+        WHERE ur.user_id = #{userId}
+        ORDER BY CASE r.role_key
+            WHEN 'SYSTEM_ADMIN' THEN 1
+            WHEN 'TEACHER' THEN 2
+            WHEN 'STOCK_KEEPER' THEN 3
+            WHEN 'MEMBER' THEN 4
+            WHEN 'admin' THEN 5
+            WHEN 'student' THEN 6
+            ELSE 99
+        END, r.id
     </select>
 
     <select id="selectMemberPage" resultType="com.usn.labhub.user.domain.vo.MemberVO">

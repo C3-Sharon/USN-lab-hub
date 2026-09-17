@@ -1,5 +1,6 @@
 package com.usn.labhub.user.controller.iot;
 
+import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.iot.IotAlertHandleDTO;
 import com.usn.labhub.user.domain.dto.iot.IotCommandRequestDTO;
@@ -42,6 +43,7 @@ public class IotOperationsController {
     }
 
     @PostMapping("/alerts/{alertId}/handle")
+    @RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
     @Operation(summary = "处理或忽略告警")
     public Result<IotAlertVO> handleAlert(@PathVariable Long alertId, @RequestBody IotAlertHandleDTO request) {
         return Result.success(service.handleAlert(alertId, request == null ? null : request.getStatus()));
@@ -58,18 +60,21 @@ public class IotOperationsController {
     }
 
     @PostMapping("/recommendations/{recommendationId}/confirm")
+    @RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
     @Operation(summary = "确认建议")
     public Result<IotRecommendationVO> confirmRecommendation(@PathVariable Long recommendationId) {
         return Result.success(service.updateRecommendation(recommendationId, "CONFIRMED"));
     }
 
     @PostMapping("/recommendations/{recommendationId}/ignore")
+    @RequireRoles({"SYSTEM_ADMIN", "TEACHER"})
     @Operation(summary = "忽略建议")
     public Result<IotRecommendationVO> ignoreRecommendation(@PathVariable Long recommendationId) {
         return Result.success(service.updateRecommendation(recommendationId, "IGNORED"));
     }
 
     @PostMapping("/devices/{deviceId}/commands")
+    @RequireRoles("SYSTEM_ADMIN")
     @Operation(summary = "向 PM-001 下发固定采样间隔指令")
     public Result<IotCommandVO> sendCommand(@PathVariable Long deviceId,
                                              @RequestBody IotCommandRequestDTO request) {

@@ -1,14 +1,22 @@
 package com.usn.labhub.user.common.exception;
 
+import com.usn.labhub.user.common.auth.AuthException;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.service.iot.IotApiException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<Result<String>> handleAuthException(AuthException e) {
+        return ResponseEntity.status(e.getHttpStatus())
+                .body(Result.error(e.getHttpStatus(), e.getMessage(), e.getReason().name()));
+    }
 
     @ExceptionHandler(IotApiException.class)
     public Result<String> handleIotApiException(IotApiException e) {

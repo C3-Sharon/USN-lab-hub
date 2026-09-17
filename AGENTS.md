@@ -60,6 +60,16 @@ USN Lab Hub 是面向中国高校小型硬件实验室的项目协作、学习�
 5. 联调步骤、已知风险和需要另一角色确认的事项。
 6. 建议提交信息和 PR 文案要点。
 
+### Java 后端分块执行
+
+Java 后端每周工作额外遵循 `docs/governance/WEEKLY_DELIVERY_PLAYBOOK.md` 和 `docs/agent-guides/12_BACKEND_LONG_TERM_AGENT.md`：
+
+1. 编码前从 `docs/backend/WEEKLY_EXECUTION_TEMPLATE.md` 创建当周执行台账，并先向用户确认 3 至 6 个工作块。
+2. 同一时间只执行一个工作块；在开始、完成、阻塞或范围变化时回填当前检查点，计划不得冒充实际结果。
+3. 普通块验证后可继续；迁移、权限、事务/并发、不可逆数据、契约偏离和范围显著扩大必须暂停确认。
+4. 每个已验证工作块形成有意义提交并推送到同一个 Draft PR；全部质量门通过后才转为 Ready for review。
+5. 恢复工作时先读取执行台账的当前检查点和当前块，再按引用读取必要代码与文档，不默认重新扫描整个项目。
+
 Agent 不得：
 
 - 把 mock、未合并分支、计划功能写入 CURRENT_STATE 的已完成功能。
