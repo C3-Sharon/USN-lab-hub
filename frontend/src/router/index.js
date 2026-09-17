@@ -45,13 +45,13 @@ const routes = [
         meta: { title: '个人工作台', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       },
       {
-        path: 'admin/members',
+        path: 'members',
         name: 'MemberManage',
         component: MemberManage,
         meta: { title: '实验室成员管理', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
       },
       {
-        path: 'admin/attendance',
+        path: 'attendance',
         name: 'AttendanceRecord',
         component: AttendanceRecord,
         meta: { title: '考勤检查与导出', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
@@ -139,7 +139,7 @@ router.beforeEach((to) => {
   if (Array.isArray(to.meta.roles) && to.meta.roles.length) {
     if (!hasAnyRole(to.meta.roles)) {
       ElMessage.warning('当前账号无权访问该页面')
-      return { path: '/forbidden', query: { from: to.fullPath } }
+      return { path: '/dashboard', query: { denied: to.fullPath } }
     }
   }
   return true

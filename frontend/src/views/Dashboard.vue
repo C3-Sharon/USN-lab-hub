@@ -55,7 +55,13 @@
           <h2 class="region__title">我参与的项目</h2>
           <span class="region__sub muted text-help">{{ projectsHint }}</span>
         </header>
-        <RegionState :state="projectsState" :variant="'list'" :description="projectsHint" />
+        <RegionState
+          :state="projectsState"
+          :variant="'list'"
+          :description="projectsHint"
+          :error-message="overview?.projects?.message || overviewError"
+          @retry="loadOverview"
+        />
       </section>
 
       <section class="region region--tasks">
@@ -63,7 +69,13 @@
           <h2 class="region__title">本周任务</h2>
           <span class="region__sub muted text-help">{{ tasksHint }}</span>
         </header>
-        <RegionState :state="tasksState" :variant="'list'" :description="tasksHint" />
+        <RegionState
+          :state="tasksState"
+          :variant="'list'"
+          :description="tasksHint"
+          :error-message="overview?.tasks?.message || overviewError"
+          @retry="loadOverview"
+        />
       </section>
 
       <section class="region region--learning">
@@ -71,7 +83,13 @@
           <h2 class="region__title">学习实验</h2>
           <span class="region__sub muted text-help">{{ learningHint }}</span>
         </header>
-        <RegionState :state="learningState" :variant="'list'" :description="learningHint" />
+        <RegionState
+          :state="learningState"
+          :variant="'list'"
+          :description="learningHint"
+          :error-message="overview?.learning?.message || overviewError"
+          @retry="loadOverview"
+        />
       </section>
 
       <section class="region region--notifications">
@@ -79,7 +97,13 @@
           <h2 class="region__title">待处理事项</h2>
           <span class="region__sub muted text-help">{{ notificationsHint }}</span>
         </header>
-        <RegionState :state="notificationsState" :variant="'list'" :description="notificationsHint" />
+        <RegionState
+          :state="notificationsState"
+          :variant="'list'"
+          :description="notificationsHint"
+          :error-message="overview?.notifications?.message || overviewError"
+          @retry="loadOverview"
+        />
       </section>
 
       <section class="region region--device">
@@ -90,8 +114,8 @@
         <RegionState
           :state="deviceState"
           :variant="'card'"
-          :error-message="deviceError"
-          @retry="loadDeviceReminder"
+          :error-message="deviceReminder?.message || overviewError"
+          @retry="loadOverview"
         >
           <div v-if="deviceReminder" class="device-content">
             <div class="device-content__metric">
@@ -101,10 +125,6 @@
             <div class="device-content__metric">
               <span class="muted text-help">告警数</span>
               <strong>{{ deviceReminder.alertCount }}</strong>
-            </div>
-            <div class="device-content__metric">
-              <span class="muted text-help">总设备</span>
-              <strong>{{ deviceReminder.totalCount }}</strong>
             </div>
           </div>
         </RegionState>
@@ -121,7 +141,6 @@ import { userStore } from '@/store/user'
 import { currentPrimaryRole, currentRoles } from '@/store/user'
 import { ROLE_META, ROLE } from '@/utils/permission'
 import { fetchWorkbenchOverview } from '@/api/workbench'
-import { fetchDeviceReminder } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
 import RegionState from '@/components/RegionState.vue'
 
@@ -134,21 +153,22 @@ const roleMeta = computed(() => ROLE_META[primaryRole.value] || ROLE_META[ROLE.M
 const overviewLoading = ref(false)
 const overviewError = ref('')
 const overview = ref(null)
-const deviceError = ref('')
-const deviceReminder = ref(null)
 
-const attendance = computed(() => overview.value?.attendance?.data || null)
-const attendanceState = computed(() => {
-  if (overviewError.value) return 'error'
-  if (overview.value?.attendance?.status === 'NOT_AVAILABLE') return 'not-available'
-  if (overview.value?.attendance?.status === 'READY') return 'success'
-  if (overviewLoading.value) return 'loading'
-  return 'empty'
+const attendance = computed(() => {
+  const source = overview.value?.attendance
+  if (!source || source.state !== 'READY') return null
+  const statusMeta = {
+    0: { statusLabel: '未签到', tagType: 'info' },
+    1: { statusLabel: '已签到', tagType: 'success' },
+    2: { statusLabel: '已签退', tagType: 'warning' }
+  }
+  return { ...source, ...(statusMeta[source.todayStatus] || statusMeta[0]) }
 })
+const attendanceState = computed(() => regionState(overview.value?.attendance))
 
 const projectsHint = computed(() => {
   const r = overview.value?.projects
-  if (r?.status === 'NOT_AVAILABLE') return '尚未开放'
+  if (r?.state === 'NOT_AVAILABLE') return '尚未开放'
   if (!r) return '加载中'
   return ''
 })
@@ -156,9 +176,7 @@ const projectsState = computed(() => {
   if (overviewError.value) return 'error'
   if (overviewLoading.value && !overview.value) return 'loading'
   if (!overview.value) return 'loading'
-  if (overview.value.projects?.status === 'NOT_AVAILABLE') return 'not-available'
-  if (overview.value.projects?.status === 'READY') return 'success'
-  return 'empty'
+  return regionState(overview.value.projects)
 })
 
 const tasksHint = computed(() => regionHint(overview.value?.tasks))
@@ -170,15 +188,12 @@ const learningState = computed(() => regionState(overview.value?.learning))
 const notificationsHint = computed(() => regionHint(overview.value?.notifications))
 const notificationsState = computed(() => regionState(overview.value?.notifications))
 
-const deviceState = computed(() => {
-  if (deviceError.value && !deviceReminder.value) return 'error'
-  if (!deviceReminder.value) return 'loading'
-  return 'success'
-})
+const deviceReminder = computed(() => overview.value?.deviceReminder || null)
+const deviceState = computed(() => regionState(deviceReminder.value))
 
 function regionHint(region) {
   if (!region) return '加载中'
-  if (region.status === 'NOT_AVAILABLE') return '尚未开放'
+  if (region.state === 'NOT_AVAILABLE') return '尚未开放'
   return ''
 }
 
@@ -186,8 +201,9 @@ function regionState(region) {
   if (overviewError.value) return 'error'
   if (overviewLoading.value && !overview.value) return 'loading'
   if (!region) return 'loading'
-  if (region.status === 'NOT_AVAILABLE') return 'not-available'
-  if (region.status === 'READY') return 'success'
+  if (region.state === 'NOT_AVAILABLE') return 'not-available'
+  if (region.state === 'READY') return 'success'
+  if (region.state === 'ERROR') return 'error'
   return 'empty'
 }
 
@@ -206,18 +222,8 @@ async function loadOverview() {
   }
 }
 
-async function loadDeviceReminder() {
-  deviceError.value = ''
-  try {
-    deviceReminder.value = await fetchDeviceReminder()
-  } catch (err) {
-    deviceError.value = err?.msg || err?.message || '设备提醒加载失败'
-  }
-}
-
 onMounted(() => {
   loadOverview()
-  loadDeviceReminder()
   if (route.query.reason === 'ACCOUNT_DISABLED') {
     ElMessage.error('账号已被禁用，请联系管理员')
   } else if (route.query.reason) {

@@ -5,7 +5,7 @@
         <h2 class="page-title">实验室成员管理</h2>
         <p class="page-subtitle">维护成员资料、状态和组织归属</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreateDialog">新增成员</el-button>
+      <el-button v-if="canManageMembers" type="primary" :icon="Plus" @click="openCreateDialog">新增成员</el-button>
     </div>
 
     <section class="toolbar">
@@ -61,10 +61,13 @@
         </el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
-            <el-button link :type="row.status === 1 ? 'danger' : 'success'" @click="toggleStatus(row)">
-              {{ row.status === 1 ? '禁用' : '启用' }}
-            </el-button>
+            <template v-if="canManageMembers">
+              <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
+              <el-button link :type="row.status === 1 ? 'danger' : 'success'" @click="toggleStatus(row)">
+                {{ row.status === 1 ? '禁用' : '启用' }}
+              </el-button>
+            </template>
+            <span v-else class="muted text-help">只读</span>
           </template>
         </el-table-column>
       </el-table>
@@ -124,6 +127,7 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { fetchMemberPage, saveMember, updateMember, updateMemberStatus } from '@/api/member'
 import { groupOptions, identityOptions, statusOptions } from '@/constants/dictionaries'
 import { buildQueryWithoutEmpty } from '@/utils/format'
+import { isAdmin } from '@/store/user'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -132,6 +136,7 @@ const editingId = ref(null)
 const memberFormRef = ref()
 const tableData = ref([])
 const total = ref(0)
+const canManageMembers = computed(() => isAdmin())
 
 const queryForm = reactive({
   pageNo: 1,

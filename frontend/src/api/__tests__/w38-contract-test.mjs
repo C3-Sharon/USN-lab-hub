@@ -15,6 +15,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { ROLE, getUserRoles, getPrimaryRole, hasAnyRole } from '../../utils/permission.js'
 
 let pass = 0
@@ -40,11 +41,11 @@ function group(name, fn) {
 
 // =================== permission.js ===================
 group('hasAnyRole / 多角色路由判断', () => {
-  const admin = { primaryRoleKey: ROLE.SYSTEM_ADMIN, primaryRoleName: '系统管理员', roles: [ROLE.SYSTEM_ADMIN] }
-  const teacher = { primaryRoleKey: ROLE.TEACHER, primaryRoleName: '老师', roles: [ROLE.TEACHER] }
-  const keeper = { primaryRoleKey: ROLE.STOCK_KEEPER, primaryRoleName: '库存管理员', roles: [ROLE.STOCK_KEEPER] }
-  const member = { primaryRoleKey: ROLE.MEMBER, primaryRoleName: '普通成员', roles: [ROLE.MEMBER] }
-  const multi = { primaryRoleKey: ROLE.SYSTEM_ADMIN, primaryRoleName: '系统管理员', roles: [ROLE.SYSTEM_ADMIN, ROLE.MEMBER] }
+  const admin = { primaryRoleKey: ROLE.SYSTEM_ADMIN, primaryRoleName: '系统管理员', roles: [{ roleKey: ROLE.SYSTEM_ADMIN, roleName: '系统管理员' }] }
+  const teacher = { primaryRoleKey: ROLE.TEACHER, primaryRoleName: '老师', roles: [{ roleKey: ROLE.TEACHER, roleName: '老师' }] }
+  const keeper = { primaryRoleKey: ROLE.STOCK_KEEPER, primaryRoleName: '库存管理员', roles: [{ roleKey: ROLE.STOCK_KEEPER, roleName: '库存管理员' }] }
+  const member = { primaryRoleKey: ROLE.MEMBER, primaryRoleName: '普通成员', roles: [{ roleKey: ROLE.MEMBER, roleName: '普通成员' }] }
+  const multi = { primaryRoleKey: ROLE.SYSTEM_ADMIN, primaryRoleName: '系统管理员', roles: [{ roleKey: ROLE.SYSTEM_ADMIN }, { roleKey: ROLE.MEMBER }] }
 
   test('空 requiredRoles 对任何人通过', () => {
     assert.equal(hasAnyRole(admin, []), true)
@@ -93,40 +94,38 @@ group('401 与 403 分流', () => {
   // 由于 request.js 耦合 Vue 全局（ElMessage / router / userStore），这里只做"判定逻辑"测试
   // 通过复刻 interceptor 的最小子集验证分类正确
 
-  const LOGIN_REQUIRED_CODES = new Set(['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_DISABLED'])
-
-  function classifyHttp(status, bodyCode) {
+  function classifyHttp(status, body) {
     if (status === 401) {
-      return LOGIN_REQUIRED_CODES.has(bodyCode || 'TOKEN_INVALID') ? 'logout' : 'logout'
+      return { action: 'logout', reason: body?.reason || 'TOKEN_INVALID' }
     }
-    if (status === 403 || bodyCode === 'ACCESS_DENIED') {
-      return 'keep'
+    if (status === 403 || body?.reason === 'ACCESS_DENIED') {
+      return { action: 'keep', reason: body?.reason }
     }
-    return 'pass'
+    return { action: 'pass' }
   }
 
   test('401 + TOKEN_MISSING → logout', () => {
-    assert.equal(classifyHttp(401, 'TOKEN_MISSING'), 'logout')
+    assert.deepEqual(classifyHttp(401, { code: 401, reason: 'TOKEN_MISSING' }), { action: 'logout', reason: 'TOKEN_MISSING' })
   })
 
   test('401 + TOKEN_EXPIRED → logout', () => {
-    assert.equal(classifyHttp(401, 'TOKEN_EXPIRED'), 'logout')
+    assert.equal(classifyHttp(401, { code: 401, reason: 'TOKEN_EXPIRED' }).reason, 'TOKEN_EXPIRED')
   })
 
   test('401 + ACCOUNT_DISABLED → logout + 提示禁用', () => {
-    assert.equal(classifyHttp(401, 'ACCOUNT_DISABLED'), 'logout')
+    assert.equal(classifyHttp(401, { code: 401, reason: 'ACCOUNT_DISABLED' }).reason, 'ACCOUNT_DISABLED')
   })
 
   test('401 + 未知 code → logout（保守）', () => {
-    assert.equal(classifyHttp(401, undefined), 'logout')
+    assert.equal(classifyHttp(401, {}).reason, 'TOKEN_INVALID')
   })
 
   test('403 + ACCESS_DENIED → keep 登录态', () => {
-    assert.equal(classifyHttp(403, 'ACCESS_DENIED'), 'keep')
+    assert.deepEqual(classifyHttp(403, { code: 403, reason: 'ACCESS_DENIED' }), { action: 'keep', reason: 'ACCESS_DENIED' })
   })
 
   test('200 + code 200 → pass', () => {
-    assert.equal(classifyHttp(200, 200), 'pass')
+    assert.equal(classifyHttp(200, { code: 200 }).action, 'pass')
   })
 })
 
@@ -135,29 +134,29 @@ group('工作台 READY / NOT_AVAILABLE / ERROR 适配', () => {
   // 复刻 Dashboard 内的 regionState / regionHint 计算
   function regionState(region) {
     if (!region) return 'loading'
-    if (region.status === 'NOT_AVAILABLE') return 'not-available'
-    if (region.status === 'READY') return 'success'
-    if (region.status === 'ERROR') return 'error'
+    if (region.state === 'NOT_AVAILABLE') return 'not-available'
+    if (region.state === 'READY') return 'success'
+    if (region.state === 'ERROR') return 'error'
     return 'empty'
   }
   function regionHint(region) {
     if (!region) return '加载中'
-    if (region.status === 'NOT_AVAILABLE') return '尚未开放'
+    if (region.state === 'NOT_AVAILABLE') return '尚未开放'
     return ''
   }
 
   test('attendance READY + data → success', () => {
-    assert.equal(regionState({ status: 'READY', data: { weekHours: 0 } }), 'success')
-    assert.equal(regionHint({ status: 'READY' }), '')
+    assert.equal(regionState({ state: 'READY', weekHours: 0 }), 'success')
+    assert.equal(regionHint({ state: 'READY' }), '')
   })
 
   test('projects NOT_AVAILABLE → not-available + 尚未开放', () => {
-    assert.equal(regionState({ status: 'NOT_AVAILABLE' }), 'not-available')
-    assert.equal(regionHint({ status: 'NOT_AVAILABLE' }), '尚未开放')
+    assert.equal(regionState({ state: 'NOT_AVAILABLE' }), 'not-available')
+    assert.equal(regionHint({ state: 'NOT_AVAILABLE' }), '尚未开放')
   })
 
   test('attendance 区域 ERROR → error', () => {
-    assert.equal(regionState({ status: 'ERROR', message: 'fail' }), 'error')
+    assert.equal(regionState({ state: 'ERROR', message: 'fail' }), 'error')
   })
 
   test('未返回任何 region → loading', () => {
@@ -167,7 +166,7 @@ group('工作台 READY / NOT_AVAILABLE / ERROR 适配', () => {
 
   test('不能臆造 available 字段', () => {
     // 状态机只接受 READY/NOT_AVAILABLE/ERROR
-    const illegal = { status: 'AVAILABLE', data: {} }
+    const illegal = { state: 'AVAILABLE' }
     assert.equal(regionState(illegal), 'empty')
   })
 })
@@ -260,21 +259,37 @@ group('API-1~10、API-16 修正后的数据读取', () => {
   })
 
   test('API-16 统一为 listAlerts(deviceId, params) 等位置参数', () => {
-    // 通过 readFileSync 验证 iot.js 源文件确实采用位置参数形态
-    import('node:fs').then(({ readFileSync }) => {
-      const src = readFileSync(new URL('../iot.js', import.meta.url), 'utf8')
-      const patterns = [
-        /export function listAlerts\(deviceId, params\)/,
-        /export function listRecommendations\(deviceId, params\)/,
-        /export function listCommands\(deviceId, params\)/,
-        /export function listOperationLogs\(deviceId, params\)/
-      ]
-      for (const p of patterns) {
-        assert.match(src, p, `iot.js 缺少 ${p}`)
-      }
-    })
-    // 同步形态断言：iot.js 中至少存在 4 个形如 listXxx(deviceId, params) 的导出
-    assert.ok(true, '异步 fs 检查已入队')
+    const src = readFileSync(new URL('../iot.js', import.meta.url), 'utf8')
+    const patterns = [
+      /export function listAlerts\(deviceId, params\)/,
+      /export function listRecommendations\(deviceId, params\)/,
+      /export function listCommands\(deviceId, params\)/,
+      /export function listOperationLogs\(deviceId, params\)/
+    ]
+    for (const pattern of patterns) {
+      assert.match(src, pattern, `iot.js 缺少 ${pattern}`)
+    }
+  })
+})
+
+group('真实工作台契约源文件', () => {
+  const workbenchSource = readFileSync(new URL('../workbench.js', import.meta.url), 'utf8')
+  const dashboardSource = readFileSync(new URL('../../views/Dashboard.vue', import.meta.url), 'utf8')
+  const mockSource = readFileSync(new URL('../../utils/mock.js', import.meta.url), 'utf8')
+
+  test('工作台只调用聚合接口', () => {
+    assert.match(workbenchSource, /\/api\/workbench\/overview/)
+    assert.doesNotMatch(workbenchSource, /\/api\/workbench\/device-reminder/)
+  })
+
+  test('Dashboard 使用 state 而不是 status', () => {
+    assert.match(dashboardSource, /region\.state/)
+    assert.doesNotMatch(dashboardSource, /region\.status/)
+  })
+
+  test('未配置环境变量时默认关闭 mock', () => {
+    assert.match(mockSource, /typeof window === 'undefined'\) return false/)
+    assert.doesNotMatch(mockSource, /return true\s*\n}/)
   })
 })
 

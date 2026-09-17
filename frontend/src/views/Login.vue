@@ -66,7 +66,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
-import { userStore, currentRoles } from '@/store/user'
+import { userStore } from '@/store/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -98,17 +98,12 @@ async function handleLogin() {
       router.replace(String(redirect))
       return
     }
-    const roles = currentRoles()
-    if (roles.includes('SYSTEM_ADMIN') || roles.includes('TEACHER')) {
-      router.replace('/admin/members')
-    } else {
-      router.replace('/dashboard')
-    }
+    router.replace('/dashboard')
   } catch (err) {
-    const code = err?.code || ''
-    if (code === 'ACCOUNT_DISABLED') {
+    const reason = err?.response?.data?.reason || err?.reason || err?.code || ''
+    if (reason === 'ACCOUNT_DISABLED') {
       errorMessage.value = '账号已被禁用，请联系管理员'
-    } else if (code === 'TOKEN_EXPIRED' || code === 'TOKEN_INVALID' || code === 'TOKEN_MISSING') {
+    } else if (reason === 'TOKEN_EXPIRED' || reason === 'TOKEN_INVALID' || reason === 'TOKEN_MISSING') {
       errorMessage.value = '登录状态已失效，请重新登录'
     } else {
       errorMessage.value = err?.msg || '登录失败，请检查账号密码'

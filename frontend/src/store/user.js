@@ -28,9 +28,7 @@ function normalizeUser(raw) {
   if (!raw) return null
   const primaryRoleKey = raw.primaryRoleKey || raw.roleKey || (raw.role === 'admin' ? 'SYSTEM_ADMIN' : 'MEMBER')
   const primaryRoleName = raw.primaryRoleName || raw.roleName || (primaryRoleKey === 'SYSTEM_ADMIN' ? '系统管理员' : '普通成员')
-  const roles = Array.isArray(raw.roles) && raw.roles.length
-    ? raw.roles
-    : (raw.role === 'admin' ? ['SYSTEM_ADMIN'] : ['MEMBER'])
+  const roles = getUserRoles({ ...raw, primaryRoleKey })
   return {
     ...raw,
     primaryRoleKey,

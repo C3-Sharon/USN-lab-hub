@@ -24,7 +24,7 @@ request.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-const LOGIN_REQUIRED_CODES = new Set(['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_DISABLED'])
+const LOGIN_REQUIRED_REASONS = new Set(['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_DISABLED'])
 
 function clearAuthAndRedirect(reason, message) {
   userStore.logout()
@@ -48,15 +48,15 @@ request.interceptors.response.use(
     if (payload.code === 200) {
       return payload.data
     }
-    if (LOGIN_REQUIRED_CODES.has(payload.code)) {
-      const reason = payload.code
+    const reason = payload.reason
+    if (payload.code === 401 || LOGIN_REQUIRED_REASONS.has(reason)) {
       const message = reason === 'ACCOUNT_DISABLED'
         ? '账号已被禁用，请联系管理员'
         : '登录状态已失效，请重新登录'
       clearAuthAndRedirect(reason, message)
       return Promise.reject(payload)
     }
-    if (payload.code === 403 || payload.code === 'ACCESS_DENIED') {
+    if (payload.code === 403 || reason === 'ACCESS_DENIED' || reason === 'RESOURCE_NOT_FOUND') {
       ElMessage.error(payload.msg || '当前账号无权访问该资源')
       return Promise.reject(payload)
     }
@@ -65,11 +65,12 @@ request.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
+    const payload = error.response?.data || {}
     if (status === 401) {
-      const bodyCode = error.response?.data?.code || 'TOKEN_INVALID'
-      clearAuthAndRedirect(bodyCode, bodyCode === 'ACCOUNT_DISABLED' ? '账号已被禁用，请联系管理员' : '登录状态已失效，请重新登录')
+      const reason = payload.reason || 'TOKEN_INVALID'
+      clearAuthAndRedirect(reason, reason === 'ACCOUNT_DISABLED' ? '账号已被禁用，请联系管理员' : '登录状态已失效，请重新登录')
     } else if (status === 403) {
-      ElMessage.error('当前账号无权访问该资源')
+      ElMessage.error(payload.msg || '当前账号无权访问该资源')
     } else {
       ElMessage.error(error.response?.data?.msg || error.message || '网络请求失败')
     }

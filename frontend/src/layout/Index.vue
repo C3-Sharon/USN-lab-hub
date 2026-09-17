@@ -1,6 +1,6 @@
 <template>
   <el-container class="app-layout">
-    <el-aside class="sidebar" :width="sidebarWidth">
+    <el-aside class="sidebar desktop-sidebar" :width="sidebarWidth">
       <div class="sidebar-brand">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 32 32" width="22" height="22">
@@ -37,6 +37,13 @@
 
     <el-container>
       <el-header class="topbar">
+        <el-button
+          class="mobile-menu-button"
+          :icon="Menu"
+          circle
+          aria-label="打开导航菜单"
+          @click="mobileNavOpen = true"
+        />
         <div class="topbar-info">
           <h1 class="topbar-title">{{ route.meta.title || 'USN-lab-hub' }}</h1>
           <p class="text-help muted">{{ pageSubtitle }}</p>
@@ -55,23 +62,71 @@
         <router-view />
       </el-main>
     </el-container>
+
+    <el-drawer v-model="mobileNavOpen" direction="ltr" size="280px" :with-header="false" class="mobile-nav-drawer">
+      <nav class="mobile-sidebar" aria-label="移动端主导航">
+        <div class="sidebar-brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="22" height="22">
+              <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2" />
+              <path d="M6 16 Q 12 9 16 16 T 26 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <circle cx="16" cy="16" r="2" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="brand-text">
+            <strong>USN lab-hub</strong>
+            <span class="text-help muted">个人工作台</span>
+          </div>
+        </div>
+        <el-menu
+          :default-active="activePath"
+          router
+          class="sidebar-menu"
+          background-color="transparent"
+          text-color="rgba(255,255,255,0.78)"
+          active-text-color="#ffffff"
+          @select="mobileNavOpen = false"
+        >
+          <template v-for="item in menuItems" :key="item.index">
+            <el-sub-menu v-if="item.children" :index="item.index">
+              <template #title>
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.title }}</span>
+              </template>
+              <el-menu-item v-for="child in item.children" :key="child.index" :index="child.index">
+                <el-icon><component :is="child.icon" /></el-icon>
+                <span>{{ child.title }}</span>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="item.index">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
+        </el-menu>
+      </nav>
+    </el-drawer>
   </el-container>
 </template>
 
 <script setup>
-import { computed, h, markRaw } from 'vue'
+import { computed, markRaw, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu } from '@element-plus/icons-vue'
 import { userStore, hasAnyRole } from '@/store/user'
 import { ROLE } from '@/utils/permission'
 
 const route = useRoute()
 const router = useRouter()
+const mobileNavOpen = ref(false)
 
 const sidebarWidth = '224px'
 
 const activePath = computed(() => route.path)
-const usernameInitial = computed(() => (userStore.userInfo?.username || 'U').slice(0, 1))
+const usernameInitial = computed(() => {
+  const user = userStore.userInfo
+  return (user?.username || user?.memberId || 'U').slice(0, 1)
+})
 const primaryRole = computed(() => userStore.userInfo?.primaryRoleKey || 'MEMBER')
 const roleMeta = computed(() => {
   const map = {
@@ -85,7 +140,7 @@ const roleMeta = computed(() => {
 
 const pageSubtitle = computed(() => {
   if (route.path.startsWith('/dashboard')) return '今日考勤、进行中项目、本周任务、学习、设备提醒'
-  if (route.path.startsWith('/admin')) return '实验室成员与考勤检查'
+  if (route.path === '/members' || route.path === '/attendance') return '实验室成员与考勤检查'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -112,13 +167,13 @@ const menuItems = computed(() => {
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
     },
     {
-      index: '/admin',
+      index: '/laboratory',
       title: '实验室管理',
       icon: ICON.member,
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER],
       children: [
-        { index: '/admin/members', title: '成员管理', icon: ICON.member, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] },
-        { index: '/admin/attendance', title: '考勤检查', icon: ICON.attendance, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
+        { index: '/members', title: '成员管理', icon: ICON.member, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] },
+        { index: '/attendance', title: '考勤检查', icon: ICON.attendance, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
       ]
     },
     {
@@ -238,6 +293,24 @@ function handleLogout() {
   border-bottom: 1px solid var(--usn-line);
 }
 
+.mobile-menu-button {
+  display: none;
+  flex: 0 0 auto;
+}
+
+.mobile-sidebar {
+  min-height: 100%;
+  background: var(--usn-ink-900);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+:global(.mobile-nav-drawer .el-drawer__body) {
+  padding: 0;
+  background: var(--usn-ink-900);
+}
+
 .topbar-title {
   margin: 0;
   font-size: 16px;
@@ -274,39 +347,33 @@ function handleLogout() {
 
 @media (max-width: 1024px) {
   .app-layout {
-    flex-direction: column;
+    display: block;
   }
 
-  .sidebar {
-    width: 100% !important;
-    height: auto;
+  .desktop-sidebar {
+    display: none;
   }
 
-  .sidebar-brand {
-    height: 48px;
-  }
-
-  .sidebar-menu {
-    display: flex;
-    overflow-x: auto;
-    padding-top: 0;
-  }
-
-  .sidebar-menu :deep(.el-menu-item),
-  .sidebar-menu :deep(.el-sub-menu__title) {
-    height: 44px;
-    line-height: 44px;
-    flex: 0 0 auto;
+  .mobile-menu-button {
+    display: inline-flex;
   }
 
   .topbar {
     height: auto;
+    min-height: 56px;
     padding: var(--usn-space-3) var(--usn-space-4);
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .topbar-info {
+    flex: 1 1 180px;
+    min-width: 0;
   }
 
   .user-actions {
+    flex: 1 1 100%;
     flex-wrap: wrap;
   }
 

@@ -25,7 +25,10 @@ export const KNOWN_ROLES = Object.freeze(Object.values(ROLE))
 export function getUserRoles(user) {
   if (!user) return []
   if (Array.isArray(user.roles) && user.roles.length) {
-    return user.roles.filter((r) => KNOWN_ROLES.includes(r))
+    const roles = user.roles
+      .map((role) => (typeof role === 'string' ? role : role?.roleKey))
+      .filter((roleKey) => KNOWN_ROLES.includes(roleKey))
+    if (roles.length) return [...new Set(roles)]
   }
   if (user.primaryRoleKey && KNOWN_ROLES.includes(user.primaryRoleKey)) {
     return [user.primaryRoleKey]

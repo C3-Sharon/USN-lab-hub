@@ -1,116 +1,57 @@
-# M01-W02 Frontend 交付物（Plan B：frontend-only）
+# M01-W02 Frontend：全局角色、权限与个人工作台
 
-> 分支：`feature/m01-w02-frontend-auth-dashboard`
-> base：`4ea5bc1` (W37 baseline)
-> HEAD：`754c229 feat(frontend): M01-W02 auth + role-based dashboard (plan B frontend-only)`
-> bundle：`m01-w02-frontend-auth-dashboard.bundle`（2.8 MB）
+## 改了什么
 
-## 一句话总结
+- 同步最新 `dev`，接入第二周产品契约和后端实现。
+- 登录后统一进入个人工作台，支持 `roles: [{ roleKey, roleName }]` 多角色响应。
+- 请求同时发送 `Authorization: Bearer` 与兼容 `token` Header。
+- 按响应 `reason` 区分 401、账号禁用和 403，不把数字 `code` 当作原因。
+- 使用 `GET /api/workbench/overview` 加载六个区域，按后端扁平 `state` 结构展示 READY、NOT_AVAILABLE 和 ERROR。
+- 移除不存在的 `/api/workbench/device-reminder` 请求，设备提醒从聚合响应读取。
+- 默认关闭 mock；仅显式设置 `VITE_USE_MOCK=true` 时启用。
+- 侧栏和路由按角色过滤，硬件指令入口仅 SYSTEM_ADMIN 可见。
+- TEACHER 可以查看成员与考勤页面，但成员新增、编辑、启用和禁用入口不可见。
+- 前端管理页面调整为 `/members`、`/attendance`，避免与后端 `/admin/**` 代理冲突。
+- 落地 UI Token、区域状态组件和姓名/学工号首字头像占位。
+- 清理一次性截图脚本和人工 SVG，改为 9 张真实浏览器 PNG 证据。
 
-第二周按"方案 B（frontend-only）"交付：
+## 如何验证
 
-- 完成 W37 baseline 验收中的 `/login` 与 `/dashboard` 升级（workbench 6 区域）
-- 完成 04_API_CONTRACT 全部依赖（`permission.js` / `userStore` / `request.js` / `mock.js`）
-- 完成 UI_SPEC 16 token 全部落地到 `tokens.css` + `global.css`
-- 完成三角色（SYSTEM_ADMIN / TEACHER / MEMBER）路由守卫与侧栏菜单派生
-- 修复 API-1~10 取值错误，扩展为 `records/total` + `list/total` 双形态
-- 7 态 `RegionState` 组件
-- Node 单测 12 条全部通过
-- 三视口 × 三角色 × 九页面 视觉证据 87 张 SVG
+~~~powershell
+cd frontend
+npm ci
+node src/api/__tests__/w38-contract-test.mjs
+node src/api/__tests__/sse-test-node.mjs
+npm run build
+~~~
 
-## 主要变更（116 文件 +6264/-468）
+验证结果：
 
-### 1. 鉴权与角色（核心）
+- W38 契约测试：36/36 通过。
+- SSE 回归测试：23/23 通过。
+- Vite 生产构建：通过。
+- 真实浏览器检查：1440×900、1280×800、390×844 均无横向溢出。
+- TEACHER 三个视口下成员写操作按钮均为 0。
 
-| 文件 | 内容 |
-| --- | --- |
-| `frontend/src/utils/permission.js` | `ROLE` 枚举 + `hasAnyRole` 单一来源 |
-| `frontend/src/store/user.js` | 用户 store 含 `primaryRoleKey` / `primaryRoleName` / `roles[]` |
-| `frontend/src/utils/request.js` | 401 清 token + 跳 login；403 弹提示 + 跳 dashboard；同时发 `X-Token` 与 `Authorization` 兼容 |
-| `frontend/src/api/workbench.js` | `getWorkbenchOverview` / `getAttendanceToday` / `getProjects` / `getTasks` / `getLearning` / `getNotifications` / `getDeviceReminder` |
-| `frontend/src/utils/mock.js` | mock 数据，符合 `{list|records, total}` 形态 |
-| `frontend/src/views/Login.vue` | 本地占位，移除 Unsplash，错误内联提示 |
-| `frontend/src/views/errors/Forbidden.vue` + `NotFound.vue` | 错误页 |
+视觉证据见 `docs/evidence/2026-W38/frontend/README.md`。
 
-### 2. 路由与布局
+## 契约影响
 
-| 文件 | 内容 |
-| --- | --- |
-| `frontend/src/router/index.js` | 路由 `meta.roles` + `beforeEach` 守卫；`/iot/public` 不需要登录 |
-| `frontend/src/layout/Index.vue` | 224 侧栏 + 56 顶栏 + 移动端折叠；按 `user.roles[]` 派生菜单 |
+- API：不新增接口；按冻结契约消费 `GET /api/workbench/overview`。
+- 鉴权：兼容双 Header；401/403 按 `reason` 处理。
+- 权限：按 SYSTEM_ADMIN / TEACHER / STOCK_KEEPER / MEMBER 过滤路由和菜单。
+- 前端路由：成员与考勤页面从 `/admin/*` 调整为 `/members`、`/attendance`，后端 `/admin/**` API 不变。
+- MQTT、数据库：无变化。
 
-### 3. 工作台（核心）
+## 联调重点
 
-| 文件 | 内容 |
-| --- | --- |
-| `frontend/src/views/Dashboard.vue` | 6 区域：attendance / projects / tasks / learning / notifications / deviceReminder；统一调 `getWorkbenchOverview` |
-| `frontend/src/components/RegionState.vue` | 7 态：loading / empty / error / permission / success / offline / not-available |
+1. 用 SYSTEM_ADMIN、TEACHER、STOCK_KEEPER、MEMBER 分别登录，确认角色标签、菜单和首页区域。
+2. 验证 TEACHER 可以查看成员列表，但不能看到或调用成员写操作。
+3. 验证 TOKEN_MISSING、TOKEN_INVALID、TOKEN_EXPIRED、ACCOUNT_DISABLED 和 ACCESS_DENIED。
+4. 验证首页直接消费后端 `state` 扁平结构，设备提醒不再发第二个请求。
+5. 验证 `/api/iot/public/**` SSE 保持公开可用。
 
-### 4. UI Token（UI_SPEC 16 项）
+## 已知风险
 
-`frontend/src/styles/tokens.css` 落地：
-
-- 品牌：brand / brand-soft / brand-strong
-- 状态：success / warn / danger / info（含 soft 变体）
-- 角色：role-admin / role-teacher / role-keeper / role-member
-- 文本：ink / muted / subtle
-- 背景：bg / surface / surface-2
-- 边框：border / border-strong
-- 间距：space-1~space-6
-
-### 5. API 修复（API-1~10 + API-16）
-
-| API | 取值 | 修复 |
-| --- | --- | --- |
-| getProjects / getDevices | `res.records` | 维持 4ea5bc1 修复 |
-| listAlerts / listRecommendations / listCommands / listOperationLogs | `res.list` | 维持 4ea5bc1 修复 |
-| mock `listAlerts/listRecommendations/listOperationLogs` | 改用 `mockListPageResponse` | **本次新增** —— 此前返回 `records/total`，与契约 §2 的 `list/total` 不一致 |
-
-### 6. 测试
-
-`frontend/src/api/__tests__/w38-contract-test.mjs`：
-
-- `ROLE` 枚举存在
-- `hasAnyRole` 正/反向
-- 路由 meta.roles 配置
-- `request.js` 401/403 分流函数可调用
-- `iot.js` mock 响应字段
-- 7 态 RegionState
-- 6 区域在 Dashboard 中存在
-- 16 token 全部出现在 tokens.css
-- `/iot/public` 不在需要登录列表
-
-`node frontend/src/api/__tests__/w38-contract-test.mjs` → 12 pass / 0 fail。
-
-### 7. 视觉证据
-
-`docs/evidence/2026-W38/frontend/`：
-
-- 3 视口（1440×900 / 1280×800 / 390×844）
-- 4 角色（含 public 访客）
-- 9 页面 + 公开页 `/iot/public`
-- 87 张 SVG 静态展示卡
-
-详见 `docs/evidence/2026-W38/frontend/README.md`。
-
-## 硬约束遵守清单
-
-- ✅ 未修改 `/iot/pm001`（W7 硬约束）—— 验证：`git show HEAD:frontend/src/views/iot/Pm001Live.vue` 与 W38 一致
-- ✅ Admin 页面维持 `result.records` 用法（W37 修复）
-- ✅ 全部请求封装在 `frontend/src/api/{iot,workbench}.js`
-- ✅ `getWorkbenchOverview` 在 `unmount` 时 abort（`request.js` 内统一实现）
-- ✅ W37 IoT 修复（4ea5bc1）未被覆盖
-
-## 已知限制与遗留
-
-| 项 | 状态 | 处理 |
-| --- | --- | --- |
-| Edge headless 截图不可用 | 本机限制 | 改 SVG 静态展示卡，README 中说明替换方法 |
-| mock 数据 vs 后端真接口 | mock 优先 | 真实后端就绪后仅替换 `USE_MOCK=false` 即可 |
-| `/iot/public` 看板真实数据 | 待后端 | 仍走 mock 列表 |
-| mobile 390 视口下侧栏抽屉交互 | 基础已实现 | 后续可补动画细节 |
-| `/admin/members` 与 `/admin/attendance` 仅 SYSTEM_ADMIN 可见 | 已通过路由守卫实现 | 待产品确认是否需要 403 软降级 |
-
-## 应用方法
-
-详见 `m01-w02-frontend-auth-dashboard.bundle.README.md`。
+- 构建产物主 JS 约 2.47 MB，Vite 有 chunk size 警告；不阻塞本周契约联调，后续按页面拆分异步路由。
+- 浏览器截图使用契约同形的请求拦截数据，只证明布局和权限可见性；真实后端联调仍需按周任务清单执行。
