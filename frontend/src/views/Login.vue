@@ -1,17 +1,33 @@
 <template>
   <main class="login-page">
-    <section class="login-visual">
-      <div class="brand-block">
-        <span class="brand-mark">USN</span>
-        <h1>USN-lab-hub</h1>
-        <p>实验室考勤与人员管理系统</p>
+    <aside class="login-visual" aria-hidden="true">
+      <div class="visual-grid">
+        <div class="emblem">
+          <svg viewBox="0 0 64 64" width="56" height="56">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="2.5" />
+            <path d="M10 32 Q 20 18 32 32 T 54 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            <circle cx="32" cy="32" r="4" fill="currentColor" />
+          </svg>
+        </div>
+        <div class="visual-meta">
+          <strong class="visual-mark">USN</strong>
+          <span class="visual-name">lab-hub</span>
+          <span class="text-help visual-sub">实验室考勤与人员管理系统</span>
+        </div>
+        <ul class="visual-points">
+          <li>考勤、项目、实验、库存、设备在同一台工作台</li>
+          <li>多角色登录，按权限看到对应模块</li>
+          <li>数据驱动状态，避免营销式干扰</li>
+        </ul>
       </div>
-    </section>
+    </aside>
 
     <section class="login-panel">
       <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" class="login-form" @keyup.enter="handleLogin">
-        <h2>登录</h2>
-        <p class="muted">使用学号或工号进入工作台</p>
+        <header class="login-form__head">
+          <h2>登录</h2>
+          <p class="muted">使用学号或工号进入工作台</p>
+        </header>
 
         <el-form-item prop="memberId">
           <el-input v-model.trim="loginForm.memberId" size="large" placeholder="账号 / 学工号" :prefix-icon="User" />
@@ -32,9 +48,13 @@
           <el-checkbox v-model="rememberMe">保持登录</el-checkbox>
         </el-form-item>
 
+        <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon class="login-error" />
+
         <el-button class="login-button" type="primary" size="large" :loading="loading" @click="handleLogin">
           登录系统
         </el-button>
+
+        <p class="text-help muted login-hint">本系统为实验室内部使用，登录即视为同意内部数据规范；账号异常请联系系统管理员。</p>
       </el-form>
     </section>
   </main>
@@ -53,6 +73,7 @@ const route = useRoute()
 const loginFormRef = ref()
 const loading = ref(false)
 const rememberMe = ref(true)
+const errorMessage = ref('')
 
 const loginForm = reactive({
   memberId: '',
@@ -65,6 +86,7 @@ const loginRules = {
 }
 
 async function handleLogin() {
+  errorMessage.value = ''
   await loginFormRef.value?.validate()
   loading.value = true
   try {
@@ -76,7 +98,16 @@ async function handleLogin() {
       router.replace(String(redirect))
       return
     }
-    router.replace(loginData.user?.role === 'admin' ? '/admin/members' : '/dashboard')
+    router.replace('/dashboard')
+  } catch (err) {
+    const reason = err?.response?.data?.reason || err?.reason || err?.code || ''
+    if (reason === 'ACCOUNT_DISABLED') {
+      errorMessage.value = '账号已被禁用，请联系管理员'
+    } else if (reason === 'TOKEN_EXPIRED' || reason === 'TOKEN_INVALID' || reason === 'TOKEN_MISSING') {
+      errorMessage.value = '登录状态已失效，请重新登录'
+    } else {
+      errorMessage.value = err?.msg || '登录失败，请检查账号密码'
+    }
   } finally {
     loading.value = false
   }
@@ -87,49 +118,77 @@ async function handleLogin() {
 .login-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
-  background: #f4f7fb;
+  grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr);
+  background: var(--usn-canvas);
 }
 
 .login-visual {
-  position: relative;
+  background: var(--usn-blue-700);
+  color: #ffffff;
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 64px;
-  color: #fff;
-  background:
-    linear-gradient(rgba(16, 38, 64, 0.64), rgba(16, 38, 64, 0.72)),
-    url("https://images.unsplash.com/photo-1581093588401-fbb62a02f120?auto=format&fit=crop&w=1600&q=80") center / cover;
 }
 
-.brand-block {
-  max-width: 620px;
+.visual-grid {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-5);
 }
 
-.brand-mark {
+.emblem {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--usn-radius-md);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1d4f91;
+}
+
+.visual-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.visual-mark {
+  font-size: 36px;
   font-weight: 800;
-  font-size: 20px;
-}
-
-.brand-block h1 {
-  margin: 28px 0 12px;
-  font-size: 52px;
-  line-height: 1.08;
   letter-spacing: 0;
+  line-height: 1;
 }
 
-.brand-block p {
+.visual-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.visual-sub {
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 4px;
+}
+
+.visual-points {
+  list-style: none;
   margin: 0;
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.84);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-2);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: var(--usn-font-size-body);
+}
+
+.visual-points li::before {
+  content: '·';
+  color: var(--usn-blue-100);
+  margin-right: 8px;
+  font-weight: 800;
 }
 
 .login-panel {
@@ -141,38 +200,63 @@ async function handleLogin() {
 
 .login-form {
   width: min(100%, 420px);
-  padding: 36px;
-  background: #fff;
-  border: 1px solid #e7ecf3;
-  border-radius: 8px;
-  box-shadow: 0 24px 64px rgba(24, 39, 75, 0.08);
+  padding: var(--usn-space-6);
+  background: var(--usn-surface);
+  border: 1px solid var(--usn-line);
+  border-radius: var(--usn-radius-md);
+  box-shadow: var(--usn-shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
 }
 
-.login-form h2 {
-  margin: 0 0 8px;
-  font-size: 28px;
+.login-form__head h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  color: var(--usn-ink-900);
+}
+
+.login-form__head p {
+  margin: 0;
+  color: var(--usn-ink-500);
 }
 
 .login-button {
   width: 100%;
+  height: 44px;
 }
 
-@media (max-width: 900px) {
+.login-error {
+  margin-bottom: 0;
+}
+
+.login-hint {
+  text-align: center;
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
   .login-page {
     grid-template-columns: 1fr;
   }
 
   .login-visual {
-    min-height: 280px;
-    padding: 36px;
-  }
-
-  .brand-block h1 {
-    font-size: 38px;
+    min-height: 240px;
+    padding: 40px;
   }
 
   .login-panel {
     padding: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-visual {
+    padding: 32px;
+  }
+
+  .visual-mark {
+    font-size: 28px;
   }
 }
 </style>

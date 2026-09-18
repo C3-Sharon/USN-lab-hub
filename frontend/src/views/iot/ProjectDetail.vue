@@ -63,8 +63,8 @@ async function loadProject() {
   loading.value = true
   try {
     const res = await getProjectDetail(projectId)
-    project.value = res.data || {}
-    devices.value = res.data.devices || []
+    project.value = res || {}
+    devices.value = res.devices || []
   } catch (err) {
     console.error('加载项目详情失败', err)
   } finally {
@@ -76,7 +76,7 @@ async function loadDevices() {
   devicesLoading.value = true
   try {
     const res = await listDevices({ projectId })
-    devices.value = res.data.records || []
+    devices.value = res.records || []
   } catch (err) {
     console.error('加载设备列表失败', err)
   } finally {

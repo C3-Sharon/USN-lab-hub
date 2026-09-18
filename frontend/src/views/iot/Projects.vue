@@ -116,8 +116,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await listProjects(query.value)
-    projects.value = res.data.records || []
-    total.value = res.data.total || 0
+    projects.value = res.records || []
+    total.value = res.total || 0
   } catch (err) {
     console.error('加载项目列表失败', err)
     projects.value = []

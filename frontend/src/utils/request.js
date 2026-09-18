@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import router from '@/router'
 import { userStore } from '@/store/user'
 
@@ -9,12 +9,12 @@ const request = axios.create({
 })
 
 function readStoredToken() {
-  return localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+  return userStore.token || localStorage.getItem('token') || sessionStorage.getItem('token') || ''
 }
 
 request.interceptors.request.use(
   (config) => {
-    const token = userStore.token || readStoredToken()
+    const token = readStoredToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
       config.headers.token = token
@@ -24,27 +24,53 @@ request.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+const LOGIN_REQUIRED_REASONS = new Set(['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_DISABLED'])
+
+function clearAuthAndRedirect(reason, message) {
+  userStore.logout()
+  ElMessage.error(message || '登录状态已失效，请重新登录')
+  if (reason) {
+    router.replace({ path: '/login', query: { reason } })
+  } else {
+    router.replace('/login')
+  }
+}
+
 request.interceptors.response.use(
   (response) => {
-    const payload = response.data
     if (response.config.responseType === 'blob') {
       return response
     }
+    const payload = response.data
     if (!payload || typeof payload.code === 'undefined') {
       return payload
     }
-    if (payload.code !== 200) {
-      ElMessage.error(payload.msg || '请求处理失败')
+    if (payload.code === 200) {
+      return payload.data
+    }
+    const reason = payload.reason
+    if (payload.code === 401 || LOGIN_REQUIRED_REASONS.has(reason)) {
+      const message = reason === 'ACCOUNT_DISABLED'
+        ? '账号已被禁用，请联系管理员'
+        : '登录状态已失效，请重新登录'
+      clearAuthAndRedirect(reason, message)
       return Promise.reject(payload)
     }
-    return payload.data
+    if (payload.code === 403 || reason === 'ACCESS_DENIED' || reason === 'RESOURCE_NOT_FOUND') {
+      ElMessage.error(payload.msg || '当前账号无权访问该资源')
+      return Promise.reject(payload)
+    }
+    ElMessage.error(payload.msg || '请求处理失败')
+    return Promise.reject(payload)
   },
   (error) => {
     const status = error.response?.status
+    const payload = error.response?.data || {}
     if (status === 401) {
-      userStore.logout()
-      ElMessage.error('登录状态已失效，请重新登录')
-      router.replace('/login')
+      const reason = payload.reason || 'TOKEN_INVALID'
+      clearAuthAndRedirect(reason, reason === 'ACCOUNT_DISABLED' ? '账号已被禁用，请联系管理员' : '登录状态已失效，请重新登录')
+    } else if (status === 403) {
+      ElMessage.error(payload.msg || '当前账号无权访问该资源')
     } else {
       ElMessage.error(error.response?.data?.msg || error.message || '网络请求失败')
     }
