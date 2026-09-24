@@ -1,6 +1,6 @@
 # USN Lab Hub 当前状态
 
-> 事实基线：`origin/dev` commit `f70fdcf`
+> 事实基线：`origin/dev` commit `5ea466d`
 > 更新规则：仅在功能合入 `dev` 且完成验证后更新
 > 禁止：把计划、mock、未合并 PR 或口头完成写成已完成
 
@@ -8,11 +8,23 @@
 
 ### 人员与考勤
 
-- 用户登录和 JWT 鉴权。
-- 管理员成员查询、新增、更新和状态管理。
+- 用户登录和 JWT 鉴权（Authorization Bearer + 旧 token Header 兼容）。
+- 五档全局角色：SYSTEM_ADMIN、TEACHER、STOCK_KEEPER、MEMBER（GUEST 为逻辑角色）。
+- 管理员成员查询、新增、更新和状态管理；TEACHER 只读查看成员和考勤。
 - 学生签到、签退、今日记录、时长统计。
 - 管理员考勤分页和导出。
-- 默认演示账号及 Flyway 初始化。
+- 禁用用户 Token 立即失效（每次鉴权查库）。
+- 默认演示账号及 Flyway V6 迁移。
+- 401/403 统一响应格式 + reason 枚举（TOKEN_MISSING/INVALID/EXPIRED、ACCOUNT_DISABLED、ACCESS_DENIED）。
+
+### 个人工作台
+
+- `GET /api/workbench/overview` 首页聚合接口（六区域 + state 三态）。
+- 角色化首页：不同全局角色看到正确的区域和数据范围。
+- 今日考勤、设备提醒为真实数据；项目、任务、学习、待办为 NOT_AVAILABLE 占位。
+- loading / success / empty / error / permission / offline 六态。
+- 三视口布局：1440x900、1280x800、390x844。
+- UI_SPEC 设计 Token 落地，移除 Unsplash 外链。
 
 ### 单项目、单设备 IoT 闭环
 
@@ -22,32 +34,31 @@
 - 阈值告警、规则建议、建议确认或忽略。
 - 指令创建、MQTT 发布、ACK、超时和操作日志。
 - 设备健康评分、公开项目展示和登录后 IoT 总览。
-- SSE 最新遥测推送、断线重连和轮询降级。
+- SSE 最新遥测推送、断线重连和轮询降级（公开接口保留）。
 - Python PM-001 模拟器用于契约和联调，不是生产接口的事实源。
 
 ### 工程基础
 
-- Spring Boot 3.1.5、JDK 17、MyBatis-Plus、MySQL 8、Redis、Flyway。
+- Spring Boot 3.1.5、JDK 17、MyBatis-Plus、MySQL 8、Flyway。
 - Vue 3、Vite、Element Plus、Vue Router、Axios。
 - 后端单元/集成测试和前端 SSE Node 测试已有基础。
 - GitHub `dev` 集成、PR 协作和 GitLab 单向归档约定。
 
 ## 已知局限
 
-- `lab_project`、设备和指标结构仍服务首轮 IoT 演示，尚未成为正式项目域和多设备模板。
-- 当前权限主要是全局管理员/普通用户，尚未实现全局角色与项目角色组合授权。
-- 个人首页以考勤为主，尚未聚合项目、任务、学习、审批和设备提醒。
-- 项目成员、里程碑、任务状态机尚未实现。
+- `lab_project` 表仍服务首轮 IoT 演示，尚未成为正式项目域（无项目成员、项目角色、里程碑、任务）。
+- 项目工作台首页 projects 区域仍为 NOT_AVAILABLE 占位，待第 3 周切换为真实数据。
+- 硬件指令暂时仅限 SYSTEM_ADMIN（历史演示兼容，待第 16-17 周平台化后重新设计）。
 - 学习实验、采购库存、资产、自研硬件、知识/RAG、Agent 尚未实现。
 - MinIO、OpenSearch、双实例、Outbox、监控和恢复体系尚未进入正式实现。
-- 前端自动化测试较少，设计 Token 和固定视口截图流程尚未建立。
+- 前端自动化测试仍以 Node 契约测试为主，组件级 Vitest 待建立。
 - 旧 README 的长期 `feature/iot-*` 分支规则已经过期，下一阶段使用每周短分支。
 
 ## 当前阶段
 
-26 周路线第 1 周（2026-W37）已验收通过，状态为 VERIFIED。第一周完成基线清点：产品地图、六个月范围矩阵、核心术语说明已冻结；后端 85 个 Java 文件、9 个 Controller、16 张表和 9 个测试套件已清点；前端 14 个业务页面、视觉债务和可复用组件已清点。三方对现状、目标和非目标无分歧。
+26 周路线第 2 周（2026-W38）已验收通过，状态为 VERIFIED。五档全局角色、鉴权统一、个人工作台首页聚合已验证通过。四种角色（SYSTEM_ADMIN/TEACHER/STOCK_KEEPER/MEMBER）登录后权限边界正确，401/403 各 reason 行为符合预期，教师成员只读页面真实联调通过。
 
-当前等待第 2 周产品契约冻结：首页字段、全局角色枚举、考勤查看范围、Token Header 名称和 401/403 响应格式。第 2 周不新增业务 API 范围以外的重构，不平台化多设备 IoT。
+当前进入第 3 周：正式项目档案、项目成员与项目权限契约。目标是让成员可以从个人工作台进入自己参与的项目，建立项目状态和项目角色的基础模型。
 
 ## 更新格式
 
