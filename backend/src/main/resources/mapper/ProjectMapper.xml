@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ProjectMapper">
+
+    <insert id="insertProject" parameterType="com.usn.labhub.user.domain.entity.project.ProjectRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_project
+            (project_code, project_name, description, owner_id, status, public_visible,
+             category, cover_media_id, create_time, update_time)
+        VALUES
+            (#{projectCode}, #{projectName}, #{description}, #{ownerId}, #{status}, #{publicVisible},
+             #{category}, #{coverMediaId}, #{createTime}, #{updateTime})
+    </insert>
+
+    <insert id="insertMember">
+        INSERT INTO lab_project_member (project_id, user_id, project_role, joined_at)
+        VALUES (#{projectId}, #{userId}, #{projectRole}, #{joinedAt})
+    </insert>
+
+    <sql id="visibleProjectJoin">
+        LEFT JOIN lab_project_member current_member
+            ON current_member.project_id = p.id AND current_member.user_id = #{userId}
+    </sql>
+
+    <sql id="projectVisibility">
+        <choose>
+            <when test="viewAll">
+            </when>
+            <when test="publicOnly">
+                AND p.public_visible = 1
+            </when>
+            <otherwise>
+                AND current_member.user_id IS NOT NULL
+            </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="projectFilters">
+        <include refid="projectVisibility"/>
+        <choose>
+            <when test="status != null">
+                AND p.status = #{status}
+            </when>
+            <otherwise>
+                AND p.status != 'ARCHIVED'
+            </otherwise>
+        </choose>
+        <if test="keyword != null">
+            AND (p.project_code LIKE CONCAT('%', #{keyword}, '%')
+                OR p.project_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <sql id="projectSummaryColumns">
+        p.id,
+        p.project_code AS code,
+        p.project_name AS name,
+        p.description AS summary,
+        p.category,
+        p.status,
+        NULL AS coverUrl,
+        current_member.project_role AS myRole,
+        (SELECT COUNT(*) FROM lab_project_member member_count WHERE member_count.project_id = p.id) AS memberCount,
+        p.create_time AS createTime,
+        p.update_time AS updateTime
+    </sql>
+
+    <select id="countProjects" resultType="long">
+        SELECT COUNT(*)
+        FROM lab_project p
+        <include refid="visibleProjectJoin"/>
+        WHERE 1 = 1
+        <include refid="projectFilters"/>
+    </select>
+
+    <select id="selectProjects" resultType="com.usn.labhub.user.domain.vo.project.ProjectSummaryVO">
+        SELECT <include refid="projectSummaryColumns"/>
+        FROM lab_project p
+        <include refid="visibleProjectJoin"/>
+        WHERE 1 = 1
+        <include refid="projectFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, p.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectProjectDetail" resultType="com.usn.labhub.user.domain.vo.project.ProjectDetailVO">
+        SELECT <include refid="projectSummaryColumns"/>
+        FROM lab_project p
+        <include refid="visibleProjectJoin"/>
+        WHERE p.id = #{projectId}
+        <include refid="projectVisibility"/>
+    </select>
+
+    <select id="selectMembers" resultType="com.usn.labhub.user.domain.vo.project.ProjectMemberVO">
+        SELECT
+            pm.user_id AS userId,
+            u.member_id AS memberId,
+            u.username AS name,
+            pm.project_role AS projectRole,
+            pm.joined_at AS joinedAt
+        FROM lab_project_member pm
+        INNER JOIN sys_user u ON u.id = pm.user_id
+        WHERE pm.project_id = #{projectId}
+        ORDER BY CASE WHEN pm.project_role = 'OWNER' THEN 0 ELSE 1 END,
+                 pm.joined_at ASC,
+                 pm.user_id ASC
+    </select>
+</mapper>
