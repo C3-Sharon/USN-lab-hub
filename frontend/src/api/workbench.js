@@ -35,13 +35,41 @@ function attendanceRegion() {
   }
 }
 
+function mockProjectsRegion() {
+  return {
+    state: 'READY',
+    total: 2,
+    active: 1,
+    list: [
+      {
+        id: 10,
+        code: 'PROJ-001',
+        name: '智能气象站项目',
+        status: 'PREPARING',
+        myRole: 'OWNER',
+        coverUrl: null,
+        updateTime: '2026-09-21T10:30:00'
+      },
+      {
+        id: 5,
+        code: 'PM-001',
+        name: '功率监测演示项目',
+        status: 'ACTIVE',
+        myRole: 'MEMBER',
+        coverUrl: null,
+        updateTime: '2026-09-20T09:15:00'
+      }
+    ]
+  }
+}
+
 function mockOverview() {
   return Promise.resolve({
     code: 200,
     msg: 'success',
     data: {
       attendance: attendanceRegion(),
-      projects: notAvailable(),
+      projects: mockProjectsRegion(),
       tasks: notAvailable(),
       learning: notAvailable(),
       notifications: notAvailable(),

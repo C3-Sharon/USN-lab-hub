@@ -141,6 +141,7 @@ const roleMeta = computed(() => {
 const pageSubtitle = computed(() => {
   if (route.path.startsWith('/dashboard')) return '今日考勤、进行中项目、本周任务、学习、设备提醒'
   if (route.path === '/members' || route.path === '/attendance') return '实验室成员与考勤检查'
+  if (route.path.startsWith('/projects')) return '正式项目档案、成员与权限管理'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -177,13 +178,19 @@ const menuItems = computed(() => {
       ]
     },
     {
+      index: '/projects',
+      title: '项目工作台',
+      icon: ICON.folder,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
+    },
+    {
       index: '/iot',
       title: 'IoT 管理',
       icon: ICON.iot,
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
       children: [
         { index: '/iot/overview', title: 'IoT 总览', icon: ICON.overview, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
-        { index: '/iot/projects', title: '项目列表', icon: ICON.folder, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/iot/projects', title: 'IoT 项目（旧）', icon: ICON.folder, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
         { index: '/iot/devices', title: '设备列表', icon: ICON.device, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
         { index: '/iot/alerts', title: '告警中心', icon: ICON.bell, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER] },
         { index: '/iot/commands', title: '指令控制台', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN] },
