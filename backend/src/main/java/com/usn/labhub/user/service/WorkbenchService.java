@@ -3,12 +3,14 @@ package com.usn.labhub.user.service;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.domain.vo.WorkbenchOverviewVO;
 import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
+import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import com.usn.labhub.user.service.iot.IotOperationsService;
 import com.usn.labhub.user.service.iot.IotTelemetryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -21,12 +23,14 @@ public class WorkbenchService {
     private final IAttendanceService attendanceService;
     private final IotTelemetryService telemetryService;
     private final IotOperationsService operationsService;
+    private final ProjectService projectService;
 
     public WorkbenchService(IAttendanceService attendanceService, IotTelemetryService telemetryService,
-                            IotOperationsService operationsService) {
+                            IotOperationsService operationsService, ProjectService projectService) {
         this.attendanceService = attendanceService;
         this.telemetryService = telemetryService;
         this.operationsService = operationsService;
+        this.projectService = projectService;
     }
 
     public WorkbenchOverviewVO getOverview(Long userId) {
@@ -34,7 +38,7 @@ public class WorkbenchService {
 
         WorkbenchOverviewVO overview = new WorkbenchOverviewVO();
         overview.setAttendance(attendanceSection(attendance));
-        overview.setProjects(projectSection());
+        overview.setProjects(projectSection(userId));
         overview.setTasks(taskSection());
         overview.setLearning(learningSection());
         overview.setNotifications(notificationSection());
@@ -55,9 +59,23 @@ public class WorkbenchService {
         return section;
     }
 
-    private WorkbenchOverviewVO.ProjectSection projectSection() {
+    private WorkbenchOverviewVO.ProjectSection projectSection(Long userId) {
         WorkbenchOverviewVO.ProjectSection section = new WorkbenchOverviewVO.ProjectSection();
-        section.setState(NOT_AVAILABLE);
+        try {
+            List<ProjectWorkbenchItemVO> projects = projectService.workbenchProjects(userId);
+            section.setState(READY);
+            section.setList(projects);
+            section.setTotal(projects.size());
+            section.setActive((int) projects.stream()
+                    .filter(project -> "ACTIVE".equals(project.getStatus()))
+                    .count());
+        } catch (RuntimeException e) {
+            log.warn("Project summary query failed: {}", e.getMessage());
+            section.setState(ERROR);
+            section.setErrorCode("PROJECTS_LOAD_FAILED");
+            section.setMessage("项目数据加载失败");
+            section.setRetryable(true);
+        }
         return section;
     }
 

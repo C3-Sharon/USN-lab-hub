@@ -89,7 +89,7 @@ class Week2AuthWorkbenchIntegrationTest {
         Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
         assertEquals(6, data.size());
         assertEquals("READY", ((Map<?, ?>) data.get("attendance")).get("state"));
-        assertEquals("NOT_AVAILABLE", ((Map<?, ?>) data.get("projects")).get("state"));
+        assertEquals("READY", ((Map<?, ?>) data.get("projects")).get("state"));
         assertEquals("READY", ((Map<?, ?>) data.get("deviceReminder")).get("state"));
         assertFalse(data.toString().contains("available"));
     }

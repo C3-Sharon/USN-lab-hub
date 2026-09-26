@@ -2,10 +2,14 @@ package com.usn.labhub.user.service;
 
 import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.project.ProjectCreateDTO;
+import com.usn.labhub.user.domain.dto.project.ProjectMemberAddDTO;
+import com.usn.labhub.user.domain.entity.project.ProjectAccessRecord;
 import com.usn.labhub.user.domain.entity.project.ProjectRecord;
 import com.usn.labhub.user.domain.vo.project.ProjectDetailVO;
+import com.usn.labhub.user.domain.vo.project.ProjectMemberVO;
 import com.usn.labhub.user.domain.vo.project.ProjectPageVO;
 import com.usn.labhub.user.domain.vo.project.ProjectSummaryVO;
+import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import com.usn.labhub.user.mapper.ProjectMapper;
 import com.usn.labhub.user.project.ProjectApiException;
 import org.springframework.dao.DuplicateKeyException;
@@ -107,6 +111,71 @@ public class ProjectService {
         }
         project.setMembers(projectMapper.selectMembers(projectId));
         return project;
+    }
+
+    @Transactional
+    public ProjectMemberVO addMember(Long projectId, ProjectMemberAddDTO request) {
+        Long actorId = requiredUserId();
+        ProjectAccessRecord access = projectMapper.selectProjectAccess(projectId, actorId);
+        boolean systemAdmin = UserContext.getRoles().contains("SYSTEM_ADMIN");
+        if (access == null || (!systemAdmin && access.getMyRole() == null)) {
+            throw ProjectApiException.notFound();
+        }
+        if ("ARCHIVED".equals(access.getStatus())) {
+            throw ProjectApiException.archived();
+        }
+
+        String requestedRole = request.getProjectRole();
+        verifyGrantPermission(systemAdmin, access.getMyRole(), requestedRole);
+
+        ProjectMemberVO target = projectMapper.selectUserByMemberId(request.getMemberId().trim());
+        if (target == null) {
+            throw ProjectApiException.userNotFound();
+        }
+
+        ProjectMemberVO existing = projectMapper.selectMember(projectId, target.getUserId());
+        if (existing != null) {
+            return sameRoleOrConflict(existing, requestedRole);
+        }
+
+        try {
+            projectMapper.insertMember(projectId, target.getUserId(), requestedRole, LocalDateTime.now());
+        } catch (DuplicateKeyException exception) {
+            ProjectMemberVO concurrent = projectMapper.selectMember(projectId, target.getUserId());
+            if (concurrent != null) {
+                return sameRoleOrConflict(concurrent, requestedRole);
+            }
+            throw exception;
+        }
+        return projectMapper.selectMember(projectId, target.getUserId());
+    }
+
+    public List<ProjectWorkbenchItemVO> workbenchProjects(Long userId) {
+        if (userId == null) {
+            throw ProjectApiException.badRequest();
+        }
+        return projectMapper.selectWorkbenchProjects(userId);
+    }
+
+    private void verifyGrantPermission(boolean systemAdmin, String actorRole, String requestedRole) {
+        if (systemAdmin) {
+            return;
+        }
+        if ("OWNER".equals(actorRole) && !"OWNER".equals(requestedRole)) {
+            return;
+        }
+        if ("MAINTAINER".equals(actorRole)
+                && ("MEMBER".equals(requestedRole) || "OBSERVER".equals(requestedRole))) {
+            return;
+        }
+        throw ProjectApiException.operationDenied();
+    }
+
+    private ProjectMemberVO sameRoleOrConflict(ProjectMemberVO existing, String requestedRole) {
+        if (requestedRole.equals(existing.getProjectRole())) {
+            return existing;
+        }
+        throw ProjectApiException.memberRoleConflict();
     }
 
     private AccessScope accessScope() {

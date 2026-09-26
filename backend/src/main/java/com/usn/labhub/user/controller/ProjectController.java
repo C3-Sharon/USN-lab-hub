@@ -3,8 +3,10 @@ package com.usn.labhub.user.controller;
 import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.project.ProjectCreateDTO;
+import com.usn.labhub.user.domain.dto.project.ProjectMemberAddDTO;
 import com.usn.labhub.user.domain.vo.project.ProjectDetailVO;
 import com.usn.labhub.user.domain.vo.project.ProjectPageVO;
+import com.usn.labhub.user.domain.vo.project.ProjectMemberVO;
 import com.usn.labhub.user.domain.vo.project.ProjectSummaryVO;
 import com.usn.labhub.user.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,5 +54,14 @@ public class ProjectController {
     @Operation(summary = "查询项目详情")
     public Result<ProjectDetailVO> detail(@PathVariable("id") Long projectId) {
         return Result.success(projectService.detail(projectId));
+    }
+
+    @PostMapping("/{id}/members")
+    @Operation(summary = "添加项目成员")
+    public Result<ProjectMemberVO> addMember(@PathVariable("id") Long projectId,
+                                             @Valid @RequestBody ProjectMemberAddDTO request) {
+        Result<ProjectMemberVO> result = Result.success(projectService.addMember(projectId, request));
+        result.setMsg("成员添加成功");
+        return result;
     }
 }

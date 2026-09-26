@@ -1,9 +1,11 @@
 package com.usn.labhub.user.mapper;
 
+import com.usn.labhub.user.domain.entity.project.ProjectAccessRecord;
 import com.usn.labhub.user.domain.entity.project.ProjectRecord;
 import com.usn.labhub.user.domain.vo.project.ProjectDetailVO;
 import com.usn.labhub.user.domain.vo.project.ProjectMemberVO;
 import com.usn.labhub.user.domain.vo.project.ProjectSummaryVO;
+import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -42,4 +44,14 @@ public interface ProjectMapper {
                                         @Param("publicOnly") boolean publicOnly);
 
     List<ProjectMemberVO> selectMembers(@Param("projectId") Long projectId);
+
+    ProjectAccessRecord selectProjectAccess(@Param("projectId") Long projectId,
+                                            @Param("userId") Long userId);
+
+    ProjectMemberVO selectUserByMemberId(@Param("memberId") String memberId);
+
+    ProjectMemberVO selectMember(@Param("projectId") Long projectId,
+                                 @Param("userId") Long userId);
+
+    List<ProjectWorkbenchItemVO> selectWorkbenchProjects(@Param("userId") Long userId);
 }

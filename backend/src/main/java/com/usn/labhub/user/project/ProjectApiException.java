@@ -25,4 +25,21 @@ public class ProjectApiException extends RuntimeException {
     public static ProjectApiException duplicateCode() {
         return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_CODE_DUPLICATE", "项目编号已存在");
     }
+
+    public static ProjectApiException operationDenied() {
+        return new ProjectApiException(HttpStatus.FORBIDDEN, "PROJECT_OPERATION_DENIED", "无权执行该项目操作");
+    }
+
+    public static ProjectApiException userNotFound() {
+        return new ProjectApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "成员不存在");
+    }
+
+    public static ProjectApiException archived() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_ARCHIVED", "归档项目不能变更成员");
+    }
+
+    public static ProjectApiException memberRoleConflict() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "ALREADY_MEMBER_DIFFERENT_ROLE",
+                "该成员已在项目中，角色不同，请使用角色变更功能");
+    }
 }

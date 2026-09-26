@@ -105,4 +105,47 @@
                  pm.joined_at ASC,
                  pm.user_id ASC
     </select>
+
+    <select id="selectProjectAccess" resultType="com.usn.labhub.user.domain.entity.project.ProjectAccessRecord">
+        SELECT p.id, p.status, current_member.project_role AS myRole
+        FROM lab_project p
+        LEFT JOIN lab_project_member current_member
+            ON current_member.project_id = p.id AND current_member.user_id = #{userId}
+        WHERE p.id = #{projectId}
+    </select>
+
+    <select id="selectUserByMemberId" resultType="com.usn.labhub.user.domain.vo.project.ProjectMemberVO">
+        SELECT id AS userId, member_id AS memberId, username AS name
+        FROM sys_user
+        WHERE member_id = #{memberId}
+        LIMIT 1
+    </select>
+
+    <select id="selectMember" resultType="com.usn.labhub.user.domain.vo.project.ProjectMemberVO">
+        SELECT
+            pm.user_id AS userId,
+            u.member_id AS memberId,
+            u.username AS name,
+            pm.project_role AS projectRole,
+            pm.joined_at AS joinedAt
+        FROM lab_project_member pm
+        INNER JOIN sys_user u ON u.id = pm.user_id
+        WHERE pm.project_id = #{projectId} AND pm.user_id = #{userId}
+    </select>
+
+    <select id="selectWorkbenchProjects"
+            resultType="com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO">
+        SELECT
+            p.id,
+            p.project_code AS code,
+            p.project_name AS name,
+            p.status,
+            pm.project_role AS myRole,
+            NULL AS coverUrl,
+            p.update_time AS updateTime
+        FROM lab_project_member pm
+        INNER JOIN lab_project p ON p.id = pm.project_id
+        WHERE pm.user_id = #{userId} AND p.status != 'ARCHIVED'
+        ORDER BY p.update_time DESC, p.id DESC
+    </select>
 </mapper>
