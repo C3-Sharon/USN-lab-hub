@@ -381,6 +381,13 @@ await group('Vite 开发代理', async () => {
     assert.match(viteConfigSource, /['"]\/api['"]\s*:\s*\{/)
     assert.doesNotMatch(viteConfigSource, /['"]\/api\/iot['"]\s*:\s*\{/)
   })
+
+  await test('三组代理共享可配置目标并默认使用 8080', async () => {
+    assert.match(viteConfigSource, /import\s*\{[^}]*loadEnv[^}]*\}\s*from\s*'vite'/)
+    assert.match(viteConfigSource, /VITE_API_PROXY_TARGET/)
+    assert.match(viteConfigSource, /['"]http:\/\/localhost:8080['"]/)
+    assert.equal((viteConfigSource.match(/target:\s*apiProxyTarget/g) || []).length, 3)
+  })
 })
 
 // ========== summary ==========
