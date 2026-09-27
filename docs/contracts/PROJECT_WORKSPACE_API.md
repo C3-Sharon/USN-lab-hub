@@ -21,7 +21,7 @@
 - 不修改现有 MQTT、IoT、考勤及鉴权契约
 - 不把 `/iot/projects` 当作正式项目工作台（历史演示路径保留）
 - 不引入微服务、Redis 缓存或复杂审批流
-- 不实现项目退出、移除成员和 OWNER 转让（待确认是否本周实现）
+- 不实现项目退出、移除成员、角色变更和 OWNER 转让
 - 不实现项目公开可见性开关（沿用现有 lab_project public_visible 但不作为本周重点）
 
 ## 2. 现状矛盾与决策
@@ -31,11 +31,11 @@
 | 项目表来源 | `lab_project` 服务首轮 IoT 演示 | 扩展 `lab_project` 为正式项目表，保留现有字段，新增状态/分类/封面等字段 |
 | 项目成员 | 无项目成员表 | 新增 `lab_project_member` 多对多关系表，承载项目角色 |
 | 项目归属 | `owner_id` 单字段 | 保留 owner_id 作为冗余字段，正式成员关系走 project_member 表，创建者自动成为 OWNER |
-| 创建权限 | 未定义 | 待确认：SYSTEM_ADMIN/TEACHER 可创建，还是所有登录用户均可创建 |
-| 全局查看权限 | 未定义 | 待确认：SYSTEM_ADMIN/TEACHER 可查看全部项目，还是只能看自己参与的 |
+| 创建权限 | 未定义 | SYSTEM_ADMIN、TEACHER、MEMBER 可创建；STOCK_KEEPER、GUEST 不可创建 |
+| 全局查看权限 | 未定义 | SYSTEM_ADMIN 可查看并管理全部项目；TEACHER 可只读查看全部项目；其他角色只看参与项目 |
 | 项目编号 | `project_code` varchar(64) | 收紧为 3-32 位大写字母/数字/连字符，全局唯一 |
-| 添加成员标识 | 未定义 | 待确认：使用 memberId（学工号）还是 userId（数据库 ID） |
-| 分类字段 | 无 | 待确认：category 是枚举还是受限文本 |
+| 添加成员标识 | 未定义 | 使用 memberId（学工号） |
+| 分类字段 | 无 | 使用可选的受限文本，匹配 `[a-z][a-z0-9_]{1,31}` |
 | 工作台项目区 | state=NOT_AVAILABLE 占位 | 第 3 周切换为 state=READY，返回用户参与的真实项目列表 |
 
 ## 3. 项目状态枚举
@@ -48,7 +48,7 @@
 | `COMPLETED` | 已完成 | 项目已完成 | 查看、归档 |
 | `ARCHIVED` | 已归档 | 项目已归档，只读 | 仅查看；拒绝成员变更、状态变更 |
 
-状态转换（第 3 周实现基础转换）：
+状态转换（本契约冻结允许的转换；第 3 周不提供状态变更接口）：
 
 ```
 PREPARING → ACTIVE
@@ -67,7 +67,7 @@ ARCHIVED 为终态，不能从 ARCHIVED 转回其他状态。
 | projectRole | 中文名称 | 说明 |
 |---|---|---|
 | `OWNER` | 项目负责人 | 项目最高权限，管理成员、编辑项目、删除项目 |
-| `MAINTAINER` | 项目维护者 | 编辑项目信息、管理里程碑/任务、添加成员（待确认） |
+| `MAINTAINER` | 项目维护者 | 后续可编辑项目信息和管理任务；第 3 周可受限添加 MEMBER/OBSERVER |
 | `MEMBER` | 项目成员 | 参与项目、查看信息、完成分配的任务 |
 | `OBSERVER` | 观察者 | 只读查看项目信息，不能修改任何内容 |
 
@@ -76,30 +76,30 @@ ARCHIVED 为终态，不能从 ARCHIVED 转回其他状态。
 | 操作 | OWNER | MAINTAINER | MEMBER | OBSERVER | 非成员 |
 |---|---|---|---|---|---|
 | 查看项目详情 | 可 | 可 | 可 | 可 | 403 |
-| 编辑项目基本信息 | 可 | 待确认 | 不可 | 不可 | 403 |
-| 更改项目状态 | 可 | 待确认 | 不可 | 不可 | 403 |
-| 添加成员 | 可 | 待确认 | 不可 | 不可 | 403 |
-| 移除成员 | 可 | 待确认 | 不可 | 不可 | 403 |
-| 更改成员角色 | 可 | 待确认 | 不可 | 不可 | 403 |
-| 转让 OWNER | 待确认 | 不可 | 不可 | 不可 | 不可 |
-| 退出项目 | 待确认 | 待确认 | 待确认 | 待确认 | — |
+| 编辑项目基本信息 | 可 | 可（后续接口） | 不可 | 不可 | 403 |
+| 更改项目状态 | 可 | 可（后续接口） | 不可 | 不可 | 403 |
+| 添加成员 | 可 | 可，仅 MEMBER/OBSERVER | 不可 | 不可 | 403 |
+| 移除成员 | 后续实现 | 后续实现 | 不可 | 不可 | 403 |
+| 更改成员角色 | 后续实现 | 不可 | 不可 | 不可 | 403 |
+| 转让 OWNER | 后续实现 | 不可 | 不可 | 不可 | 不可 |
+| 退出项目 | 后续实现 | 后续实现 | 后续实现 | 后续实现 | — |
 | 删除项目 | 可 | 不可 | 不可 | 不可 | 不可 |
 | 创建里程碑 | 第 4 周 | 第 4 周 | 不可 | 不可 | 403 |
 | 创建/分配任务 | 第 4 周 | 第 4 周 | 第 4 周 | 不可 | 403 |
 
-> **待确认**：MAINTAINER 的权限边界（是否能编辑项目、添加成员、更改成员角色）。建议 MAINTAINER 可以编辑项目和添加成员，但不能更改成员角色为 OWNER，也不能删除项目。
+第 3 周仅实现添加成员：OWNER 可添加 MAINTAINER、MEMBER、OBSERVER；MAINTAINER 只能添加 MEMBER、OBSERVER。编辑、状态变更、移除、角色变更和 OWNER 转让均不在本周接口范围。
 
 ### 4.2 全局角色与项目的关系
 
 | 全局角色 | 可创建项目 | 可查看全部项目 | 说明 |
 |---|---|---|---|
-| SYSTEM_ADMIN | 待确认 | 待确认 | 建议可创建、可查看全部项目，自动拥有所有项目的 OWNER 级访问权 |
-| TEACHER | 待确认 | 待确认 | 建议可创建、可查看全部项目（只读） |
-| STOCK_KEEPER | 待确认 | 待确认 | 建议不可创建，只能查看自己参与的项目 |
-| MEMBER | 待确认 | 不可 | 建议可创建（由成员自主发起项目），只能查看自己参与的项目 |
+| SYSTEM_ADMIN | 可 | 可 | 可创建、查看全部项目并执行成员管理；未加入项目时 myRole 为 null |
+| TEACHER | 可 | 可 | 可创建、只读查看全部项目；未加入项目时 myRole 为 null |
+| STOCK_KEEPER | 不可 | 不可 | 只能查看自己参与的项目 |
+| MEMBER | 可 | 不可 | 可自主发起项目，只能查看自己参与的项目 |
 | GUEST | 不可 | 仅公开项目 | 访客只能访问显式公开的项目 |
 
-> **待确认**：各全局角色的项目创建权限和全局可见权限。默认倾向：SYSTEM_ADMIN 和 TEACHER 可创建且可查看全部；MEMBER 可创建但只能查看自己参与的；STOCK_KEEPER 同 MEMBER。
+全局权限是访问覆盖，不自动写入项目成员关系，也不把未加入项目的用户伪装成 OWNER。
 
 ## 5. 基础接口
 
@@ -107,7 +107,7 @@ ARCHIVED 为终态，不能从 ARCHIVED 转回其他状态。
 
 ```
 POST /api/projects
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -130,7 +130,7 @@ Status: REVIEW
 | `code` | string | 是 | 项目编号 | 3-32 位，大写字母、数字或连字符，全局唯一 |
 | `name` | string | 是 | 项目名称 | 2-80 字符 |
 | `summary` | string | 否 | 项目简介 | 最多 500 字符 |
-| `category` | string | 否 | 项目分类 | 待确认：枚举还是受限文本 |
+| `category` | string | 否 | 项目分类 | 2-32 位，匹配 `[a-z][a-z0-9_]{1,31}` |
 | `coverMediaId` | long | 否 | 封面媒体 ID | 第 3 周暂不实现上传，传 null 使用默认占位 |
 
 **成功响应（200）：**
@@ -165,7 +165,7 @@ Status: REVIEW
 
 ```
 GET /api/projects?page=1&pageSize=10&status=ACTIVE&keyword=
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -177,10 +177,10 @@ Status: REVIEW
 | `pageSize` | int | 否 | 10 | 每页条数，最大 50 |
 | `status` | string | 否 | （全部） | 按状态过滤，枚举值见 §3 |
 | `keyword` | string | 否 | （空） | 按项目编号或名称模糊搜索 |
-| `sortBy` | string | 否 | createTime | 排序字段：createTime / updateTime / name / code |
+| `sortBy` | string | 否 | updateTime | 排序字段：createTime / updateTime / name / code |
 | `sortOrder` | string | 否 | desc | 排序方向：asc / desc |
 
-> **待确认**：默认排序方式和过滤条件。建议默认按 updateTime 降序（最近活动在前）。
+默认按 `updateTime DESC, id DESC` 稳定排序。
 
 **成功响应（200）：**
 
@@ -226,15 +226,15 @@ Status: REVIEW
 
 **业务规则：**
 - 默认返回当前用户参与的所有项目
-- SYSTEM_ADMIN / TEACHER 是否能查看全部项目：待确认
+- SYSTEM_ADMIN 可查看全部项目并管理成员，TEACHER 可只读查看全部项目；未显式加入时 myRole 为 null
 - 空列表为合法状态（total=0, list=[]），不返回 mock 数据
-- 不包含 ARCHIVED 项目（需显式过滤才能看到归档项目，待确认是否需要）
+- 默认不包含 ARCHIVED 项目；显式传入 `status=ARCHIVED` 时返回归档项目
 
 ### 5.3 获取项目详情
 
 ```
 GET /api/projects/{id}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -277,16 +277,16 @@ Status: REVIEW
 ```
 
 **业务规则：**
-- 非成员访问返回 403
+- 非成员访问统一返回 404 PROJECT_NOT_FOUND，不暴露项目存在性；SYSTEM_ADMIN/TEACHER 的全局查看权限除外
 - ARCHIVED 项目成员仍可查看详情，但不可编辑
-- members 列表为项目详情页成员区域的数据，分页与否待确认（建议第 3 周不分页，成员数较少）
+- members 第 3 周不分页，按 OWNER 优先、joinedAt 升序、userId 升序稳定返回
 
 ### 5.4 添加项目成员
 
 ```
 POST /api/projects/{id}/members
-Status: REVIEW
-鉴权：需要登录，需 OWNER 或 MAINTAINER 权限（待确认）
+Status: FROZEN
+鉴权：需要登录，需 OWNER、受限 MAINTAINER 或 SYSTEM_ADMIN 权限
 ```
 
 **请求体：**
@@ -302,10 +302,8 @@ Status: REVIEW
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `memberId` | string | 是 | 成员学工号（待确认：用 memberId 还是 userId） |
+| `memberId` | string | 是 | 成员学工号 |
 | `projectRole` | string | 是 | 项目角色：OWNER / MAINTAINER / MEMBER / OBSERVER |
-
-> **待确认**：添加成员使用 memberId（学工号）还是 userId（数据库 ID）。建议使用 memberId，因为用户更熟悉学工号，且可以做模糊搜索辅助。
 
 **成功响应（200）：**
 
@@ -329,10 +327,10 @@ Status: REVIEW
 - 幂等键：`(project_id, user_id)` 唯一约束
 
 **业务规则：**
-- 只有 OWNER（及 MAINTAINER，待确认）可以添加成员
+- OWNER 可添加 MAINTAINER、MEMBER、OBSERVER；MAINTAINER 只能添加 MEMBER、OBSERVER；SYSTEM_ADMIN 可执行成员管理覆盖
 - 不能添加不存在的用户（返回 404 reason=USER_NOT_FOUND）
 - ARCHIVED 项目不能添加成员（返回 409 reason=PROJECT_ARCHIVED）
-- 一个项目至少保留一名 OWNER（不能把最后一个 OWNER 降级，待确认本周是否实现）
+- 本周不提供移除、角色变更或 OWNER 转让接口，因此不会产生最后一个 OWNER 被移除的问题
 
 ## 6. 错误响应
 
@@ -380,7 +378,7 @@ HTTP 状态：`404 Not Found`
 | `PROJECT_NOT_FOUND` | 项目不存在（或无权限时不暴露存在性，也可用 403） |
 | `USER_NOT_FOUND` | 添加成员时目标用户不存在 |
 
-> **待确认**：非成员访问不存在的项目时，返回 404 还是 403。安全倾向是返回 404（不暴露项目存在性），但 403 对用户更友好。建议：非成员统一返回 404，避免泄露项目存在。
+非成员统一返回 404，避免泄露项目存在；已是成员但操作权限不足返回 403 PROJECT_OPERATION_DENIED。
 
 ### 6.4 409 冲突
 
@@ -403,7 +401,7 @@ HTTP 状态：`409 Conflict`
 | `PROJECT_ARCHIVED` | 项目已归档，禁止成员变更 | 归档项目添加/移除成员 |
 | `LAST_OWNER_CANNOT_REMOVE` | 不能移除最后一个 OWNER | 移除或降级最后一个 OWNER |
 
-> **待确认**：重复添加成员且角色相同时返回 200（幂等）还是 409（冲突）。建议返回 200 + 已有成员信息，体现幂等性。
+重复添加成员且角色相同时返回 200 和已有成员信息；角色不同时返回 409 ALREADY_MEMBER_DIFFERENT_ROLE。
 
 ## 7. 与个人工作台的集成
 
@@ -454,21 +452,13 @@ Workbench overview 中 projects 区域结构：
 - 两条路径指向的底层数据可以复用，但正式项目页不展示 IoT 演示特定的布局
 - 第 16 周平台化后统一迁移
 
-## 8. 待确认项
+## 8. 已确认项与前端待确认项
 
-### 待后端确认
+### 后端确认结论
 
-1. **创建权限**：哪些全局角色可以创建项目（建议 SYSTEM_ADMIN/TEACHER/MEMBER 都可以）
-2. **全局可见性**：SYSTEM_ADMIN/TEACHER 是否能查看全部项目，还是只能看自己参与的
-3. **添加成员标识**：使用 memberId（学工号）还是 userId（数据库 ID）
-4. **category 类型**：枚举（hardware_project/iot_demo/software_project 等）还是受限文本
-5. **MAINTAINER 权限**：MAINTAINER 是否能编辑项目、添加成员、更改成员角色
-6. **退出/移除/转让**：本周是否实现项目退出、移除成员和 OWNER 转让
-7. **404 vs 403**：非成员访问不存在的项目时返回 404（隐藏存在性）还是 403
-8. **重复添加成员**：角色相同时返回 200（幂等）还是 409（冲突）
-9. **列表默认排序**：默认排序字段和方向
-10. **ARCHIVED 过滤**：列表默认是否排除 ARCHIVED 项目
-11. **项目详情 members 分页**：成员列表是否需要分页
+后端实现决策已于 2026-09-26 确认并写入第 2-7 节。第 3 周只实现创建、列表、详情和添加成员，不把接口范围误称为完整 CRUD，也不实现项目状态流转。
+
+兼容说明：V5 中现有 IoT 演示项目的 `project_code` 是 `power-monitor`，而 `PM-001` 是设备编号。迁移必须保留该项目编号和旧公开路径；3-32 位大写编号规则只校验第 3 周起的新建项目，不能用数据库 CHECK 约束破坏历史数据。
 
 ### 待前端确认
 
