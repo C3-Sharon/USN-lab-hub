@@ -10,6 +10,7 @@
  *   - addProjectMember 成功 / 幂等(同角色 200) / 异角色 409 / 项目 404
  *   - workbench.js projects 区域 READY 结构（§7.1）
  *   - 路由 /projects、/projects/:id 与菜单注册（静态检查）
+ *   - Vite 开发代理覆盖全部 /api 接口
  *
  * 运行：node src/api/__tests__/w39-contract-test.mjs
  *
@@ -369,6 +370,16 @@ await group('路由与菜单注册', async () => {
 
   await test('工作台点击项目卡片跳转 /projects/:id', async () => {
     assert.match(dashboardSrc, /\/projects\/\$\{item\.id\}/)
+  })
+})
+
+// ========== 本地真实接口代理（静态检查） ==========
+await group('Vite 开发代理', async () => {
+  const viteConfigSource = readFileSync(new URL('../../../vite.config.js', import.meta.url), 'utf8')
+
+  await test('覆盖全部 /api 接口且不保留窄范围规则', async () => {
+    assert.match(viteConfigSource, /['"]\/api['"]\s*:\s*\{/)
+    assert.doesNotMatch(viteConfigSource, /['"]\/api\/iot['"]\s*:\s*\{/)
   })
 })
 
