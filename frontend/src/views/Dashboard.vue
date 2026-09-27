@@ -61,7 +61,28 @@
           :description="projectsHint"
           :error-message="overview?.projects?.message || overviewError"
           @retry="loadOverview"
-        />
+        >
+          <div v-if="projectsList.length" class="project-mini-list">
+            <div
+              v-for="item in projectsList"
+              :key="item.id"
+              class="project-mini-card"
+              @click="$router.push(`/projects/${item.id}`)"
+            >
+              <ProjectCover :code="item.code" :size="36" />
+              <div class="project-mini-info">
+                <span class="project-mini-name">{{ item.name }}</span>
+                <span class="project-mini-code muted text-help">{{ item.code }}</span>
+              </div>
+              <el-tag :type="projectStatusMeta(item.status).tagType" size="small" effect="light">
+                {{ projectStatusMeta(item.status).label }}
+              </el-tag>
+            </div>
+          </div>
+          <el-empty v-else description="暂无参与的项目">
+            <el-button v-if="canCreateProject" type="primary" size="small" @click="$router.push('/projects')">去创建</el-button>
+          </el-empty>
+        </RegionState>
       </section>
 
       <section class="region region--tasks">
@@ -137,12 +158,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { userStore } from '@/store/user'
+import { userStore, hasAnyRole } from '@/store/user'
 import { currentPrimaryRole, currentRoles } from '@/store/user'
 import { ROLE_META, ROLE } from '@/utils/permission'
 import { fetchWorkbenchOverview } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
+import { PROJECT_STATUS_META } from '@/api/projects'
 import RegionState from '@/components/RegionState.vue'
+import ProjectCover from '@/components/ProjectCover.vue'
 
 const route = useRoute()
 
@@ -169,15 +192,23 @@ const attendanceState = computed(() => regionState(overview.value?.attendance))
 const projectsHint = computed(() => {
   const r = overview.value?.projects
   if (r?.state === 'NOT_AVAILABLE') return '尚未开放'
+  if (r?.state === 'READY') return `${r.total ?? 0} 个项目，${r.active ?? 0} 个进行中`
   if (!r) return '加载中'
   return ''
 })
+const projectsList = computed(() => overview.value?.projects?.list || [])
 const projectsState = computed(() => {
   if (overviewError.value) return 'error'
   if (overviewLoading.value && !overview.value) return 'loading'
   if (!overview.value) return 'loading'
   return regionState(overview.value.projects)
 })
+
+const canCreateProject = computed(() => hasAnyRole([ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.MEMBER]))
+
+function projectStatusMeta(status) {
+  return PROJECT_STATUS_META[status] || { label: status, tagType: 'info' }
+}
 
 const tasksHint = computed(() => regionHint(overview.value?.tasks))
 const tasksState = computed(() => regionState(overview.value?.tasks))
@@ -345,6 +376,51 @@ defineExpose({ currentRoles })
   font-size: 24px;
   color: var(--usn-blue-700);
   font-weight: 700;
+}
+
+.project-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.project-mini-card {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  border: 1px solid var(--usn-line);
+  background: var(--usn-surface);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.project-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.1);
+}
+
+.project-mini-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-mini-name {
+  font-size: var(--usn-font-size-body);
+  font-weight: 600;
+  color: var(--usn-ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-mini-code {
+  font-size: var(--usn-font-size-help);
+  font-family: 'Courier New', monospace;
 }
 
 @media (max-width: 1280px) {

@@ -12,6 +12,8 @@ import IotAlertCenter from '@/views/iot/AlertCenter.vue'
 import IotCommandConsole from '@/views/iot/CommandConsole.vue'
 import IotProjects from '@/views/iot/Projects.vue'
 import IotProjectDetail from '@/views/iot/ProjectDetail.vue'
+import ProjectList from '@/views/projects/ProjectList.vue'
+import ProjectDetail from '@/views/projects/ProjectDetail.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -109,6 +111,18 @@ const routes = [
         name: 'Pm001Live',
         component: Pm001Live,
         meta: { title: 'PM-001 实时数据', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'projects',
+        name: 'ProjectList',
+        component: ProjectList,
+        meta: { title: '项目工作台', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'projects/:id',
+        name: 'ProjectDetail',
+        component: ProjectDetail,
+        meta: { title: '项目详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       }
     ]
   },
