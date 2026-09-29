@@ -1,0 +1,52 @@
+{
+  "code": "W39-UI-839428",
+  "projectId": 5,
+  "pass": 8,
+  "total": 8,
+  "results": [
+    {
+      "check": "real-login",
+      "pass": true,
+      "detail": "url=http://localhost:5173/dashboard roleTag=系统管理员"
+    },
+    {
+      "check": "workbench-real-projects",
+      "pass": true,
+      "detail": "miniCards=3"
+    },
+    {
+      "check": "project-list-real",
+      "pass": true,
+      "detail": "cards=3"
+    },
+    {
+      "check": "create-project-via-ui",
+      "pass": true,
+      "detail": "id=5 code=W39-UI-839428 title=W39 前端联调项目"
+    },
+    {
+      "check": "add-member-via-ui",
+      "pass": true,
+      "detail": "rows=2 contains20260001=true"
+    },
+    {
+      "check": "detail-member-table",
+      "pass": true,
+      "detail": "memberCardText=\"项目成员 2 人 成员 学工号 角色 加入时间 系 系统管理员 admin 负责人 2026/9/28 23:20:45 测 测试学生 20260001 成员 \""
+    },
+    {
+      "check": "no-horizontal-overflow",
+      "pass": true,
+      "detail": "workbench@1440x900=false list@1440x900=false detail@1440x900=false create-dialog@1440x900=false add-member@1440x900=false workbench@1280x800=false list@1280x800=false detail@1280x800=false create-dialog@1280x800=false add-member@1280x800=false workbench@390x844=false list@390x844=false detail@390x844=false create-dialog@390x844=false add-member@390x844=false"
+    },
+    {
+      "check": "no-api-http-errors",
+      "pass": true,
+      "detail": "none"
+    }
+  ],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "httpErrors": []
+}
