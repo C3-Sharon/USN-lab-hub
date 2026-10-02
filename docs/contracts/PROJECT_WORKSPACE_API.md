@@ -1,10 +1,10 @@
 # 项目工作台 API 契约 V1
 
 > 状态：FROZEN
-> 版本：v1.0（第 3 周：项目档案与成员权限）
-> 最后确认周：第 3 周（2026-W39）
+> 版本：v1.1（第 3 周：项目档案与成员权限；第 4 周新增：里程碑、任务状态机、看板、乐观锁）
+> 最后确认周：第 4 周（2026-W40）
 > 影响范围：API、数据库、权限、前端字段
-> 关联周文档：`docs/weekly/2026-W39.md`
+> 关联周文档：`docs/weekly/2026-W39.md`、`docs/weekly/2026-W40.md`
 > 前置契约：`docs/contracts/AUTH_WORKBENCH_V1.md`
 
 ## 1. 目标与非目标
@@ -452,35 +452,719 @@ Workbench overview 中 projects 区域结构：
 - 两条路径指向的底层数据可以复用，但正式项目页不展示 IoT 演示特定的布局
 - 第 16 周平台化后统一迁移
 
-## 8. 已确认项与前端待确认项
+## 8. 里程碑
 
-### 后端确认结论
+### 8.1 里程碑字段
 
-后端实现决策已于 2026-09-26 确认并写入第 2-7 节。第 3 周只实现创建、列表、详情和添加成员，不把接口范围误称为完整 CRUD，也不实现项目状态流转。
+| 字段 | 类型 | 必填 | 说明 | 约束 |
+|---|---|---|---|---|
+| `id` | long | 自动 | 里程碑 ID | 自增主键 |
+| `projectId` | long | 是 | 所属项目 ID | 外键 |
+| `name` | string | 是 | 里程碑名称 | 2-80 字符 |
+| `description` | string | 否 | 里程碑描述 | 最多 500 字符 |
+| `status` | string | 是 | 里程碑状态 | PLANNED / IN_PROGRESS / COMPLETED |
+| `startDate` | string | 否 | 计划开始日期 | ISO 日期 `YYYY-MM-DD`，可为空 |
+| `endDate` | string | 否 | 计划完成日期 | ISO 日期 `YYYY-MM-DD`，可为空 |
+| `sortOrder` | int | 是 | 排序序号 | 正整数，默认 0，值越小越靠前 |
+| `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
+| `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
 
-兼容说明：V5 中现有 IoT 演示项目的 `project_code` 是 `power-monitor`，而 `PM-001` 是设备编号。迁移必须保留该项目编号和旧公开路径；3-32 位大写编号规则只校验第 3 周起的新建项目，不能用数据库 CHECK 约束破坏历史数据。
+### 8.2 里程碑状态
+
+| status | 中文名称 | 说明 |
+|---|---|---|
+| `PLANNED` | 已规划 | 里程碑尚未开始 |
+| `IN_PROGRESS` | 进行中 | 里程碑正在推进 |
+| `COMPLETED` | 已完成 | 里程碑已完成 |
+
+状态转换：
+
+```
+PLANNED → IN_PROGRESS → COMPLETED
+```
+
+COMPLETED 为终态，不能转回其他状态。
+
+### 8.3 排序规则
+
+- 里程碑列表默认按 `sortOrder ASC, id ASC` 排序
+- 同 sortOrder 时按 id 升序保证稳定
+- sortOrder 由前端/后端共同维护，第 4 周不提供拖拽重排接口
+
+### 8.4 创建里程碑
+
+```
+POST /api/projects/{projectId}/milestones
+Status: REVIEW
+鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
+```
+
+**请求体：**
+
+```json
+{
+  "name": "原型设计与评审",
+  "description": "完成硬件原型设计并组织评审",
+  "status": "PLANNED",
+  "startDate": "2026-09-26",
+  "endDate": "2026-10-10",
+  "sortOrder": 1
+}
+```
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "projectId": 10,
+    "name": "原型设计与评审",
+    "description": "完成硬件原型设计并组织评审",
+    "status": "PLANNED",
+    "startDate": "2026-09-26",
+    "endDate": "2026-10-10",
+    "sortOrder": 1,
+    "createTime": "2026-09-25T10:00:00",
+    "updateTime": "2026-09-25T10:00:00"
+  }
+}
+```
+
+**业务规则：**
+- OWNER 和 MAINTAINER 可创建里程碑
+- MEMBER、OBSERVER 不可创建（403 PROJECT_OPERATION_DENIED）
+- 项目 ARCHIVED 时不可创建（409 PROJECT_ARCHIVED）
+- 项目 PAUSED 时不可创建（409 PROJECT_PAUSED）
+- 项目 COMPLETED 时不可创建（409 PROJECT_COMPLETED）
+- name 同项目下建议唯一但不强制（第 4 周不做唯一约束）
+
+### 8.5 获取里程碑列表
+
+```
+GET /api/projects/{projectId}/milestones
+Status: REVIEW
+鉴权：需要登录，需项目成员权限
+```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `status` | string | 否 | （全部） | 按状态过滤 |
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": [
+    {
+      "id": 1,
+      "projectId": 10,
+      "name": "原型设计与评审",
+      "description": "完成硬件原型设计并组织评审",
+      "status": "PLANNED",
+      "startDate": "2026-09-26",
+      "endDate": "2026-10-10",
+      "sortOrder": 1,
+      "taskCount": 0,
+      "taskDone": 0,
+      "createTime": "2026-09-25T10:00:00",
+      "updateTime": "2026-09-25T10:00:00"
+    }
+  ]
+}
+```
+
+**附加统计字段：**
+- `taskCount`：该里程碑下任务总数
+- `taskDone`：该里程碑下状态为 DONE 的任务数
+
+**业务规则：**
+- 非成员返回 404 PROJECT_NOT_FOUND（同项目详情规则）
+- SYSTEM_ADMIN/TEACHER 全局查看权限同样适用
+- 默认按 sortOrder ASC, id ASC 排序
+
+### 8.6 更新里程碑状态
+
+```
+PUT /api/projects/{projectId}/milestones/{milestoneId}/status
+Status: REVIEW
+鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
+```
+
+**请求体：**
+
+```json
+{
+  "status": "IN_PROGRESS"
+}
+```
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "status": "IN_PROGRESS",
+    "updateTime": "2026-09-26T09:00:00"
+  }
+}
+```
+
+**业务规则：**
+- 只允许 PLANNED → IN_PROGRESS → COMPLETED 正向转换
+- 非法转换返回 409 reason=MILESTONE_INVALID_TRANSITION
+- ARCHIVED 项目不能更新里程碑状态（409 PROJECT_ARCHIVED）
+- MEMBER 及以下角色不可更新（403 PROJECT_OPERATION_DENIED）
+
+## 9. 任务
+
+### 9.1 任务字段
+
+| 字段 | 类型 | 必填 | 说明 | 约束 |
+|---|---|---|---|---|
+| `id` | long | 自动 | 任务 ID | 自增主键 |
+| `projectId` | long | 是 | 所属项目 ID | 外键 |
+| `milestoneId` | long | 否 | 所属里程碑 ID | 可为空（未归类任务） |
+| `title` | string | 是 | 任务标题 | 2-120 字符 |
+| `description` | string | 否 | 任务说明 | 最多 2000 字符 |
+| `status` | string | 是 | 任务状态 | TODO / IN_PROGRESS / BLOCKED / DONE / CANCELED |
+| `assigneeUserId` | long | 否 | 负责人用户 ID | 可为空（未分配） |
+| `assigneeName` | string | 否 | 负责人姓名 | 返回时冗余 |
+| `priority` | string | 否 | 优先级 | LOW / MEDIUM / HIGH，默认 MEDIUM |
+| `dueDate` | string | 否 | 截止日期 | ISO 日期 `YYYY-MM-DD`，可为空 |
+| `blockReason` | string | 否 | 阻塞原因 | 最多 500 字符，BLOCKED 状态时必填 |
+| `version` | int | 自动 | 乐观锁版本号 | 每次更新自增 1 |
+| `createdBy` | long | 自动 | 创建人用户 ID | |
+| `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
+| `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
+
+### 9.2 任务状态
+
+| status | 中文名称 | 说明 |
+|---|---|---|
+| `TODO` | 待开始 | 任务已创建，尚未开始 |
+| `IN_PROGRESS` | 进行中 | 任务正在执行 |
+| `BLOCKED` | 已阻塞 | 任务因外部因素阻塞 |
+| `DONE` | 已完成 | 任务已由负责人提交完成 |
+| `CANCELED` | 已取消 | 任务已取消，不再执行 |
+
+### 9.3 状态转换规则
+
+```
+TODO → IN_PROGRESS
+TODO → CANCELED
+IN_PROGRESS → BLOCKED
+IN_PROGRESS → DONE
+IN_PROGRESS → CANCELED
+BLOCKED → IN_PROGRESS
+BLOCKED → CANCELED
+```
+
+**终态**：DONE、CANCELED 为终态，不能转换为其他状态。
+
+**DONE 语义**：DONE 表示任务负责人提交完成，不需要负责人额外验收。本周采用简单闭环语义：提交即完成。后续需要验收流程时再增加 REVIEW 状态（不破坏现有状态）。
+
+**BLOCKED 规则**：
+- 进入 BLOCKED 状态时，`blockReason` 必填
+- 从 BLOCKED 转出到 IN_PROGRESS 时，blockReason 不自动清空（保留历史阻塞记录）
+- 前端展示时，BLOCKED 状态任务始终显示阻塞原因
+
+**CANCELED 规则**：
+- CANCELED 为终态，不允许恢复
+- 取消后任务保留在看板的历史筛选中
+- 只有 OWNER/MAINTAINER 可以取消任务（待确认是否允许负责人取消自己的任务）
+
+### 9.4 创建任务
+
+```
+POST /api/projects/{projectId}/tasks
+Status: REVIEW
+鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
+```
+
+**请求体：**
+
+```json
+{
+  "title": "设计温湿度传感器电路",
+  "description": "完成 DHT22 传感器的信号调理和 ADC 采集电路设计",
+  "milestoneId": 1,
+  "assigneeUserId": 2,
+  "priority": "MEDIUM",
+  "dueDate": "2026-10-05"
+}
+```
+
+**字段说明：**
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `title` | 是 | 任务标题，2-120 字符 |
+| `description` | 否 | 任务说明，最多 2000 字符 |
+| `milestoneId` | 否 | 所属里程碑，可为空 |
+| `assigneeUserId` | 否 | 负责人，必须是项目成员；为空表示未分配 |
+| `priority` | 否 | LOW/MEDIUM/HIGH，默认 MEDIUM |
+| `dueDate` | 否 | 截止日期，ISO 格式 |
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "projectId": 10,
+    "milestoneId": 1,
+    "title": "设计温湿度传感器电路",
+    "description": "完成 DHT22 传感器的信号调理和 ADC 采集电路设计",
+    "status": "TODO",
+    "assigneeUserId": 2,
+    "assigneeName": "张同学",
+    "priority": "MEDIUM",
+    "dueDate": "2026-10-05",
+    "blockReason": null,
+    "version": 1,
+    "createdBy": 1,
+    "createTime": "2026-09-25T10:30:00",
+    "updateTime": "2026-09-25T10:30:00"
+  }
+}
+```
+
+**业务规则：**
+- OWNER 和 MAINTAINER 可创建任务
+- MEMBER 不能创建任务（待确认：是否允许成员创建任务并自行负责？）
+- OBSERVER 不能创建任务
+- assigneeUserId 非空时，该用户必须是项目成员，否则返回 400 reason=ASSIGNEE_NOT_MEMBER
+- milestoneId 非空时，该里程碑必须属于同一项目，否则返回 400 reason=MILESTONE_NOT_FOUND
+- 初始状态为 TODO，初始 version 为 1
+- 项目 ARCHIVED/PAUSED/COMPLETED 时不可创建任务
+
+**幂等语义：**
+- 创建任务不做幂等，相同标题可以创建多个任务
+- 如果后续需要批量导入或防重，另加业务幂等键
+
+### 9.5 获取任务列表（看板）
+
+```
+GET /api/projects/{projectId}/tasks?milestoneId=1&status=TODO&page=1&pageSize=20
+Status: REVIEW
+鉴权：需要登录，需项目成员权限
+```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `milestoneId` | long | 否 | （全部） | 按里程碑过滤，0 或不传表示全部 |
+| `status` | string | 否 | （全部） | 按状态过滤 |
+| `assigneeUserId` | long | 否 | （全部） | 按负责人过滤 |
+| `page` | int | 否 | 1 | 页码 |
+| `pageSize` | int | 否 | 20 | 每页条数，最大 100 |
+| `sortBy` | string | 否 | createTime | createTime / dueDate / priority / updateTime |
+| `sortOrder` | string | 否 | desc | asc / desc |
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "total": 5,
+    "page": 1,
+    "pageSize": 20,
+    "list": [
+      {
+        "id": 1,
+        "projectId": 10,
+        "milestoneId": 1,
+        "milestoneName": "原型设计与评审",
+        "title": "设计温湿度传感器电路",
+        "description": "完成 DHT22 传感器的信号调理和 ADC 采集电路设计",
+        "status": "TODO",
+        "assigneeUserId": 2,
+        "assigneeName": "张同学",
+        "priority": "MEDIUM",
+        "dueDate": "2026-10-05",
+        "blockReason": null,
+        "version": 1,
+        "createdBy": 1,
+        "createTime": "2026-09-25T10:30:00",
+        "updateTime": "2026-09-25T10:30:00"
+      }
+    ]
+  }
+}
+```
+
+**看板视图规则：**
+- 前端看板按 status 分组展示 TODO、IN_PROGRESS、BLOCKED、DONE 四列
+- CANCELED 任务不显示在默认看板中，需要显式筛选"已取消"
+- 每列内部按 sortBy/sortOrder 排序
+- 移动端：四列改为纵向堆叠的四个分组区块
+
+### 9.6 任务状态变更
+
+```
+PUT /api/projects/{projectId}/tasks/{taskId}/status
+Status: REVIEW
+鉴权：需要登录
+```
+
+**请求体：**
+
+```json
+{
+  "status": "IN_PROGRESS",
+  "version": 1,
+  "blockReason": null
+}
+```
+
+**字段说明：**
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `status` | 是 | 目标状态 |
+| `version` | 是 | 当前任务版本号，用于乐观锁 |
+| `blockReason` | 条件必填 | 目标状态为 BLOCKED 时必填 |
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "msg": "操作成功",
+  "data": {
+    "id": 1,
+    "status": "IN_PROGRESS",
+    "version": 2,
+    "updateTime": "2026-09-25T14:00:00"
+  }
+}
+```
+
+**乐观锁规则：**
+- 请求必须携带当前 version
+- 数据库中 version 与请求 version 一致时，更新成功，version 自增 1
+- 不一致时返回 409 reason=VERSION_CONFLICT，前端应刷新数据后再操作
+- 不能静默覆盖
+
+**权限规则（谁可以切换哪些状态）：**
+
+| 操作 | OWNER | MAINTAINER | MEMBER（负责人） | MEMBER（非负责人） | OBSERVER |
+|---|---|---|---|---|---|
+| TODO → IN_PROGRESS | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| TODO → CANCELED | 可 | 可 | 待确认 | 不可 | 不可 |
+| IN_PROGRESS → BLOCKED | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| IN_PROGRESS → DONE | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| IN_PROGRESS → CANCELED | 可 | 可 | 待确认 | 不可 | 不可 |
+| BLOCKED → IN_PROGRESS | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| BLOCKED → CANCELED | 可 | 可 | 不可 | 不可 | 不可 |
+
+> **待确认**：MEMBER 是否可以取消自己的任务。倾向：不可以，取消需 OWNER/MAINTAINER 操作。
+
+**BLOCKED 校验：**
+- 目标状态为 BLOCKED 时，blockReason 必填（2-500 字符）
+- blockReason 为空或不足返回 400 reason=BLOCK_REASON_REQUIRED
+
+### 9.7 任务详情
+
+```
+GET /api/projects/{projectId}/tasks/{taskId}
+Status: REVIEW
+鉴权：需要登录，需项目成员权限
+```
+
+返回完整任务对象（同创建成功响应结构）。
+
+### 9.8 编辑任务（基本信息）
+
+```
+PUT /api/projects/{projectId}/tasks/{taskId}
+Status: REVIEW
+鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
+```
+
+可编辑字段：title、description、milestoneId、assigneeUserId、priority、dueDate。
+
+**请求体：**
+
+```json
+{
+  "title": "更新后的任务标题",
+  "description": "更新后的描述",
+  "milestoneId": 2,
+  "assigneeUserId": 3,
+  "priority": "HIGH",
+  "dueDate": "2026-10-08",
+  "version": 1
+}
+```
+
+**业务规则：**
+- 同样使用 version 乐观锁
+- 只有 OWNER/MAINTAINER 可以编辑任务基本信息
+- 负责人不能编辑任务基本信息，只能变更自己任务的状态
+- 重新分配 assignee 时，新负责人必须是项目成员
+
+### 9.9 项目状态对任务操作的限制
+
+| 项目状态 | 创建任务 | 编辑任务 | 状态变更 | 查看 |
+|---|---|---|---|---|
+| PREPARING | 可 | 可 | 可 | 可 |
+| ACTIVE | 可 | 可 | 可 | 可 |
+| PAUSED | 不可 | 不可 | 不可（仅查看） | 可 |
+| COMPLETED | 不可 | 不可 | 不可（仅查看） | 可 |
+| ARCHIVED | 不可 | 不可 | 不可（仅查看） | 可 |
+
+违反限制返回 409 reason=PROJECT_ARCHIVED / PROJECT_PAUSED / PROJECT_COMPLETED。
+
+## 10. 错误响应扩展（里程碑与任务）
+
+沿用第 6 节格式，新增以下 reason：
+
+### 10.1 400 参数错误
+
+HTTP 状态：`400 Bad Request`
+
+```json
+{
+  "code": 400,
+  "msg": "参数错误",
+  "reason": "INVALID_PARAMETER",
+  "data": null
+}
+```
+
+| reason | 说明 | 触发场景 |
+|---|---|---|
+| `INVALID_PARAMETER` | 参数校验失败 | 字段缺失、格式错误、长度超限 |
+| `BLOCK_REASON_REQUIRED` | 阻塞原因必填 | 切换到 BLOCKED 状态时未提供 blockReason |
+| `ASSIGNEE_NOT_MEMBER` | 负责人不是项目成员 | 创建或编辑任务时 assignee 不在项目中 |
+| `MILESTONE_NOT_FOUND` | 里程碑不存在或不属于该项目 | 创建任务时 milestoneId 无效 |
+| `INVALID_DUE_DATE` | 截止日期非法 | dueDate 格式错误或早于今天（待确认是否限制） |
+
+### 10.2 404 资源不存在
+
+新增：
+
+| reason | 说明 |
+|---|---|
+| `MILESTONE_NOT_FOUND` | 里程碑不存在或不属于该项目 |
+| `TASK_NOT_FOUND` | 任务不存在或不属于该项目 |
+
+### 10.3 409 冲突
+
+新增：
+
+| reason | 说明 | 触发场景 |
+|---|---|---|
+| `VERSION_CONFLICT` | 乐观锁版本冲突 | 任务更新时 version 不匹配 |
+| `TASK_INVALID_TRANSITION` | 非法任务状态转换 | 不在允许的转换路径中 |
+| `MILESTONE_INVALID_TRANSITION` | 非法里程碑状态转换 | 不在允许的转换路径中 |
+| `PROJECT_PAUSED` | 项目已暂停，禁止修改 | 暂停项目创建/编辑任务或里程碑 |
+| `PROJECT_COMPLETED` | 项目已完成，禁止修改 | 完成项目创建/编辑任务或里程碑 |
+| `TASK_ALREADY_DONE` | 任务已完成，不能修改 | （不单独使用，用终态转换规则覆盖） |
+
+**VERSION_CONFLICT 响应示例：**
+
+```json
+{
+  "code": 409,
+  "msg": "任务已被他人更新，请刷新后重试",
+  "reason": "VERSION_CONFLICT",
+  "data": {
+    "currentVersion": 2,
+    "taskId": 1
+  }
+}
+```
+
+## 11. 首页 tasks 区域
+
+### 11.1 从 NOT_AVAILABLE 切换为 READY
+
+第 4 周起，首页 `tasks` 区域从 `state: NOT_AVAILABLE` 切换为 `state: READY`，返回当前用户作为负责人的任务统计和最近任务列表。
+
+Workbench overview 中 tasks 区域结构：
+
+```json
+{
+  "tasks": {
+    "state": "READY",
+    "todo": 2,
+    "inProgress": 1,
+    "blocked": 0,
+    "doneThisWeek": 3,
+    "list": [
+      {
+        "id": 1,
+        "projectId": 10,
+        "projectCode": "PROJ-001",
+        "projectName": "智能气象站项目",
+        "milestoneName": "原型设计与评审",
+        "title": "设计温湿度传感器电路",
+        "status": "TODO",
+        "priority": "MEDIUM",
+        "dueDate": "2026-10-05",
+        "updateTime": "2026-09-25T10:30:00"
+      },
+      {
+        "id": 3,
+        "projectId": 10,
+        "projectCode": "PROJ-001",
+        "projectName": "智能气象站项目",
+        "milestoneName": "原型设计与评审",
+        "title": "PCB 布局布线",
+        "status": "IN_PROGRESS",
+        "priority": "HIGH",
+        "dueDate": "2026-10-01",
+        "updateTime": "2026-09-26T08:00:00"
+      }
+    ]
+  }
+}
+```
+
+### 11.2 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `state` | string | READY / NOT_AVAILABLE / ERROR |
+| `todo` | int | 待开始任务数（负责人为当前用户） |
+| `inProgress` | int | 进行中任务数 |
+| `blocked` | int | 已阻塞任务数 |
+| `doneThisWeek` | int | 本周（周一至周日）完成的任务数 |
+| `list` | array | 最近任务列表，默认按 updateTime 降序，最多 5 条 |
+
+### 11.3 空状态
+
+用户没有任何任务时：
+- state=READY
+- todo=0, inProgress=0, blocked=0, doneThisWeek=0
+- list=[]
+- 前端显示"暂无任务"空状态 + "查看全部任务"入口（跳转到项目列表）
+
+### 11.4 SYSTEM_ADMIN / TEACHER 的首页任务
+
+- SYSTEM_ADMIN / TEACHER 的首页 tasks 区域同样显示自己作为负责人的任务
+- 不显示全项目任务统计（避免信息过载）
+- 全项目任务视图在项目详情页的看板中提供
+
+## 12. 信息层级与响应式
+
+### 12.1 项目详情页布局
+
+从上到下：
+1. **项目头部**：封面、编号、名称、状态标签、角色标签、成员数
+2. **Tab 导航**：概览 / 里程碑 / 任务看板 / 成员 / 设置（OWNER/MAINTAINER 可见）
+3. **概览 Tab**：基本信息、项目简介、最近活动（第 4 周可简化为基本信息 + 里程碑进度摘要）
+4. **里程碑 Tab**：里程碑列表卡片，含名称、日期范围、进度条（任务完成数/总数）
+5. **任务看板 Tab**：四列看板（TODO / IN_PROGRESS / BLOCKED / DONE）
+6. **成员 Tab**：成员列表（第 3 周已实现，第 4 周无变化）
+
+### 12.2 任务看板布局
+
+**桌面端（1440x900 / 1280x800）：**
+- 四列等宽布局，列标题显示状态名 + 任务数
+- 每列内任务卡片纵向堆叠
+- 任务卡片：标题（加粗）、优先级标签、负责人头像+姓名、截止日期、所属里程碑
+- 卡片点击打开任务详情弹窗/抽屉
+- 状态变更通过卡片菜单操作，不做拖拽
+- 顶部筛选：里程碑筛选、负责人筛选、搜索
+
+**移动端（390x844）：**
+- 四列改为纵向堆叠的四个分组
+- 每个分组有可折叠标题（状态名 + 任务数）
+- 任务卡片简化：标题、优先级、截止日期
+- 状态变更通过底部操作菜单
+- 筛选折叠到顶部筛选按钮
+
+### 12.3 任务详情
+
+弹窗或抽屉形式展示：
+- 标题、状态标签、优先级标签
+- 所属里程碑、负责人、截止日期
+- 任务描述
+- 阻塞原因（BLOCKED 状态时突出显示）
+- 操作按钮：状态变更菜单、编辑（有权限时）
+- 创建时间、更新时间、创建人
+
+## 13. 权限矩阵汇总（里程碑与任务）
+
+| 操作 | OWNER | MAINTAINER | MEMBER（负责人） | MEMBER（非负责人） | OBSERVER |
+|---|---|---|---|---|---|
+| 查看里程碑 | 可 | 可 | 可 | 可 | 可 |
+| 创建里程碑 | 可 | 可 | 不可 | 不可 | 不可 |
+| 更新里程碑状态 | 可 | 可 | 不可 | 不可 | 不可 |
+| 查看任务/看板 | 可 | 可 | 可 | 可 | 可 |
+| 创建任务 | 可 | 可 | 待确认 | 不可 | 不可 |
+| 编辑任务信息 | 可 | 可 | 不可 | 不可 | 不可 |
+| 分配/更换负责人 | 可 | 可 | 不可 | 不可 | 不可 |
+| 开始任务（TODO→IN_PROGRESS） | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| 阻塞任务（→BLOCKED） | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| 完成任务（→DONE） | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+| 取消任务（→CANCELED） | 可 | 可 | 不可 | 不可 | 不可 |
+| 从 BLOCKED 恢复 | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
+
+SYSTEM_ADMIN 全局覆盖项目 OWNER 权限；TEACHER 全局覆盖项目只读权限（同 OBSERVER 全局可见）。
+
+---
+
+## 14. 第 4 周待确认项
+
+### 待后端确认
+
+1. **MEMBER 能否创建任务**：倾向 OWNER/MAINTAINER 创建，MEMBER 不创建。是否允许 MEMBER 创建并自行负责的任务？
+2. **MEMBER 能否取消自己的任务**：倾向不可以，取消需 OWNER/MAINTAINER。请确认。
+3. **dueDate 校验规则**：是否禁止早于今天？是否需要与里程碑日期范围校验？
+4. **任务分页性能**：看板四列是一次拉取全量再前端分组，还是每列独立分页？建议首次全量（上限 200 条），超过后走分页。
+5. **任务列表默认排序**：createTime DESC 还是 priority + dueDate？
+6. **doneThisWeek 统计口径**：自然周（周一 00:00 至周日 23:59）还是滚动 7 天？
+7. **BLOCKED 转出后 blockReason 是否保留**：当前约定保留历史记录。是否需要额外的 blockedHistory 字段？
+8. **里程碑 sortOrder 维护方式**：前端传入还是后端自动计算？第 4 周不做拖拽，前端传值即可。
+9. **CANCELED 任务在看板的默认展示**：完全隐藏还是灰显？当前约定默认隐藏，需显式筛选。
+10. **任务标题同项目下是否唯一**：倾向不唯一。请确认。
+11. **事务边界**：创建任务 + 分配负责人 + 乐观锁初始化是否同一事务？
+12. **SYSTEM_ADMIN 对任务的操作**：是否直接拥有 OWNER 级别权限？
 
 ### 待前端确认
 
-1. 项目列表卡片布局（封面 + 编号 + 名称 + 状态 + 角色 + 成员数）
-2. 项目详情页信息层级（基本信息 + 成员列表 + 里程碑/任务占位）
-3. 创建项目表单设计（字段排列、验证提示）
-4. 添加成员交互（输入学工号 + 角色选择 + 搜索建议）
-5. 项目状态标签颜色映射（PREPARING/ACTIVE/PAUSED/COMPLETED/ARCHIVED）
-6. 项目角色标签颜色映射（OWNER/MAINTAINER/MEMBER/OBSERVER）
-7. 确定性默认封面样式（基于 code 字符生成稳定视觉）
-8. 工作台 projects 区域切换为真实数据后的展示形式（卡片列表还是图标网格）
-9. 空状态设计（无项目时的引导文案和创建入口）
+1. **看板四列布局**：固定宽度还是弹性？任务卡片高度是否自适应？
+2. **任务卡片信息密度**：桌面端卡片显示哪些字段？移动端简化到什么程度？
+3. **状态变更交互**：卡片右键菜单、卡片内下拉按钮、还是详情弹窗内操作？
+4. **任务详情承载形式**：弹窗还是右侧抽屉？
+5. **优先级视觉**：颜色标签还是图标？HIGH/MEDIUM/LOW 配色？
+6. **里程碑进度条**：百分比数字 + 进度条样式？
+7. **乐观锁冲突提示**：检测到 409 VERSION_CONFLICT 后如何提示？自动刷新还是手动刷新？
+8. **看板空状态**：每列空时显示什么文案和引导？
+9. **移动端纵向布局**：四列分组的折叠/展开默认状态？
+10. **首页 tasks 区域卡片样式**：与 projects 区域卡片风格是否统一？
+11. **截止日期临近/逾期的视觉提示**：红色/橙色标注？
+12. **创建任务表单**：弹窗内表单还是独立页面？字段排列？
 
-## 9. 版本兼容
+## 15. 版本兼容
 
 | 版本 | 变更 | 兼容策略 |
 |---|---|---|
 | v1.0（第 3 周） | 项目档案、成员管理、项目角色、基础 CRUD | 新增表和接口，不影响现有 IoT 演示项目路径 |
-| 第 4 周（计划） | 里程碑、任务状态机 | 在现有项目接口基础上扩展，不破坏第 3 周字段 |
+| v1.1（第 4 周） | 里程碑、任务状态机、乐观锁、首页 tasks 区域 | 在现有项目接口基础上扩展，不破坏 v1.0 字段和接口 |
 
-## 10. 变更记录
+## 16. 变更记录
 
 | 日期 | 变更 | 状态 |
 |---|---|---|
-| 2026-09-21 | 初始草案：项目状态、项目角色、基础 CRUD、成员管理、错误响应 | FROZEN（第 3 周产品 PR，前后端确认后实现） |
+| 2026-09-21 | 初始草案 v1.0：项目状态、项目角色、基础 CRUD、成员管理、错误响应 | FROZEN（第 3 周产品 PR，前后端确认后实现） |
+| 2026-09-28 | 扩展 v1.1：里程碑、任务状态机、乐观锁、看板、首页 tasks 区域 | FROZEN（第 4 周产品 PR，前后端确认后实现） |
