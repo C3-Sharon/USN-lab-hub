@@ -38,6 +38,30 @@ public class ProjectApiException extends RuntimeException {
         return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_ARCHIVED", "归档项目不能变更成员");
     }
 
+    public static ProjectApiException invalidParameter() {
+        return new ProjectApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "参数错误");
+    }
+
+    public static ProjectApiException milestoneNotFound() {
+        return new ProjectApiException(HttpStatus.NOT_FOUND, "MILESTONE_NOT_FOUND", "里程碑不存在");
+    }
+
+    public static ProjectApiException milestoneInvalidTransition() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "MILESTONE_INVALID_TRANSITION", "里程碑状态转换非法");
+    }
+
+    public static ProjectApiException paused() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_PAUSED", "暂停项目不可修改");
+    }
+
+    public static ProjectApiException completed() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_COMPLETED", "已完成项目不可修改");
+    }
+
+    public static ProjectApiException archivedProject() {
+        return new ProjectApiException(HttpStatus.CONFLICT, "PROJECT_ARCHIVED", "归档项目不可修改");
+    }
+
     public static ProjectApiException memberRoleConflict() {
         return new ProjectApiException(HttpStatus.CONFLICT, "ALREADY_MEMBER_DIFFERENT_ROLE",
                 "该成员已在项目中，角色不同，请使用角色变更功能");
