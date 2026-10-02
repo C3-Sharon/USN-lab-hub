@@ -143,7 +143,27 @@ class ProjectWorkflowMigrationTest {
                 FROM lab_task
                 WHERE project_id = 1 AND title = 'W40 MySQL migration probe'
                 """, String.class));
-        jdbc.update("DELETE FROM lab_task WHERE project_id = 1 AND title = 'W40 MySQL migration probe'");
+        int firstUpdate = jdbc.update("""
+                UPDATE lab_task
+                SET title = 'W40 MySQL optimistic winner', version = version + 1
+                WHERE project_id = 1 AND id = ? AND version = 1
+                """, jdbc.queryForObject("""
+                SELECT id FROM lab_task
+                WHERE project_id = 1 AND title = 'W40 MySQL migration probe'
+                """, Long.class));
+        int staleUpdate = jdbc.update("""
+                UPDATE lab_task
+                SET title = 'W40 MySQL stale overwrite', version = version + 1
+                WHERE project_id = 1 AND title = 'W40 MySQL optimistic winner' AND version = 1
+                """);
+        assertEquals(1, firstUpdate);
+        assertEquals(0, staleUpdate);
+        assertEquals("W40 MySQL optimistic winner:2", jdbc.queryForObject("""
+                SELECT CONCAT(title, ':', version)
+                FROM lab_task
+                WHERE project_id = 1 AND title = 'W40 MySQL optimistic winner'
+                """, String.class));
+        jdbc.update("DELETE FROM lab_task WHERE project_id = 1 AND title = 'W40 MySQL optimistic winner'");
         jdbc.update("DELETE FROM lab_milestone WHERE id = ?", milestoneId);
     }
 
