@@ -1,19 +1,22 @@
 import request from '@/utils/request'
 import { getMockEnabled } from '@/utils/mock'
 import { userStore } from '@/store/user'
+import { buildMockWorkbenchTasks } from '@/api/tasks'
 
 /**
  * 工作台接口
  *
  * W38 真实端点：
  *   GET  /api/workbench/overview   个人工作台 6 区域
- * 区域 schema（W38 任务书）：
+ * 区域 schema（W38 任务书 / PROJECT_WORKSPACE_API.md §11）：
  *   { state: 'READY' | 'NOT_AVAILABLE' | 'ERROR', ...regionFields }
  *   - attendance: 真实考勤；字段直接位于 attendance 区域
- *   - projects / tasks / learning / notifications: 本周统一为 NOT_AVAILABLE
+ *   - projects: 第 3 周起 READY（参与项目摘要）
+ *   - tasks: 第 4 周起 READY（负责人任务统计 + 最近 5 条）
+ *   - learning / notifications: 尚未开放（NOT_AVAILABLE）
  *   - deviceReminder: { state, onlineCount, alertCount }
  *
- * 注意：本文件仅在前端 mock 模式（VITE_USE_MOCK !== 'false'）下走 mockResponse，
+ * 注意：本文件仅在前端 mock 模式（VITE_USE_MOCK=true）下走 mockResponse，
  * 真实后端模式下走 /api/workbench/* 标准响应，request.js 拦截器已解包到 data。
  */
 
@@ -70,7 +73,7 @@ function mockOverview() {
     data: {
       attendance: attendanceRegion(),
       projects: mockProjectsRegion(),
-      tasks: notAvailable(),
+      tasks: buildMockWorkbenchTasks(),
       learning: notAvailable(),
       notifications: notAvailable(),
       deviceReminder: { state: 'READY', onlineCount: 1, alertCount: 0 },
