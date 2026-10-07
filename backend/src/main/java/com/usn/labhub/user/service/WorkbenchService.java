@@ -4,6 +4,7 @@ import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.domain.vo.WorkbenchOverviewVO;
 import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
 import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchSummaryVO;
 import com.usn.labhub.user.service.iot.IotOperationsService;
 import com.usn.labhub.user.service.iot.IotTelemetryService;
 import lombok.extern.slf4j.Slf4j;
@@ -24,13 +25,16 @@ public class WorkbenchService {
     private final IotTelemetryService telemetryService;
     private final IotOperationsService operationsService;
     private final ProjectService projectService;
+    private final ProjectTaskService projectTaskService;
 
     public WorkbenchService(IAttendanceService attendanceService, IotTelemetryService telemetryService,
-                            IotOperationsService operationsService, ProjectService projectService) {
+                            IotOperationsService operationsService, ProjectService projectService,
+                            ProjectTaskService projectTaskService) {
         this.attendanceService = attendanceService;
         this.telemetryService = telemetryService;
         this.operationsService = operationsService;
         this.projectService = projectService;
+        this.projectTaskService = projectTaskService;
     }
 
     public WorkbenchOverviewVO getOverview(Long userId) {
@@ -39,7 +43,7 @@ public class WorkbenchService {
         WorkbenchOverviewVO overview = new WorkbenchOverviewVO();
         overview.setAttendance(attendanceSection(attendance));
         overview.setProjects(projectSection(userId));
-        overview.setTasks(taskSection());
+        overview.setTasks(taskSection(userId));
         overview.setLearning(learningSection());
         overview.setNotifications(notificationSection());
         overview.setDeviceReminder(deviceReminderSection());
@@ -79,9 +83,23 @@ public class WorkbenchService {
         return section;
     }
 
-    private WorkbenchOverviewVO.TaskSection taskSection() {
+    private WorkbenchOverviewVO.TaskSection taskSection(Long userId) {
         WorkbenchOverviewVO.TaskSection section = new WorkbenchOverviewVO.TaskSection();
-        section.setState(NOT_AVAILABLE);
+        try {
+            TaskWorkbenchSummaryVO summary = projectTaskService.workbenchSummary(userId);
+            section.setState(READY);
+            section.setTodo(summary.stats().getTodo());
+            section.setInProgress(summary.stats().getInProgress());
+            section.setBlocked(summary.stats().getBlocked());
+            section.setDoneThisWeek(summary.stats().getDoneThisWeek());
+            section.setList(summary.list());
+        } catch (RuntimeException e) {
+            log.warn("Task summary query failed: {}", e.getMessage());
+            section.setState(ERROR);
+            section.setErrorCode("TASKS_LOAD_FAILED");
+            section.setMessage("任务数据加载失败");
+            section.setRetryable(true);
+        }
         return section;
     }
 

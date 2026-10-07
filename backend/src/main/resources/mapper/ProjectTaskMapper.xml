@@ -53,4 +53,35 @@
             update_time=#{updateTime}
         WHERE project_id=#{projectId} AND id=#{taskId} AND status=#{currentStatus} AND version=#{expectedVersion}
     </update>
+    <select id="selectWorkbenchStats"
+            resultType="com.usn.labhub.user.domain.vo.project.TaskWorkbenchStatsVO">
+        SELECT
+            COALESCE(SUM(CASE WHEN status='TODO' THEN 1 ELSE 0 END), 0) AS todo,
+            COALESCE(SUM(CASE WHEN status='IN_PROGRESS' THEN 1 ELSE 0 END), 0) AS inProgress,
+            COALESCE(SUM(CASE WHEN status='BLOCKED' THEN 1 ELSE 0 END), 0) AS blocked,
+            COALESCE(SUM(CASE WHEN status='DONE' AND update_time &gt;= #{weekStart}
+                AND update_time &lt; #{weekEnd} THEN 1 ELSE 0 END), 0) AS doneThisWeek
+        FROM lab_task
+        WHERE assignee_user_id=#{userId}
+    </select>
+    <select id="selectWorkbenchRecent"
+            resultType="com.usn.labhub.user.domain.vo.project.TaskWorkbenchItemVO">
+        SELECT
+            t.id,
+            t.project_id AS projectId,
+            p.project_code AS projectCode,
+            p.project_name AS projectName,
+            m.name AS milestoneName,
+            t.title,
+            t.status,
+            t.priority,
+            t.due_date AS dueDate,
+            t.update_time AS updateTime
+        FROM lab_task t
+        INNER JOIN lab_project p ON p.id=t.project_id
+        LEFT JOIN lab_milestone m ON m.id=t.milestone_id AND m.project_id=t.project_id
+        WHERE t.assignee_user_id=#{userId}
+        ORDER BY t.update_time DESC, t.id DESC
+        LIMIT 5
+    </select>
 </mapper>

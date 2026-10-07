@@ -2,6 +2,7 @@ package com.usn.labhub.user.domain.vo;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchItemVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -50,9 +51,15 @@ public class WorkbenchOverviewVO {
         private String state;
         private Integer todo = 0;
         private Integer inProgress = 0;
-        private Integer review = 0;
-        private Integer done = 0;
-        private List<Object> list = new ArrayList<>();
+        private Integer blocked = 0;
+        private Integer doneThisWeek = 0;
+        private List<TaskWorkbenchItemVO> list = new ArrayList<>();
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String errorCode;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String message;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private Boolean retryable;
     }
 
     @Data

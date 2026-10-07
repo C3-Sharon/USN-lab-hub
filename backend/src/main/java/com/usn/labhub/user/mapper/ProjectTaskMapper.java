@@ -2,6 +2,8 @@ package com.usn.labhub.user.mapper;
 
 import com.usn.labhub.user.domain.entity.project.TaskRecord;
 import com.usn.labhub.user.domain.vo.project.TaskVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchStatsVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -26,4 +28,8 @@ public interface ProjectTaskMapper {
                      @Param("currentStatus") String currentStatus, @Param("targetStatus") String targetStatus,
                      @Param("blockReason") String blockReason, @Param("expectedVersion") Integer expectedVersion,
                      @Param("updateTime") LocalDateTime updateTime);
+    TaskWorkbenchStatsVO selectWorkbenchStats(@Param("userId") Long userId,
+                                              @Param("weekStart") LocalDateTime weekStart,
+                                              @Param("weekEnd") LocalDateTime weekEnd);
+    List<TaskWorkbenchItemVO> selectWorkbenchRecent(@Param("userId") Long userId);
 }

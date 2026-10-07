@@ -9,6 +9,8 @@ import com.usn.labhub.user.domain.entity.project.TaskRecord;
 import com.usn.labhub.user.domain.vo.project.TaskPageVO;
 import com.usn.labhub.user.domain.vo.project.TaskStatusVO;
 import com.usn.labhub.user.domain.vo.project.TaskVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchStatsVO;
+import com.usn.labhub.user.domain.vo.project.TaskWorkbenchSummaryVO;
 import com.usn.labhub.user.mapper.ProjectMapper;
 import com.usn.labhub.user.mapper.ProjectMilestoneMapper;
 import com.usn.labhub.user.mapper.ProjectTaskMapper;
@@ -18,13 +20,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 @Service
 public class ProjectTaskService {
+
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private static final Set<String> STATUSES = Set.of("TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELED");
     private static final Map<String, String> SORT_COLUMNS = Map.of(
@@ -97,6 +105,18 @@ public class ProjectTaskService {
     public TaskVO detail(Long projectId, Long taskId) {
         requireReadableProject(projectId);
         return requireTask(projectId, taskId);
+    }
+
+    public TaskWorkbenchSummaryVO workbenchSummary(Long userId) {
+        if (userId == null || userId < 1) {
+            throw ProjectApiException.invalidParameter();
+        }
+        LocalDate monday = LocalDate.now(SHANGHAI)
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDateTime weekStart = monday.atStartOfDay();
+        LocalDateTime weekEnd = monday.plusWeeks(1).atStartOfDay();
+        TaskWorkbenchStatsVO stats = taskMapper.selectWorkbenchStats(userId, weekStart, weekEnd);
+        return new TaskWorkbenchSummaryVO(stats, taskMapper.selectWorkbenchRecent(userId));
     }
 
     @Transactional
