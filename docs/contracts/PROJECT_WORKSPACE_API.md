@@ -465,7 +465,7 @@ Workbench overview 中 projects 区域结构：
 | `status` | string | 是 | 里程碑状态 | PLANNED / IN_PROGRESS / COMPLETED |
 | `startDate` | string | 否 | 计划开始日期 | ISO 日期 `YYYY-MM-DD`，可为空 |
 | `endDate` | string | 否 | 计划完成日期 | ISO 日期 `YYYY-MM-DD`，可为空 |
-| `sortOrder` | int | 是 | 排序序号 | 正整数，默认 0，值越小越靠前 |
+| `sortOrder` | int | 是 | 排序序号 | 非负整数，默认 0，值越小越靠前 |
 | `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
 | `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
 
@@ -495,7 +495,7 @@ COMPLETED 为终态，不能转回其他状态。
 
 ```
 POST /api/projects/{projectId}/milestones
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
 ```
 
@@ -545,7 +545,7 @@ Status: REVIEW
 
 ```
 GET /api/projects/{projectId}/milestones
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需项目成员权限
 ```
 
@@ -593,7 +593,7 @@ Status: REVIEW
 
 ```
 PUT /api/projects/{projectId}/milestones/{milestoneId}/status
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
 ```
 
@@ -681,13 +681,13 @@ BLOCKED → CANCELED
 **CANCELED 规则**：
 - CANCELED 为终态，不允许恢复
 - 取消后任务保留在看板的历史筛选中
-- 只有 OWNER/MAINTAINER 可以取消任务（待确认是否允许负责人取消自己的任务）
+- 只有 OWNER/MAINTAINER/SYSTEM_ADMIN 可以取消任务；MEMBER 不可取消自己的任务
 
 ### 9.4 创建任务
 
 ```
 POST /api/projects/{projectId}/tasks
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
 ```
 
@@ -743,7 +743,7 @@ Status: REVIEW
 
 **业务规则：**
 - OWNER 和 MAINTAINER 可创建任务
-- MEMBER 不能创建任务（待确认：是否允许成员创建任务并自行负责？）
+- MEMBER 不能创建任务
 - OBSERVER 不能创建任务
 - assigneeUserId 非空时，该用户必须是项目成员，否则返回 400 reason=ASSIGNEE_NOT_MEMBER
 - milestoneId 非空时，该里程碑必须属于同一项目，否则返回 400 reason=MILESTONE_NOT_FOUND
@@ -758,7 +758,7 @@ Status: REVIEW
 
 ```
 GET /api/projects/{projectId}/tasks?milestoneId=1&status=TODO&page=1&pageSize=20
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需项目成员权限
 ```
 
@@ -812,13 +812,14 @@ Status: REVIEW
 - 前端看板按 status 分组展示 TODO、IN_PROGRESS、BLOCKED、DONE 四列
 - CANCELED 任务不显示在默认看板中，需要显式筛选"已取消"
 - 每列内部按 sortBy/sortOrder 排序
+- 未显式指定排序时按 createTime DESC、id DESC 稳定排序
 - 移动端：四列改为纵向堆叠的四个分组区块
 
 ### 9.6 任务状态变更
 
 ```
 PUT /api/projects/{projectId}/tasks/{taskId}/status
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -866,14 +867,14 @@ Status: REVIEW
 | 操作 | OWNER | MAINTAINER | MEMBER（负责人） | MEMBER（非负责人） | OBSERVER |
 |---|---|---|---|---|---|
 | TODO → IN_PROGRESS | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
-| TODO → CANCELED | 可 | 可 | 待确认 | 不可 | 不可 |
+| TODO → CANCELED | 可 | 可 | 不可 | 不可 | 不可 |
 | IN_PROGRESS → BLOCKED | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
 | IN_PROGRESS → DONE | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
-| IN_PROGRESS → CANCELED | 可 | 可 | 待确认 | 不可 | 不可 |
+| IN_PROGRESS → CANCELED | 可 | 可 | 不可 | 不可 | 不可 |
 | BLOCKED → IN_PROGRESS | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
 | BLOCKED → CANCELED | 可 | 可 | 不可 | 不可 | 不可 |
 
-> **待确认**：MEMBER 是否可以取消自己的任务。倾向：不可以，取消需 OWNER/MAINTAINER 操作。
+> MEMBER 不可取消自己的任务；取消需 OWNER、MAINTAINER 或 SYSTEM_ADMIN 操作。
 
 **BLOCKED 校验：**
 - 目标状态为 BLOCKED 时，blockReason 必填（2-500 字符）
@@ -883,7 +884,7 @@ Status: REVIEW
 
 ```
 GET /api/projects/{projectId}/tasks/{taskId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需项目成员权限
 ```
 
@@ -893,7 +894,7 @@ Status: REVIEW
 
 ```
 PUT /api/projects/{projectId}/tasks/{taskId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 OWNER 或 MAINTAINER 权限
 ```
 
@@ -954,7 +955,7 @@ HTTP 状态：`400 Bad Request`
 | `BLOCK_REASON_REQUIRED` | 阻塞原因必填 | 切换到 BLOCKED 状态时未提供 blockReason |
 | `ASSIGNEE_NOT_MEMBER` | 负责人不是项目成员 | 创建或编辑任务时 assignee 不在项目中 |
 | `MILESTONE_NOT_FOUND` | 里程碑不存在或不属于该项目 | 创建任务时 milestoneId 无效 |
-| `INVALID_DUE_DATE` | 截止日期非法 | dueDate 格式错误或早于今天（待确认是否限制） |
+| `INVALID_DUE_DATE` | 截止日期非法 | dueDate 不符合 ISO 日期格式 |
 
 ### 10.2 404 资源不存在
 
@@ -1046,7 +1047,7 @@ Workbench overview 中 tasks 区域结构：
 | `todo` | int | 待开始任务数（负责人为当前用户） |
 | `inProgress` | int | 进行中任务数 |
 | `blocked` | int | 已阻塞任务数 |
-| `doneThisWeek` | int | 本周（周一至周日）完成的任务数 |
+| `doneThisWeek` | int | Asia/Shanghai 自然周内完成的任务数，周一 00:00（含）至下周一 00:00（不含） |
 | `list` | array | 最近任务列表，默认按 updateTime 降序，最多 5 条 |
 
 ### 11.3 空状态
@@ -1110,7 +1111,7 @@ Workbench overview 中 tasks 区域结构：
 | 创建里程碑 | 可 | 可 | 不可 | 不可 | 不可 |
 | 更新里程碑状态 | 可 | 可 | 不可 | 不可 | 不可 |
 | 查看任务/看板 | 可 | 可 | 可 | 可 | 可 |
-| 创建任务 | 可 | 可 | 待确认 | 不可 | 不可 |
+| 创建任务 | 可 | 可 | 不可 | 不可 | 不可 |
 | 编辑任务信息 | 可 | 可 | 不可 | 不可 | 不可 |
 | 分配/更换负责人 | 可 | 可 | 不可 | 不可 | 不可 |
 | 开始任务（TODO→IN_PROGRESS） | 可 | 可 | 可（自己的任务） | 不可 | 不可 |
@@ -1123,22 +1124,23 @@ SYSTEM_ADMIN 全局覆盖项目 OWNER 权限；TEACHER 全局覆盖项目只读�
 
 ---
 
-## 14. 第 4 周待确认项
+## 14. 第 4 周确认结论与前端待确认项
 
-### 待后端确认
+### 后端确认结论（2026-10-02）
 
-1. **MEMBER 能否创建任务**：倾向 OWNER/MAINTAINER 创建，MEMBER 不创建。是否允许 MEMBER 创建并自行负责的任务？
-2. **MEMBER 能否取消自己的任务**：倾向不可以，取消需 OWNER/MAINTAINER。请确认。
-3. **dueDate 校验规则**：是否禁止早于今天？是否需要与里程碑日期范围校验？
-4. **任务分页性能**：看板四列是一次拉取全量再前端分组，还是每列独立分页？建议首次全量（上限 200 条），超过后走分页。
-5. **任务列表默认排序**：createTime DESC 还是 priority + dueDate？
-6. **doneThisWeek 统计口径**：自然周（周一 00:00 至周日 23:59）还是滚动 7 天？
-7. **BLOCKED 转出后 blockReason 是否保留**：当前约定保留历史记录。是否需要额外的 blockedHistory 字段？
-8. **里程碑 sortOrder 维护方式**：前端传入还是后端自动计算？第 4 周不做拖拽，前端传值即可。
-9. **CANCELED 任务在看板的默认展示**：完全隐藏还是灰显？当前约定默认隐藏，需显式筛选。
-10. **任务标题同项目下是否唯一**：倾向不唯一。请确认。
-11. **事务边界**：创建任务 + 分配负责人 + 乐观锁初始化是否同一事务？
-12. **SYSTEM_ADMIN 对任务的操作**：是否直接拥有 OWNER 级别权限？
+1. MEMBER 不可创建任务。
+2. MEMBER 不可取消自己的任务；取消仅允许 OWNER、MAINTAINER 和 SYSTEM_ADMIN。
+3. dueDate 只校验 ISO 日期格式，允许历史日期，不强制位于里程碑日期范围内。
+4. 任务列表按契约分页，pageSize 最大 100；前端需要更多数据时逐页获取。
+5. 默认按 createTime DESC、id DESC 稳定排序。
+6. doneThisWeek 使用 Asia/Shanghai 自然周。
+7. BLOCKED 转出后保留最后一次 blockReason；本周不增加 blockedHistory。
+8. sortOrder 由前端传入，默认 0，同值按 id ASC 排序。
+9. CANCELED 默认隐藏，仅显式筛选时返回。
+10. 任务标题不唯一。
+11. 创建任务、归属校验和 version 初始化在同一事务内完成。
+12. SYSTEM_ADMIN 拥有 OWNER 级权限，TEACHER 为全局只读。
+13. 编辑和状态变更使用 id + version + 当前状态条件更新，零行更新返回 VERSION_CONFLICT。
 
 ### 待前端确认
 
