@@ -26,6 +26,10 @@ request.interceptors.request.use(
 
 const LOGIN_REQUIRED_REASONS = new Set(['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_DISABLED'])
 
+// 由页面自行处理的 reason：不弹通用 toast，避免与页面的可操作提示重复
+// VERSION_CONFLICT（乐观锁冲突）由 utils/apiError.js 的 promptVersionConflict 统一提示并引导刷新
+const SILENT_REASONS = new Set(['VERSION_CONFLICT'])
+
 function clearAuthAndRedirect(reason, message) {
   userStore.logout()
   ElMessage.error(message || '登录状态已失效，请重新登录')
@@ -60,6 +64,9 @@ request.interceptors.response.use(
       ElMessage.error(payload.msg || '当前账号无权访问该资源')
       return Promise.reject(payload)
     }
+    if (SILENT_REASONS.has(reason)) {
+      return Promise.reject(payload)
+    }
     ElMessage.error(payload.msg || '请求处理失败')
     return Promise.reject(payload)
   },
@@ -71,6 +78,8 @@ request.interceptors.response.use(
       clearAuthAndRedirect(reason, reason === 'ACCOUNT_DISABLED' ? '账号已被禁用，请联系管理员' : '登录状态已失效，请重新登录')
     } else if (status === 403) {
       ElMessage.error(payload.msg || '当前账号无权访问该资源')
+    } else if (SILENT_REASONS.has(payload.reason)) {
+      // 由页面处理，不弹通用 toast
     } else {
       ElMessage.error(error.response?.data?.msg || error.message || '网络请求失败')
     }

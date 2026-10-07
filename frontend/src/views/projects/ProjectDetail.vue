@@ -14,77 +14,121 @@
               <el-tag :type="roleMeta(project.myRole).tagType" size="small" effect="plain">
                 我的角色：{{ roleMeta(project.myRole).label }}
               </el-tag>
+              <span class="muted text-help">{{ project.memberCount }} 名成员</span>
             </div>
           </div>
         </div>
-        <el-button v-if="canAddMember" type="primary" :icon="Plus" @click="memberDialogVisible = true">添加成员</el-button>
       </header>
 
-      <div class="detail-grid">
-        <!-- 基本信息 -->
-        <el-card class="detail-card">
-          <template #header>
-            <div class="card-header">
-              <el-icon><Document /></el-icon>
-              <span>基本信息</span>
-            </div>
-          </template>
-          <div class="info-rows">
-            <div class="info-row">
-              <span class="info-label">项目简介</span>
-              <span class="info-value">{{ project.summary || '暂无简介' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">分类</span>
-              <span class="info-value">{{ project.category || '--' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">成员数</span>
-              <span class="info-value">{{ project.memberCount }} 人</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">创建时间</span>
-              <span class="info-value">{{ formatTime(project.createTime) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">最近更新</span>
-              <span class="info-value">{{ formatTime(project.updateTime) }}</span>
-            </div>
-          </div>
-        </el-card>
-
-        <!-- 成员列表 -->
-        <el-card class="detail-card">
-          <template #header>
-            <div class="card-header">
-              <el-icon><UserFilled /></el-icon>
-              <span>项目成员</span>
-              <el-tag size="small" type="info">{{ project.members?.length || 0 }} 人</el-tag>
-            </div>
-          </template>
-          <el-table :data="project.members || []" size="small" empty-text="暂无成员">
-            <el-table-column label="成员" min-width="160">
-              <template #default="{ row }">
-                <div class="member-name">
-                  <el-avatar :size="28" class="member-avatar">{{ row.name?.charAt(0) }}</el-avatar>
-                  <span>{{ row.name }}</span>
+      <el-tabs v-model="activeTab" class="project-tabs">
+        <!-- 概览 -->
+        <el-tab-pane label="概览" name="overview">
+          <div v-if="activeTab === 'overview'" class="detail-grid">
+            <el-card class="detail-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Document /></el-icon>
+                  <span>基本信息</span>
                 </div>
               </template>
-            </el-table-column>
-            <el-table-column label="学工号" prop="memberId" width="120" />
-            <el-table-column label="角色" width="120">
-              <template #default="{ row }">
-                <el-tag :type="roleMeta(row.projectRole).tagType" size="small" effect="plain">
-                  {{ roleMeta(row.projectRole).label }}
-                </el-tag>
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="info-label">项目简介</span>
+                  <span class="info-value">{{ project.summary || '暂无简介' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">分类</span>
+                  <span class="info-value">{{ project.category || '--' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">成员数</span>
+                  <span class="info-value">{{ project.memberCount }} 人</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">创建时间</span>
+                  <span class="info-value">{{ formatTime(project.createTime) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">最近更新</span>
+                  <span class="info-value">{{ formatTime(project.updateTime) }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <el-card class="detail-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Flag /></el-icon>
+                  <span>里程碑进度</span>
+                  <el-tag size="small" type="info">{{ milestoneSummary.length }} 个</el-tag>
+                </div>
               </template>
-            </el-table-column>
-            <el-table-column label="加入时间" width="160">
-              <template #default="{ row }">{{ formatTime(row.joinedAt) }}</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </div>
+              <div v-if="milestoneSummary.length" class="summary-list">
+                <div v-for="item in milestoneSummary" :key="item.id" class="summary-item">
+                  <div class="summary-item__head">
+                    <span class="summary-item__name">{{ item.name }}</span>
+                    <el-tag :type="milestoneMeta(item.status).tagType" size="small" effect="light">
+                      {{ milestoneMeta(item.status).label }}
+                    </el-tag>
+                  </div>
+                  <el-progress
+                    :percentage="milestonePercent(item)"
+                    :stroke-width="8"
+                    :status="item.status === 'COMPLETED' ? 'success' : undefined"
+                  />
+                  <span class="muted text-help">{{ item.taskDone }}/{{ item.taskCount }} 任务完成</span>
+                </div>
+              </div>
+              <el-empty v-else description="暂无里程碑" :image-size="72" />
+            </el-card>
+          </div>
+        </el-tab-pane>
+
+        <!-- 里程碑 -->
+        <el-tab-pane label="里程碑" name="milestones">
+          <MilestonePanel v-if="activeTab === 'milestones'" :project="project" />
+        </el-tab-pane>
+
+        <!-- 任务看板 -->
+        <el-tab-pane label="任务看板" name="kanban">
+          <TaskKanban v-if="activeTab === 'kanban'" :project="project" />
+        </el-tab-pane>
+
+        <!-- 成员 -->
+        <el-tab-pane label="成员" name="members">
+          <div v-if="activeTab === 'members'" class="members-pane">
+            <div class="members-pane__toolbar">
+              <span class="muted text-help">共 {{ project.members?.length || 0 }} 名成员</span>
+              <el-button v-if="canAddMember" type="primary" :icon="Plus" @click="memberDialogVisible = true">
+                添加成员
+              </el-button>
+            </div>
+            <el-card class="detail-card">
+              <el-table :data="project.members || []" size="small" empty-text="暂无成员">
+                <el-table-column label="成员" min-width="160">
+                  <template #default="{ row }">
+                    <div class="member-name">
+                      <el-avatar :size="28" class="member-avatar">{{ row.name?.charAt(0) }}</el-avatar>
+                      <span>{{ row.name }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="学工号" prop="memberId" width="120" />
+                <el-table-column label="角色" width="120">
+                  <template #default="{ row }">
+                    <el-tag :type="roleMeta(row.projectRole).tagType" size="small" effect="plain">
+                      {{ roleMeta(row.projectRole).label }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="加入时间" width="180">
+                  <template #default="{ row }">{{ formatTime(row.joinedAt) }}</template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </template>
 
     <el-empty v-else-if="!loading && notFound" description="项目不存在或无权访问">
@@ -95,7 +139,6 @@
       <el-button type="primary" @click="loadDetail">重试</el-button>
     </el-empty>
 
-    <!-- 添加成员弹窗 -->
     <AddMemberDialog
       v-if="project"
       v-model="memberDialogVisible"
@@ -106,22 +149,29 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, Document, UserFilled } from '@element-plus/icons-vue'
+import { Plus, Document, Flag } from '@element-plus/icons-vue'
 import { getProjectDetail, PROJECT_STATUS_META, PROJECT_ROLE_META } from '@/api/projects'
-import { hasAnyRole } from '@/store/user'
-import { ROLE } from '@/utils/permission'
+import { listMilestones, MILESTONE_STATUS_META } from '@/api/milestones'
+import { isProjectNotFound } from '@/utils/apiError'
 import ProjectCover from '@/components/ProjectCover.vue'
 import AddMemberDialog from './AddMemberDialog.vue'
+import MilestonePanel from './MilestonePanel.vue'
+import TaskKanban from './TaskKanban.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+const TAB_NAMES = ['overview', 'milestones', 'kanban', 'members']
 
 const project = ref(null)
 const loading = ref(false)
 const notFound = ref(false)
 const memberDialogVisible = ref(false)
+const milestoneSummary = ref([])
+
+const activeTab = ref(TAB_NAMES.includes(route.query.tab) ? route.query.tab : 'overview')
 
 const canAddMember = computed(() => {
   const role = project.value?.myRole
@@ -136,10 +186,28 @@ function roleMeta(role) {
   return PROJECT_ROLE_META[role] || { label: role, tagType: 'info' }
 }
 
+function milestoneMeta(status) {
+  return MILESTONE_STATUS_META[status] || { label: status, tagType: 'info' }
+}
+
+function milestonePercent(item) {
+  if (!item.taskCount) return 0
+  return Math.round((item.taskDone / item.taskCount) * 100)
+}
+
 function formatTime(iso) {
   if (!iso) return '--'
   const d = new Date(iso)
   return isNaN(d) ? iso : d.toLocaleString('zh-CN', { hour12: false })
+}
+
+async function loadMilestoneSummary() {
+  if (!project.value) return
+  try {
+    milestoneSummary.value = await listMilestones(project.value.id)
+  } catch (err) {
+    console.error('加载里程碑摘要失败', err)
+  }
 }
 
 async function loadDetail() {
@@ -152,12 +220,10 @@ async function loadDetail() {
   notFound.value = false
   try {
     project.value = await getProjectDetail(id)
+    if (activeTab.value === 'overview') loadMilestoneSummary()
   } catch (err) {
     console.error('加载项目详情失败', err)
-    // 兼容两种错误形态：mock/业务错误直接是 {code, reason}；HTTP 404 走 axios error，载荷在 err.response.data
-    const code = err?.code ?? err?.response?.data?.code ?? err?.response?.status
-    const reason = err?.reason ?? err?.response?.data?.reason
-    notFound.value = code === 404 || reason === 'PROJECT_NOT_FOUND' || reason === 'PROJECT_ACCESS_DENIED'
+    notFound.value = isProjectNotFound(err)
   } finally {
     loading.value = false
   }
@@ -173,6 +239,18 @@ function onMemberAdded(member) {
     }
   }
 }
+
+watch(activeTab, (tab) => {
+  if (route.query.tab !== tab) {
+    router.replace({ query: { ...route.query, tab } })
+  }
+  if (tab === 'overview') loadMilestoneSummary()
+})
+
+watch(
+  () => route.params.id,
+  () => loadDetail()
+)
 
 onMounted(() => loadDetail())
 </script>
@@ -222,10 +300,15 @@ onMounted(() => loadDetail())
   font-weight: 600;
 }
 
+.project-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--usn-space-4);
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--usn-space-4);
+  align-items: start;
 }
 
 .detail-card {
@@ -264,6 +347,44 @@ onMounted(() => loadDetail())
   font-size: var(--usn-font-size-body);
   color: var(--usn-ink-900);
   word-break: break-word;
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--usn-space-2);
+}
+
+.summary-item__name {
+  font-weight: 600;
+  color: var(--usn-ink-900);
+}
+
+.members-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.members-pane__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--usn-space-3);
+  flex-wrap: wrap;
 }
 
 .member-name {

@@ -1,0 +1,163 @@
+{
+  "base": "http://localhost:4173",
+  "generatedAt": "2026-10-02T20:01:01.425Z",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "390x844"
+  ],
+  "shots": 30,
+  "horizontalOverflow": 0,
+  "results": [
+    {
+      "viewport": "1440x900",
+      "shot": "workbench",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-overview",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-milestones",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-milestone-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-kanban",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-kanban-status-menu",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-task-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-task-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-version-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "project-members",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "workbench",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-overview",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-milestones",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-milestone-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-kanban",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-kanban-status-menu",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-task-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-task-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-version-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "project-members",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "workbench",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-overview",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-milestones",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-milestone-create",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-kanban",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-kanban-status-menu",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-task-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-task-create",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-version-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "project-members",
+      "overflow": false
+    }
+  ]
+}

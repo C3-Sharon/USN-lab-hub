@@ -82,6 +82,17 @@ const MOCK_MEMBERS = [
   { userId: 2, memberId: '20260001', name: '张同学', projectRole: 'MEMBER', joinedAt: '2026-09-21T11:00:00' }
 ]
 
+// ========== Mock 共享入口 ==========
+// milestones.js / tasks.js 复用同一份项目与成员数据，保证 mock 模式下
+// 权限判定（myRole）与负责人合法性（是否项目成员）与项目模块一致。
+export function findMockProject(id) {
+  return MOCK_PROJECTS.find((p) => p.id === Number(id)) || null
+}
+
+export function getMockProjectMembers() {
+  return [...MOCK_MEMBERS]
+}
+
 /**
  * mock 成功响应：与真实模式对齐 —— request.js 拦截器会把
  * { code: 200, data } 解包为 data，因此 mock 也直接 resolve data，

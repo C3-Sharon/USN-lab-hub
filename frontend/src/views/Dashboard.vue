@@ -96,7 +96,54 @@
           :description="tasksHint"
           :error-message="overview?.tasks?.message || overviewError"
           @retry="loadOverview"
-        />
+        >
+          <div v-if="tasksSummary" class="task-region">
+            <div class="task-stats">
+              <div class="task-stat">
+                <span class="muted text-help">待开始</span>
+                <strong>{{ tasksSummary.todo }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">进行中</span>
+                <strong>{{ tasksSummary.inProgress }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">已阻塞</span>
+                <strong>{{ tasksSummary.blocked }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">本周完成</span>
+                <strong>{{ tasksSummary.doneThisWeek }}</strong>
+              </div>
+            </div>
+            <div v-if="tasksList.length" class="task-mini-list">
+              <div
+                v-for="task in tasksList"
+                :key="task.id"
+                class="task-mini-card"
+                @click="openTask(task)"
+              >
+                <div class="task-mini-main">
+                  <span class="task-mini-title">{{ task.title }}</span>
+                  <span class="task-mini-meta muted text-help">
+                    {{ task.projectName }}<template v-if="task.milestoneName"> · {{ task.milestoneName }}</template>
+                  </span>
+                </div>
+                <div class="task-mini-tags">
+                  <el-tag :type="taskStatusMeta(task.status).tagType" size="small" effect="light">
+                    {{ taskStatusMeta(task.status).label }}
+                  </el-tag>
+                  <el-tag :type="taskPriorityMeta(task.priority).tagType" size="small" effect="plain">
+                    {{ taskPriorityMeta(task.priority).label }}
+                  </el-tag>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无任务">
+              <el-button type="primary" size="small" @click="$router.push('/projects')">查看全部任务</el-button>
+            </el-empty>
+          </div>
+        </RegionState>
       </section>
 
       <section class="region region--learning">
@@ -156,7 +203,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { userStore, hasAnyRole } from '@/store/user'
 import { currentPrimaryRole, currentRoles } from '@/store/user'
@@ -164,10 +211,12 @@ import { ROLE_META, ROLE } from '@/utils/permission'
 import { fetchWorkbenchOverview } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
 import { PROJECT_STATUS_META } from '@/api/projects'
+import { TASK_STATUS_META, TASK_PRIORITY_META } from '@/api/tasks'
 import RegionState from '@/components/RegionState.vue'
 import ProjectCover from '@/components/ProjectCover.vue'
 
 const route = useRoute()
+const router = useRouter()
 
 const user = computed(() => userStore.userInfo || {})
 const primaryRole = computed(() => currentPrimaryRole() || ROLE.MEMBER)
@@ -210,8 +259,35 @@ function projectStatusMeta(status) {
   return PROJECT_STATUS_META[status] || { label: status, tagType: 'info' }
 }
 
-const tasksHint = computed(() => regionHint(overview.value?.tasks))
+const tasksSummary = computed(() => {
+  const region = overview.value?.tasks
+  return region && region.state === 'READY' ? region : null
+})
+const tasksList = computed(() => tasksSummary.value?.list || [])
+const tasksHint = computed(() => {
+  const region = overview.value?.tasks
+  if (!region) return '加载中'
+  if (region.state === 'NOT_AVAILABLE') return '尚未开放'
+  if (region.state === 'READY') {
+    const pending = (region.todo || 0) + (region.inProgress || 0) + (region.blocked || 0)
+    return pending ? `${pending} 个待办任务` : '暂无任务'
+  }
+  return ''
+})
 const tasksState = computed(() => regionState(overview.value?.tasks))
+
+function taskStatusMeta(status) {
+  return TASK_STATUS_META[status] || { label: status, tagType: 'info' }
+}
+
+function taskPriorityMeta(priority) {
+  return TASK_PRIORITY_META[priority] || { label: priority || '--', tagType: 'info' }
+}
+
+function openTask(task) {
+  if (!task?.projectId) return
+  router.push({ path: `/projects/${task.projectId}`, query: { tab: 'kanban' } })
+}
 
 const learningHint = computed(() => regionHint(overview.value?.learning))
 const learningState = computed(() => regionState(overview.value?.learning))
@@ -421,6 +497,98 @@ defineExpose({ currentRoles })
 .project-mini-code {
   font-size: var(--usn-font-size-help);
   font-family: 'Courier New', monospace;
+}
+
+.task-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+}
+
+.task-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--usn-space-3);
+}
+
+.task-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  background: var(--usn-canvas);
+  border: 1px solid var(--usn-line);
+}
+
+.task-stat strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--usn-blue-700);
+}
+
+.task-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.task-mini-card {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  border: 1px solid var(--usn-line);
+  background: var(--usn-surface);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.task-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.1);
+}
+
+.task-mini-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-mini-title {
+  font-size: var(--usn-font-size-body);
+  font-weight: 600;
+  color: var(--usn-ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-mini-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-mini-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-2);
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .task-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-mini-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 1280px) {
