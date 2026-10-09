@@ -157,7 +157,51 @@
           :description="learningHint"
           :error-message="overview?.learning?.message || overviewError"
           @retry="loadOverview"
-        />
+        >
+          <div v-if="learningSummary" class="learning-region">
+            <div class="learning-stats">
+              <div class="learning-stat">
+                <span class="muted text-help">进行中</span>
+                <strong>{{ learningSummary.inProgressCount || 0 }}</strong>
+              </div>
+              <div class="learning-stat">
+                <span class="muted text-help">已完成</span>
+                <strong>{{ learningSummary.completedCount || 0 }}</strong>
+              </div>
+            </div>
+
+            <div v-if="learningList.length" class="learning-mini-list">
+              <div
+                v-for="item in learningList"
+                :key="item.roadmapId"
+                class="learning-mini-card"
+                @click="$router.push(`/learning/${item.roadmapId}`)"
+              >
+                <div class="learning-mini-main">
+                  <span class="learning-mini-title">{{ item.roadmapTitle }}</span>
+                  <div class="learning-mini-tags">
+                    <DifficultyTag :difficulty="item.roadmapDifficulty" />
+                    <el-tag :type="learningStatusMeta(item.status).tagType" size="small" effect="light">
+                      {{ learningStatusMeta(item.status).label }}
+                    </el-tag>
+                  </div>
+                </div>
+                <div class="learning-mini-progress">
+                  <ProgressBar
+                    :value="item.progress"
+                    :label="`${item.completedUnitCount}/${item.totalUnitCount} 单元`"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <el-empty v-else description="暂无学习路线">
+              <el-button type="primary" size="small" @click="$router.push('/learning')">
+                {{ learningEmptyActionLabel }}
+              </el-button>
+            </el-empty>
+          </div>
+        </RegionState>
       </section>
 
       <section class="region region--notifications">
@@ -212,8 +256,11 @@ import { fetchWorkbenchOverview } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
 import { PROJECT_STATUS_META } from '@/api/projects'
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '@/api/tasks'
+import { learningStatusMeta, canManageLearning } from '@/api/learning'
 import RegionState from '@/components/RegionState.vue'
 import ProjectCover from '@/components/ProjectCover.vue'
+import DifficultyTag from '@/components/DifficultyTag.vue'
+import ProgressBar from '@/components/ProgressBar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -289,7 +336,22 @@ function openTask(task) {
   router.push({ path: `/projects/${task.projectId}`, query: { tab: 'kanban' } })
 }
 
-const learningHint = computed(() => regionHint(overview.value?.learning))
+const learningSummary = computed(() => {
+  const region = overview.value?.learning
+  return region && region.state === 'READY' ? region : null
+})
+const learningList = computed(() => learningSummary.value?.list || [])
+const learningHint = computed(() => {
+  const region = overview.value?.learning
+  if (!region) return '加载中'
+  if (region.state === 'NOT_AVAILABLE') return '尚未开放'
+  if (region.state === 'READY') {
+    const active = (region.inProgressCount || 0) + (region.completedCount || 0)
+    return active ? `${active} 条学习路线` : '暂无学习路线'
+  }
+  return ''
+})
+const learningEmptyActionLabel = computed(() => (canManageLearning() ? '管理学习路线' : '浏览学习路线'))
 const learningState = computed(() => regionState(overview.value?.learning))
 
 const notificationsHint = computed(() => regionHint(overview.value?.notifications))
@@ -574,6 +636,85 @@ defineExpose({ currentRoles })
 }
 
 .task-mini-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-2);
+  flex-shrink: 0;
+}
+
+/* 学习域视觉识别：紫色顶边 + 紫色统计数字（小面积知识语义色） */
+.region--learning {
+  border-top: 3px solid var(--usn-purple-600);
+}
+
+.learning-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+}
+
+.learning-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--usn-space-3);
+}
+
+.learning-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  background: var(--usn-canvas);
+  border: 1px solid var(--usn-line);
+}
+
+.learning-stat strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--usn-purple-600);
+}
+
+.learning-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.learning-mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-2);
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  border: 1px solid var(--usn-line);
+  background: var(--usn-surface);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.learning-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.1);
+}
+
+.learning-mini-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--usn-space-3);
+}
+
+.learning-mini-title {
+  font-size: var(--usn-font-size-body);
+  font-weight: 600;
+  color: var(--usn-ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.learning-mini-tags {
   display: flex;
   align-items: center;
   gap: var(--usn-space-2);

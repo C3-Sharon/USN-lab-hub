@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import { getMockEnabled } from '@/utils/mock'
 import { userStore } from '@/store/user'
 import { buildMockWorkbenchTasks } from '@/api/tasks'
+import { buildMockWorkbenchLearning } from '@/api/learning'
 
 /**
  * 工作台接口
@@ -74,7 +75,7 @@ function mockOverview() {
       attendance: attendanceRegion(),
       projects: mockProjectsRegion(),
       tasks: buildMockWorkbenchTasks(),
-      learning: notAvailable(),
+      learning: buildMockWorkbenchLearning(),
       notifications: notAvailable(),
       deviceReminder: { state: 'READY', onlineCount: 1, alertCount: 0 },
       generatedAt: new Date().toISOString()
