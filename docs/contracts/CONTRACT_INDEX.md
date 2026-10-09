@@ -19,6 +19,7 @@
 | 全局角色与个人工作台 V1 | `docs/contracts/AUTH_WORKBENCH_V1.md` | FROZEN | 五档全局角色、权限矩阵、鉴权 Header、401/403、首页聚合接口 |
 | 项目工作台 API V1.1 | `docs/contracts/PROJECT_WORKSPACE_API.md` | FROZEN | 项目状态、项目角色、项目 CRUD、成员管理、里程碑、任务状态机、乐观锁、首页 tasks 区域 |
 | 首轮 IoT API | `docs/agent-guides/04_API_CONTRACT.md` | ACTIVE_LEGACY | PM-001 latest/history/告警/指令等基线 |
+| 学习实验域 API V1 | `docs/contracts/LEARNING_EXPERIMENT_API.md` | FROZEN | 学习路线、阶段、单元、成员学习记录、进度计算、首页 learning 区域 |
 | 首轮 MQTT | `docs/agent-guides/05_MQTT_CONTRACT.md` | ACTIVE_LEGACY | PM-001 telemetry/command/ack |
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |
 | 总体产品与架构 | `docs/superpowers/specs/2026-08-19-usn-lab-hub-platform-design.md` | ACTIVE | 六个月目标和不可突破边界 |
