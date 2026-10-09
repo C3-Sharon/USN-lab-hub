@@ -1,6 +1,6 @@
 # USN Lab Hub 当前状态
 
-> 事实基线：`origin/dev` commit `9b14d7e`
+> 事实基线：`origin/dev` commit `db306ec`
 > 更新规则：仅在功能合入 `dev` 且完成验证后更新
 > 禁止：把计划、mock、未合并 PR 或口头完成写成已完成
 
@@ -21,7 +21,7 @@
 
 - `GET /api/workbench/overview` 首页聚合接口（六区域 + state 三态）。
 - 角色化首页：不同全局角色看到正确的区域和数据范围。
-- 今日考勤、设备提醒为真实数据；项目为真实数据；任务、学习、待办为 NOT_AVAILABLE 占位。
+- 今日考勤、设备提醒为真实数据；项目和任务为真实数据；学习、待办为 NOT_AVAILABLE 占位。
 - loading / success / empty / error / permission / offline 六态。
 - 三视口布局：1440x900、1280x800、390x844。
 - UI_SPEC 设计 Token 落地，移除 Unsplash 外链。
@@ -49,7 +49,10 @@
 - `lab_project` 表已扩展为正式项目表（状态、分类、封面等字段）；已有 lab_project_member 多对多关系表承载项目角色。
 - 项目工作台首页 projects 区域已切换为 state=READY，返回用户参与的真实项目列表。
 - 项目创建、成员添加、幂等处理、权限校验已通过真实 MySQL 联调。
-- 里程碑和任务状态机尚未实现（第 4 周）。
+- 里程碑和任务状态机已实现：PLANNED/IN_PROGRESS/COMPLETED（里程碑）、TODO/IN_PROGRESS/BLOCKED/DONE/CANCELED（任务）。
+- 乐观锁 version 机制已实现，过期更新返回 409 VERSION_CONFLICT。
+- 首页 tasks 区域已切换为 state=READY，返回当前用户负责的任务统计和最近 5 条。
+- doneThisWeek 按 Asia/Shanghai 自然周统计；V8 未设独立 completedAt，以 DONE 任务 updateTime 判断（已知限制）。
 - 旧 `/iot/projects` 路由仍存在但真实请求 `/api/iot/projects` 返回 404（首轮 IoT 遗留缺口，不是回归；正式路径为 `/projects` + `/api/projects`）。
 - 硬件指令暂时仅限 SYSTEM_ADMIN（历史演示兼容，待第 16-17 周平台化后重新设计）。
 - 学习实验、采购库存、资产、自研硬件、知识/RAG、Agent 尚未实现。
@@ -59,9 +62,11 @@
 
 ## 当前阶段
 
-26 周路线第 3 周（2026-W39）已验收通过，状态为 VERIFIED。正式项目档案、项目成员与项目权限已验证通过。创建项目自动成为 OWNER、添加成员、同角色幂等、不同角色冲突、学生查看项目和权限边界均符合预期，工作台 projects 区域已切换为真实数据。
+26 周路线第 4 周（2026-W40）已验收通过，状态为 VERIFIED。里程碑与任务状态机已实现，乐观锁并发控制、权限矩阵、首页 tasks 区域均符合预期。从首页到任务完成的完整业务闭环已通过真实 MySQL 联调。
 
-当前进入第 4 周：里程碑、轻量任务与 v0.2 阶段收口。目标是建立项目里程碑和任务状态机，实现从首页到任务完成的完整闭环，并准备 v0.2 发布。
+Phase 1（第 1-4 周）全部 VERIFIED，准备 v0.2 稳定版本发布（dev → main）。
+
+当前进入第 5 周：入门学习路线与学习实验台入口。目标是让零基础成员能够区分"学习实验"和"正式项目"，浏览适合自己的学习路线并开始学习。
 
 ## 更新格式
 
