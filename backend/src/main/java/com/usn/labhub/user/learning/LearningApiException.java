@@ -1,0 +1,40 @@
+package com.usn.labhub.user.learning;
+
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+@Getter
+public class LearningApiException extends RuntimeException {
+    private final HttpStatus status;
+    private final String reason;
+
+    private LearningApiException(HttpStatus status, String reason, String message) {
+        super(message);
+        this.status = status;
+        this.reason = reason;
+    }
+
+    public static LearningApiException invalidParameter() {
+        return new LearningApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "参数错误");
+    }
+
+    public static LearningApiException operationDenied() {
+        return new LearningApiException(HttpStatus.FORBIDDEN, "LEARNING_OPERATION_DENIED", "无学习路线管理权限");
+    }
+
+    public static LearningApiException accessDenied() {
+        return new LearningApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "无权访问学习实验台");
+    }
+
+    public static LearningApiException roadmapNotFound() {
+        return new LearningApiException(HttpStatus.NOT_FOUND, "LEARNING_ROADMAP_NOT_FOUND", "学习路线不存在");
+    }
+
+    public static LearningApiException invalidTransition() {
+        return new LearningApiException(HttpStatus.CONFLICT, "LEARNING_INVALID_TRANSITION", "学习路线状态转换非法");
+    }
+
+    public static LearningApiException archived() {
+        return new LearningApiException(HttpStatus.CONFLICT, "LEARNING_ARCHIVED", "已归档学习路线不可修改");
+    }
+}

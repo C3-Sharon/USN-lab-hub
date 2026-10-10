@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.LearningRoadmapMapper">
+
+    <insert id="insert" parameterType="com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_learning_roadmap
+            (title, description, status, difficulty, estimated_hours, cover_media_id,
+             sort_order, created_by, create_time, update_time)
+        VALUES
+            (#{title}, #{description}, #{status}, #{difficulty}, #{estimatedHours}, #{coverMediaId},
+             #{sortOrder}, #{createdBy}, #{createTime}, #{updateTime})
+    </insert>
+
+    <sql id="summaryColumns">
+        r.id,
+        r.title,
+        r.description,
+        r.status,
+        r.difficulty,
+        r.estimated_hours AS estimatedHours,
+        r.cover_media_id AS coverMediaId,
+        r.sort_order AS sortOrder,
+        (SELECT COUNT(*) FROM lab_learning_stage s WHERE s.roadmap_id = r.id) AS stageCount,
+        (SELECT COUNT(*) FROM lab_learning_record lr WHERE lr.roadmap_id = r.id) AS learnerCount,
+        r.created_by AS createdBy,
+        creator.username AS createdByName,
+        r.create_time AS createTime,
+        r.update_time AS updateTime
+    </sql>
+
+    <sql id="visibilityAndFilters">
+        <choose>
+            <when test="manager">
+                <choose>
+                    <when test="status != null">
+                        AND r.status = #{status}
+                    </when>
+                    <otherwise>
+                        AND r.status != 'ARCHIVED'
+                    </otherwise>
+                </choose>
+            </when>
+            <otherwise>
+                AND r.status = 'PUBLISHED'
+                <if test="status != null">
+                    AND r.status = #{status}
+                </if>
+            </otherwise>
+        </choose>
+        <if test="difficulty != null">
+            AND r.difficulty = #{difficulty}
+        </if>
+    </sql>
+
+    <select id="selectRecord" resultType="com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord">
+        SELECT id, title, description, status, difficulty,
+               estimated_hours AS estimatedHours, cover_media_id AS coverMediaId,
+               sort_order AS sortOrder, created_by AS createdBy,
+               create_time AS createTime, update_time AS updateTime
+        FROM lab_learning_roadmap
+        WHERE id = #{roadmapId}
+    </select>
+
+    <select id="selectCreated" resultType="com.usn.labhub.user.domain.vo.learning.LearningRoadmapCreateVO">
+        SELECT r.id, r.title, r.description, r.status, r.difficulty,
+               r.estimated_hours AS estimatedHours, r.cover_media_id AS coverMediaId,
+               r.sort_order AS sortOrder,
+               (SELECT COUNT(*) FROM lab_learning_stage s WHERE s.roadmap_id = r.id) AS stageCount,
+               r.created_by AS createdBy, r.create_time AS createTime, r.update_time AS updateTime
+        FROM lab_learning_roadmap r
+        WHERE r.id = #{roadmapId}
+    </select>
+
+    <select id="countRoadmaps" resultType="long">
+        SELECT COUNT(*)
+        FROM lab_learning_roadmap r
+        WHERE 1 = 1
+        <include refid="visibilityAndFilters"/>
+    </select>
+
+    <select id="selectRoadmaps" resultType="com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO">
+        SELECT <include refid="summaryColumns"/>
+        FROM lab_learning_roadmap r
+        INNER JOIN sys_user creator ON creator.id = r.created_by
+        WHERE 1 = 1
+        <include refid="visibilityAndFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, r.id ASC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectDetail" resultType="com.usn.labhub.user.domain.vo.learning.LearningRoadmapDetailVO">
+        SELECT r.id, r.title, r.description, r.status, r.difficulty,
+               r.estimated_hours AS estimatedHours, r.cover_media_id AS coverMediaId,
+               r.sort_order AS sortOrder, r.created_by AS createdBy,
+               creator.username AS createdByName,
+               r.create_time AS createTime, r.update_time AS updateTime
+        FROM lab_learning_roadmap r
+        INNER JOIN sys_user creator ON creator.id = r.created_by
+        WHERE r.id = #{roadmapId}
+          AND (#{manager} = TRUE OR r.status = 'PUBLISHED')
+    </select>
+
+    <select id="selectStageSummaries" resultType="com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO">
+        SELECT s.id, s.roadmap_id AS roadmapId, s.name, s.description,
+               s.sort_order AS sortOrder,
+               (SELECT COUNT(*) FROM lab_learning_unit u WHERE u.stage_id = s.id) AS unitCount,
+               s.create_time AS createTime, s.update_time AS updateTime
+        FROM lab_learning_stage s
+        WHERE s.roadmap_id = #{roadmapId}
+        ORDER BY s.sort_order ASC, s.id ASC
+    </select>
+
+    <update id="updateStatus">
+        UPDATE lab_learning_roadmap
+        SET status = #{targetStatus}, update_time = #{updateTime}
+        WHERE id = #{roadmapId} AND status = #{currentStatus}
+    </update>
+
+    <update id="updateBasics" parameterType="com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord">
+        UPDATE lab_learning_roadmap
+        <set>
+            <if test="title != null">title = #{title},</if>
+            <if test="descriptionSpecified">description = #{description},</if>
+            <if test="difficulty != null">difficulty = #{difficulty},</if>
+            <if test="estimatedHours != null">estimated_hours = #{estimatedHours},</if>
+            <if test="coverMediaIdSpecified">cover_media_id = #{coverMediaId},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            update_time = #{updateTime}
+        </set>
+        WHERE id = #{id} AND status != 'ARCHIVED'
+    </update>
+
+    <select id="selectSummary" resultType="com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO">
+        SELECT <include refid="summaryColumns"/>
+        FROM lab_learning_roadmap r
+        INNER JOIN sys_user creator ON creator.id = r.created_by
+        WHERE r.id = #{roadmapId}
+    </select>
+</mapper>
