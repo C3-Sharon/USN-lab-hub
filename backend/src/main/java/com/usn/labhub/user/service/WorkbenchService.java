@@ -3,6 +3,7 @@ package com.usn.labhub.user.service;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.domain.vo.WorkbenchOverviewVO;
 import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchSummaryVO;
 import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import com.usn.labhub.user.domain.vo.project.TaskWorkbenchSummaryVO;
 import com.usn.labhub.user.service.iot.IotOperationsService;
@@ -26,15 +27,18 @@ public class WorkbenchService {
     private final IotOperationsService operationsService;
     private final ProjectService projectService;
     private final ProjectTaskService projectTaskService;
+    private final LearningRoadmapService learningRoadmapService;
 
     public WorkbenchService(IAttendanceService attendanceService, IotTelemetryService telemetryService,
                             IotOperationsService operationsService, ProjectService projectService,
-                            ProjectTaskService projectTaskService) {
+                            ProjectTaskService projectTaskService,
+                            LearningRoadmapService learningRoadmapService) {
         this.attendanceService = attendanceService;
         this.telemetryService = telemetryService;
         this.operationsService = operationsService;
         this.projectService = projectService;
         this.projectTaskService = projectTaskService;
+        this.learningRoadmapService = learningRoadmapService;
     }
 
     public WorkbenchOverviewVO getOverview(Long userId) {
@@ -44,7 +48,7 @@ public class WorkbenchService {
         overview.setAttendance(attendanceSection(attendance));
         overview.setProjects(projectSection(userId));
         overview.setTasks(taskSection(userId));
-        overview.setLearning(learningSection());
+        overview.setLearning(learningSection(userId));
         overview.setNotifications(notificationSection());
         overview.setDeviceReminder(deviceReminderSection());
         return overview;
@@ -103,9 +107,21 @@ public class WorkbenchService {
         return section;
     }
 
-    private WorkbenchOverviewVO.LearningSection learningSection() {
+    private WorkbenchOverviewVO.LearningSection learningSection(Long userId) {
         WorkbenchOverviewVO.LearningSection section = new WorkbenchOverviewVO.LearningSection();
-        section.setState(NOT_AVAILABLE);
+        try {
+            LearningWorkbenchSummaryVO summary = learningRoadmapService.workbenchSummary(userId);
+            section.setState(READY);
+            section.setInProgressCount(summary.stats().getInProgressCount());
+            section.setCompletedCount(summary.stats().getCompletedCount());
+            section.setList(summary.list());
+        } catch (RuntimeException e) {
+            log.warn("Learning summary query failed: {}", e.getMessage());
+            section.setState(ERROR);
+            section.setErrorCode("LEARNING_LOAD_FAILED");
+            section.setMessage("学习数据加载失败");
+            section.setRetryable(true);
+        }
         return section;
     }
 

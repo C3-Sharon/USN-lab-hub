@@ -41,7 +41,7 @@
 | `difficulty` | string | 否 | 难度标签 | BEGINNER / INTERMEDIATE / ADVANCED，默认 BEGINNER |
 | `estimatedHours` | int | 否 | 预计学习时长（小时） | 正整数，可为空 |
 | `coverMediaId` | string | 否 | 封面媒体 ID | 本周不实现上传，使用确定性默认占位 |
-| `sortOrder` | int | 是 | 排序序号 | 正整数，默认 0，值越小越靠前 |
+| `sortOrder` | int | 是 | 排序序号 | 非负整数，默认 0，值越小越靠前 |
 | `createdBy` | long | 自动 | 创建人用户 ID | |
 | `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
 | `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
@@ -76,7 +76,7 @@ ARCHIVED 为终态，不能转回其他状态。
 
 ```
 POST /api/learning/roadmaps
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
@@ -119,8 +119,8 @@ Status: REVIEW
 **业务规则：**
 - SYSTEM_ADMIN 和 TEACHER 可创建学习路线
 - MEMBER、STOCK_KEEPER、GUEST 不可创建（403 LEARNING_OPERATION_DENIED）
-- 初始状态为 DRAFT
-- title 同系统下不要求唯一（待确认）
+- 初始状态固定为 DRAFT；请求未传 status 时按 DRAFT 处理，传入其他状态返回 400 INVALID_PARAMETER
+- title 同系统下不要求唯一，不建立业务唯一约束
 
 **空样例（缺失 title）：**
 
@@ -148,7 +148,7 @@ Status: REVIEW
 
 ```
 GET /api/learning/roadmaps?page=1&pageSize=20&status=PUBLISHED&difficulty=BEGINNER
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -221,7 +221,7 @@ Status: REVIEW
 
 ```
 GET /api/learning/roadmaps/{roadmapId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -280,7 +280,7 @@ Status: REVIEW
 
 ```
 PUT /api/learning/roadmaps/{roadmapId}/status
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
@@ -316,11 +316,23 @@ Status: REVIEW
 
 ```
 PUT /api/learning/roadmaps/{roadmapId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
 可编辑字段：title、description、difficulty、estimatedHours、coverMediaId、sortOrder。
+
+**请求体样例：**
+
+```json
+{
+  "title": "嵌入式硬件入门（2026）",
+  "estimatedHours": 48,
+  "sortOrder": 1
+}
+```
+
+**成功响应（200）：** `data` 返回更新后的完整路线摘要，字段与 2.5 列表项一致，包括 stageCount、learnerCount、createdBy、createdByName、createTime 和 updateTime。
 
 **业务规则：**
 - ARCHIVED 路线不可编辑（409 LEARNING_ARCHIVED）
@@ -336,7 +348,7 @@ Status: REVIEW
 | `roadmapId` | long | 是 | 所属路线 ID | 外键 |
 | `name` | string | 是 | 阶段名称 | 2-80 字符 |
 | `description` | string | 否 | 阶段描述 | 最多 500 字符 |
-| `sortOrder` | int | 是 | 排序序号 | 正整数，默认 0 |
+| `sortOrder` | int | 是 | 排序序号 | 非负整数，默认 0 |
 | `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
 | `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
 
@@ -344,7 +356,7 @@ Status: REVIEW
 
 ```
 POST /api/learning/roadmaps/{roadmapId}/stages
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
@@ -381,13 +393,14 @@ Status: REVIEW
 - 只有 SYSTEM_ADMIN 和 TEACHER 可创建阶段
 - 路线必须存在且非 ARCHIVED（409 LEARNING_ARCHIVED）
 - DRAFT 和 PUBLISHED 路线均可添加阶段
+- 同一路线下阶段名称不要求唯一，不建立业务唯一约束
 - sortOrder 由前端传入，默认 0
 
 ### 3.3 获取阶段列表（含学习单元）
 
 ```
 GET /api/learning/roadmaps/{roadmapId}/stages
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -413,6 +426,7 @@ Status: REVIEW
           "sortOrder": 1,
           "templateId": null,
           "templateName": null,
+          "completed": false,
           "createTime": "2026-10-06T10:00:00",
           "updateTime": "2026-10-06T10:00:00"
         }
@@ -425,6 +439,38 @@ Status: REVIEW
 }
 ```
 
+**用户态字段规则：**
+- `units[].completed` 表示当前登录用户是否存在该单元的有效完成记录
+- 当前用户未加入该路线、尚未完成该单元，或管理者仅查看路线结构时均返回 `false`
+- 该字段是查询投影，不在 `lab_learning_unit` 中持久化；后端必须按当前登录用户计算
+- 前端只消费该字段展示勾选状态，不得自行根据 progress 推断单个单元是否完成
+
+### 3.4 编辑阶段基本信息
+
+```
+PUT /api/learning/stages/{stageId}
+Status: FROZEN
+鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
+```
+
+**请求体样例：**
+
+```json
+{
+  "name": "电路与焊接基础",
+  "description": "基础电路、安全焊接与工具使用",
+  "sortOrder": 2
+}
+```
+
+**成功响应（200）：** `data` 返回更新后的阶段摘要，字段为 id、roadmapId、name、description、sortOrder、unitCount、createTime、updateTime。
+
+**业务规则：**
+- 可编辑字段为 name、description、sortOrder
+- 阶段所属路线为 ARCHIVED 时返回 409 LEARNING_ARCHIVED
+- 阶段不存在时返回 404 LEARNING_STAGE_NOT_FOUND
+- 同一路线下阶段名称不要求唯一
+
 ## 4. 学习单元
 
 ### 4.1 单元字段
@@ -435,9 +481,10 @@ Status: REVIEW
 | `stageId` | long | 是 | 所属阶段 ID | 外键 |
 | `title` | string | 是 | 单元标题 | 2-120 字符 |
 | `description` | string | 否 | 单元描述 | 最多 2000 字符 |
-| `sortOrder` | int | 是 | 排序序号 | 正整数，默认 0 |
+| `sortOrder` | int | 是 | 排序序号 | 非负整数，默认 0 |
 | `templateId` | long | 否 | 实验模板 ID | 第 6 周实现，本周为 null |
 | `templateName` | string | 否 | 实验模板名称 | 冗余字段，本周为 null |
+| `completed` | boolean | 自动 | 当前登录用户是否已完成该单元 | 仅查询响应字段，不持久化；未加入路线或无完成记录时为 false |
 | `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
 | `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
 
@@ -445,7 +492,7 @@ Status: REVIEW
 
 ```
 POST /api/learning/stages/{stageId}/units
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
@@ -459,20 +506,40 @@ Status: REVIEW
 }
 ```
 
+**成功响应（200）：** `data` 返回新建单元，字段为 id、stageId、title、description、sortOrder、templateId、templateName、completed、createTime、updateTime；新建响应的 completed 固定为 false。
+
 **业务规则：**
 - templateId 本周不接收（传入将被忽略）
 - 阶段所属路线必须非 ARCHIVED
 - sortOrder 由前端传入，默认 0
+- 在 PUBLISHED 路线新增单元后，totalUnitCount 立即按最新结构重算；原 COMPLETED 记录若不再满足全部完成，则在同一事务内回退为 IN_PROGRESS 并清空 completedAt
 
 ### 4.3 编辑学习单元
 
 ```
 PUT /api/learning/units/{unitId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
 可编辑字段：title、description、sortOrder。templateId 本周不可设置。
+
+**请求体样例：**
+
+```json
+{
+  "title": "安全规范阅读与测验",
+  "description": "阅读规范并完成自检",
+  "sortOrder": 1
+}
+```
+
+**成功响应（200）：** `data` 返回更新后的完整单元字段；completed 按当前登录用户计算。
+
+**业务规则：**
+- 单元所属路线为 ARCHIVED 时返回 409 LEARNING_ARCHIVED
+- 单元不存在时返回 404 LEARNING_UNIT_NOT_FOUND
+- 编辑标题、描述和排序不改变任何成员的单元完成记录
 
 ## 5. 成员学习
 
@@ -512,8 +579,8 @@ Status: REVIEW
 
 ```
 POST /api/learning/roadmaps/{roadmapId}/enroll
-Status: REVIEW
-鉴权：需要登录，需 MEMBER 或以上权限
+Status: FROZEN
+鉴权：需要登录；SYSTEM_ADMIN、TEACHER、MEMBER、STOCK_KEEPER 可调用，GUEST 不可调用
 ```
 
 **请求体：** 无
@@ -578,7 +645,7 @@ Status: REVIEW
 
 ```
 POST /api/learning/units/{unitId}/complete
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -620,7 +687,7 @@ Status: REVIEW
 
 ```
 DELETE /api/learning/units/{unitId}/complete
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -653,7 +720,7 @@ Status: REVIEW
 
 ```
 GET /api/learning/my-roadmaps?page=1&pageSize=20
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -852,35 +919,32 @@ Workbench overview 中 learning 区域结构：
 | 1280x800 | 2 列卡片 | 左侧时间线 + 右侧详情 | 双列内左侧 |
 | 390x844 | 纵向卡片 | 纵向时间线 | 纵向卡片 |
 
-## 10. 第 5 周待确认项
+## 10. 第 5 周最终确认结论
 
-### 待后端确认
+### 10.1 后端实现结论
 
-1. **路线标题唯一性**：同系统下是否要求唯一？倾向不唯一。
-2. **阶段名称同路线下唯一性**：倾向不唯一。
-3. **进度计算精度**：向下取整还是四舍五入？倾向向下取整。
-4. **completedAt 写入时机**：最后一个单元完成时自动写入，还是需要显式操作？倾向自动。
-5. **COMPLETED 后取消单元**：状态回退为 IN_PROGRESS，清空 completedAt。请确认。
-6. **唯一约束**：`(roadmapId, userId)` 和 `(unitId, userId)` 的数据库唯一约束方案。
-7. **Flyway V9 表结构**：lab_learning_roadmap、lab_learning_stage、lab_learning_unit、lab_learning_record、lab_learning_unit_completion 五张表。请确认。
-8. **预置数据**：零基础路线示例是否在 V9 迁移中预置？倾向是。
-9. **路线编辑是否影响已有学习记录**：新增阶段/单元后，已有学习记录的 totalUnitCount 如何更新？倾向每次查询时动态计算。
-10. **TEACHER 的学习管理范围**：TEACHER 能管理所有路线，还是只能管理自己创建的？倾向所有路线。
+1. 路线标题不要求系统内唯一；阶段名称不要求路线内唯一。两者只做长度和非空校验。
+2. progress 使用 `floor(completedUnitCount * 100 / totalUnitCount)`；totalUnitCount=0 时固定为 0。
+3. 完成最后一个单元时自动把学习记录更新为 COMPLETED 并写入 completedAt。
+4. COMPLETED 后取消任一单元完成状态时，学习记录回退为 IN_PROGRESS 并清空 completedAt。
+5. `lab_learning_record` 对 `(roadmap_id, user_id)` 建数据库唯一约束；`lab_learning_unit_completion` 对 `(unit_id, user_id)` 建数据库唯一约束。重复请求依赖唯一约束和事务实现幂等，不采用先查后插作为唯一保障。
+6. Flyway V9 新增 `lab_learning_roadmap`、`lab_learning_stage`、`lab_learning_unit`、`lab_learning_record`、`lab_learning_unit_completion` 五张表，不修改既有迁移。
+7. V9 预置一条 PUBLISHED 的“嵌入式硬件入门”路线及其有序阶段、单元，固定业务数据不得依赖自增 ID 写死关联。
+8. totalUnitCount 每次查询按当前路线结构计算。向 PUBLISHED 路线新增单元后，在同一事务内校准既有学习记录；不再满足全部完成的记录回退为 IN_PROGRESS 并清空 completedAt。编辑标题、描述和排序不改变完成记录。
+9. TEACHER 可管理全部学习路线，不限制为自己创建的路线；操作仍记录 createdBy 和当前操作者，便于后续审计扩展。
+10. `GET /api/learning/roadmaps/{id}/stages` 的每个 `units[]` 元素必须返回 boolean `completed`，按当前登录用户计算；未加入路线或无完成记录时为 false。
 
-### 待前端确认
+### 10.2 前端交互结论
 
-1. **路线列表卡片布局**：3 列 vs 2 列，卡片高度。
-2. **路线详情时间线**：垂直时间线样式，阶段间的连接线。
-3. **单元完成交互**：勾选框点击即完成，还是需要二次确认？
-4. **进度条样式**：线性进度条还是环形？
-5. **难度标签颜色**：BEGINNER/INTERMEDIATE/ADVANCED 配色。
-6. **封面占位**：基于路线标题首字生成确定性占位？
-7. **空状态设计**：无学习记录时首页和列表页的引导文案。
-8. **移动端时间线**：折叠方式。
-9. **学习与项目入口视觉区分**：首页两个区域的色彩和图标区分方案。
-10. **侧栏菜单图标**：学习实验台使用什么图标？
-11. **"继续学习"按钮**：点击后跳转到路线详情的哪个位置？
-12. **路线详情页的单元展开/折叠**：默认展开还是折叠？
+1. 路线列表在 1440px 使用三列、1280px 使用两列、390px 使用单列，卡片保持稳定高度。
+2. 路线详情采用垂直阶段时间线；桌面端默认展开，移动端默认折叠。
+3. 单元使用勾选框即时完成或取消，不增加二次确认；请求失败时恢复原显示并呈现 reason 对应提示。
+4. 进度采用线性进度条；进度值只消费后端响应。
+5. 难度使用小面积语义标签；紫色仅作为学习域识别色，不形成整页单色主题。
+6. 未上传封面时按路线标题首字生成确定性默认占位，本周不实现上传。
+7. 空状态复用统一 RegionState；首页提供“浏览学习路线”入口。
+8. 侧栏使用 Reading 图标和“学习实验台”文案，与“项目工作台”保持一级并列。
+9. “继续学习”进入路线详情并定位到第一个未完成阶段；全部完成时停留在路线概览。
 
 ## 11. API 接口汇总
 
@@ -896,7 +960,7 @@ Workbench overview 中 learning 区域结构：
 | `/api/learning/stages/{id}` | PUT | 编辑阶段基本信息 | SYSTEM_ADMIN/TEACHER |
 | `/api/learning/stages/{id}/units` | POST | 创建学习单元 | SYSTEM_ADMIN/TEACHER |
 | `/api/learning/units/{id}` | PUT | 编辑单元基本信息 | SYSTEM_ADMIN/TEACHER |
-| `/api/learning/roadmaps/{id}/enroll` | POST | 开始学习（幂等） | MEMBER+ |
+| `/api/learning/roadmaps/{id}/enroll` | POST | 开始学习（幂等） | SYSTEM_ADMIN/TEACHER/MEMBER/STOCK_KEEPER |
 | `/api/learning/units/{id}/complete` | POST | 标记单元完成（幂等） | 登录 |
 | `/api/learning/units/{id}/complete` | DELETE | 取消单元完成（幂等） | 登录 |
 | `/api/learning/my-roadmaps` | GET | 我的学习路线 | 登录 |
@@ -921,3 +985,4 @@ Workbench overview 中 learning 区域结构：
 | 日期 | 变更 | 状态 |
 |---|---|---|
 | 2026-10-06 | 初始草案 v1.0：学习路线、阶段、单元、成员学习、首页 learning 区域 | FROZEN（第 5 周产品 PR，前后端确认后实现） |
+| 2026-10-10 | 统一接口冻结状态，固化后端/前端结论，新增 `units[].completed` 查询字段和路线结构变化后的进度校准语义 | FROZEN |
