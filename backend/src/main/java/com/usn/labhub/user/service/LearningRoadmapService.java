@@ -25,6 +25,8 @@ import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
 import com.usn.labhub.user.domain.vo.learning.LearningUnitCompletionVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchStatsVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapPageVO;
 import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO;
 import com.usn.labhub.user.learning.LearningApiException;
@@ -377,6 +379,19 @@ public class LearningRoadmapService {
         List<MyLearningRoadmapVO> list = total == 0 ? List.of() : roadmapMapper.selectMyRoadmaps(
                 userId, (page - 1) * pageSize, pageSize);
         return new MyLearningRoadmapPageVO(total, page, pageSize, list);
+    }
+
+    public LearningWorkbenchSummaryVO workbenchSummary(Long userId) {
+        if (userId == null || userId < 1) {
+            throw LearningApiException.accessDenied();
+        }
+        LearningWorkbenchStatsVO stats = roadmapMapper.selectWorkbenchStats(userId);
+        if (stats == null) {
+            stats = new LearningWorkbenchStatsVO();
+            stats.setInProgressCount(0);
+            stats.setCompletedCount(0);
+        }
+        return new LearningWorkbenchSummaryVO(stats, roadmapMapper.selectWorkbenchRecent(userId));
     }
 
     private LearningUnitCompletionVO completionResult(

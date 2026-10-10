@@ -13,6 +13,8 @@ import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
 import com.usn.labhub.user.domain.vo.learning.LearningEnrollmentVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchStatsVO;
 import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -105,4 +107,8 @@ public interface LearningRoadmapMapper {
     List<MyLearningRoadmapVO> selectMyRoadmaps(@Param("userId") Long userId,
                                                 @Param("offset") int offset,
                                                 @Param("pageSize") int pageSize);
+
+    LearningWorkbenchStatsVO selectWorkbenchStats(@Param("userId") Long userId);
+
+    List<LearningWorkbenchItemVO> selectWorkbenchRecent(@Param("userId") Long userId);
 }

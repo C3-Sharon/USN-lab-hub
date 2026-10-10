@@ -3,6 +3,9 @@ package com.usn.labhub.user.service;
 import com.usn.labhub.user.domain.vo.LoginVO;
 import com.usn.labhub.user.domain.vo.WorkbenchOverviewVO;
 import com.usn.labhub.user.domain.vo.iot.IotLatestMetricsVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchStatsVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchSummaryVO;
 import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import com.usn.labhub.user.domain.vo.project.TaskWorkbenchItemVO;
 import com.usn.labhub.user.domain.vo.project.TaskWorkbenchStatsVO;
@@ -26,6 +29,7 @@ class WorkbenchServiceTest {
     private IotOperationsService operationsService;
     private ProjectService projectService;
     private ProjectTaskService projectTaskService;
+    private LearningRoadmapService learningRoadmapService;
     private WorkbenchService service;
 
     @BeforeEach
@@ -35,8 +39,10 @@ class WorkbenchServiceTest {
         operationsService = mock(IotOperationsService.class);
         projectService = mock(ProjectService.class);
         projectTaskService = mock(ProjectTaskService.class);
+        learningRoadmapService = mock(LearningRoadmapService.class);
         service = new WorkbenchService(attendanceService, telemetryService, operationsService,
-                projectService, projectTaskService);
+                projectService, projectTaskService, learningRoadmapService);
+        when(learningRoadmapService.workbenchSummary(2L)).thenReturn(learningSummary(0, 0, List.of()));
     }
 
     @Test
@@ -48,6 +54,8 @@ class WorkbenchServiceTest {
         when(operationsService.countOpenWarningAlerts(1L)).thenReturn(2L);
         when(projectService.workbenchProjects(2L)).thenReturn(List.of(project("ACTIVE")));
         when(projectTaskService.workbenchSummary(2L)).thenReturn(taskSummary(2, 1, 1, 3));
+        when(learningRoadmapService.workbenchSummary(2L)).thenReturn(
+                learningSummary(1, 0, List.of(learning("IN_PROGRESS"))));
 
         WorkbenchOverviewVO result = service.getOverview(2L);
 
@@ -58,7 +66,10 @@ class WorkbenchServiceTest {
         assertEquals("READY", result.getTasks().getState());
         assertEquals(2, result.getTasks().getTodo());
         assertEquals(3, result.getTasks().getDoneThisWeek());
-        assertEquals("NOT_AVAILABLE", result.getLearning().getState());
+        assertEquals("READY", result.getLearning().getState());
+        assertEquals(1, result.getLearning().getInProgressCount());
+        assertEquals(0, result.getLearning().getCompletedCount());
+        assertEquals(1, result.getLearning().getList().size());
         assertEquals("NOT_AVAILABLE", result.getNotifications().getState());
         assertEquals("READY", result.getDeviceReminder().getState());
         assertEquals(1, result.getDeviceReminder().getOnlineCount());
@@ -120,6 +131,28 @@ class WorkbenchServiceTest {
     }
 
     @Test
+    void degradesOnlyLearningWhenLearningQueryFails() {
+        when(attendanceService.getOverview(2L)).thenReturn(attendance());
+        when(projectService.workbenchProjects(2L)).thenReturn(List.of());
+        when(projectTaskService.workbenchSummary(2L)).thenReturn(taskSummary(0, 0, 0, 0));
+        when(learningRoadmapService.workbenchSummary(2L))
+                .thenThrow(new IllegalStateException("learning unavailable"));
+        IotLatestMetricsVO latest = new IotLatestMetricsVO();
+        latest.setStatus("OFFLINE");
+        when(telemetryService.latest(1L)).thenReturn(latest);
+        when(operationsService.countOpenWarningAlerts(1L)).thenReturn(0L);
+
+        WorkbenchOverviewVO result = service.getOverview(2L);
+
+        assertEquals("READY", result.getProjects().getState());
+        assertEquals("READY", result.getTasks().getState());
+        assertEquals("ERROR", result.getLearning().getState());
+        assertEquals("LEARNING_LOAD_FAILED", result.getLearning().getErrorCode());
+        assertEquals(true, result.getLearning().getRetryable());
+        assertEquals("READY", result.getDeviceReminder().getState());
+    }
+
+    @Test
     void attendanceFailureFailsTheWholeOverview() {
         when(attendanceService.getOverview(2L)).thenThrow(new IllegalStateException("attendance unavailable"));
 
@@ -157,5 +190,25 @@ class WorkbenchServiceTest {
         item.setId(1L);
         item.setTitle("测试任务");
         return new TaskWorkbenchSummaryVO(stats, List.of(item));
+    }
+
+    private LearningWorkbenchSummaryVO learningSummary(
+            int inProgress, int completed, List<LearningWorkbenchItemVO> list) {
+        LearningWorkbenchStatsVO stats = new LearningWorkbenchStatsVO();
+        stats.setInProgressCount(inProgress);
+        stats.setCompletedCount(completed);
+        return new LearningWorkbenchSummaryVO(stats, list);
+    }
+
+    private LearningWorkbenchItemVO learning(String status) {
+        LearningWorkbenchItemVO item = new LearningWorkbenchItemVO();
+        item.setRoadmapId(1L);
+        item.setRoadmapTitle("嵌入式硬件入门");
+        item.setRoadmapDifficulty("BEGINNER");
+        item.setStatus(status);
+        item.setProgress(14);
+        item.setCompletedUnitCount(1);
+        item.setTotalUnitCount(7);
+        return item;
     }
 }
