@@ -62,4 +62,4 @@ npm run preview          # http://localhost:4173
 $env:W41_BASE_URL='http://localhost:4173'; node .w41-e2e.mjs   # 输出到本目录，并写入 e2e-result.json
 ```
 
-真实前后端联调仍按 `docs/weekly/2026-W41.md` 的验收脚本执行。
+真实前后端联调结果见 `docs/evidence/2026-W41/real-api-integration.md`；本目录 PNG 仍只作为 mock 模式的视觉布局证据。

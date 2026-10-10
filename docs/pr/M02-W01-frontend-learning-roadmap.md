@@ -58,7 +58,7 @@ $env:W41_BASE_URL='http://localhost:4173'; node .w41-e2e.mjs
 ## 已知风险
 
 - 构建产物主 JS 约 2.57 MB，Vite 有 chunk size 警告；不阻塞本周契约联调，后续按页面拆分异步路由。
-- 截图使用 mock 构建（`VITE_USE_MOCK=true`）与契约同形的注入登录态（TEACHER），只证明布局、权限与交互可见性；真实后端联调仍需按 `docs/weekly/2026-W41.md` §10 的 8 步脚本执行。
-- 契约 §5 未定义按单元查询完成态的接口，阶段列表接口为单元补充 `completed` 字段（契约未显式定义，渲染必需），需后端确认后固化。
+- 截图使用 mock 构建（`VITE_USE_MOCK=true`）与契约同形的注入登录态（TEACHER），只证明布局、权限与交互可见性；真实后端联调结果见 `docs/evidence/2026-W41/real-api-integration.md`。
+- 详情契约不包含列表摘要字段 learnerCount；真实模式下详情页缺失时显示“暂未统计”，不由前端伪造人数。
 - 列表页空状态复用全局 `RegionState`（el-empty），未透传「清除筛选条件」按钮；与既有页面一致，如需可后续统一增强。
-- 真实模式切换需在后端合入 dev 后同步分支，将 `VITE_USE_MOCK` 置为 `false` 并联调。
+- 真实模式已使用 `VITE_USE_MOCK=false` 完成登录、路线浏览、加入、完成/取消和首页进度同步联调。

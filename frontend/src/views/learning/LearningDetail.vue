@@ -30,8 +30,11 @@
 
         <dl class="roadmap-aside__meta">
           <div><dt>预计时长</dt><dd>{{ roadmap.estimatedHours ? `${roadmap.estimatedHours} 小时` : '待定' }}</dd></div>
-          <div><dt>阶段数</dt><dd>{{ roadmap.stageCount }} 个</dd></div>
-          <div><dt>学习人数</dt><dd>{{ roadmap.learnerCount }} 人</dd></div>
+          <div><dt>阶段数</dt><dd>{{ stages.length }} 个</dd></div>
+          <div>
+            <dt>学习人数</dt>
+            <dd>{{ roadmap.learnerCount == null ? '暂未统计' : `${roadmap.learnerCount} 人` }}</dd>
+          </div>
         </dl>
 
         <div v-if="record" class="roadmap-aside__progress">

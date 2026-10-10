@@ -140,7 +140,9 @@ const workbenchApi = await loadWithStubs('../workbench.js', {
   "import { userStore } from '@/store/user'": `const userStore = { todayAttendance: null }`,
   // 第 4 周起 workbench tasks 区域复用 tasks.js 的 mock 摘要；本测试只校验 projects 区域，
   // 这里以桩替代，避免引入 tasks/milestones 依赖链。
-  "import { buildMockWorkbenchTasks } from '@/api/tasks'": `const buildMockWorkbenchTasks = () => ({ state: 'NOT_AVAILABLE' })`
+  "import { buildMockWorkbenchTasks } from '@/api/tasks'": `const buildMockWorkbenchTasks = () => ({ state: 'NOT_AVAILABLE' })`,
+  // 第 5 周起新增 learning mock 摘要；本测试不校验学习域，使用最小桩隔离新依赖。
+  "import { buildMockWorkbenchLearning } from '@/api/learning'": `const buildMockWorkbenchLearning = () => ({ state: 'READY', inProgressCount: 0, completedCount: 0, list: [] })`
 })
 
 const { PROJECT_STATUS, PROJECT_STATUS_META, PROJECT_ROLE, PROJECT_ROLE_META } = projectsApi
