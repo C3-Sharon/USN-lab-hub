@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ProjectMilestoneMapper">
+
+    <insert id="insert" parameterType="com.usn.labhub.user.domain.entity.project.MilestoneRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_milestone
+            (project_id, name, description, status, start_date, end_date, sort_order, create_time, update_time)
+        VALUES
+            (#{projectId}, #{name}, #{description}, #{status}, #{startDate}, #{endDate}, #{sortOrder},
+             #{createTime}, #{updateTime})
+    </insert>
+
+    <sql id="milestoneColumns">
+        m.id,
+        m.project_id AS projectId,
+        m.name,
+        m.description,
+        m.status,
+        m.start_date AS startDate,
+        m.end_date AS endDate,
+        m.sort_order AS sortOrder,
+        COUNT(t.id) AS taskCount,
+        COALESCE(SUM(CASE WHEN t.status = 'DONE' THEN 1 ELSE 0 END), 0) AS taskDone,
+        m.create_time AS createTime,
+        m.update_time AS updateTime
+    </sql>
+
+    <select id="selectById" resultType="com.usn.labhub.user.domain.vo.project.MilestoneVO">
+        SELECT <include refid="milestoneColumns"/>
+        FROM lab_milestone m
+        LEFT JOIN lab_task t ON t.milestone_id = m.id AND t.project_id = m.project_id
+        WHERE m.project_id = #{projectId} AND m.id = #{milestoneId}
+        GROUP BY m.id, m.project_id, m.name, m.description, m.status, m.start_date, m.end_date,
+                 m.sort_order, m.create_time, m.update_time
+    </select>
+
+    <select id="selectByProject" resultType="com.usn.labhub.user.domain.vo.project.MilestoneVO">
+        SELECT <include refid="milestoneColumns"/>
+        FROM lab_milestone m
+        LEFT JOIN lab_task t ON t.milestone_id = m.id AND t.project_id = m.project_id
+        WHERE m.project_id = #{projectId}
+        <if test="status != null">
+            AND m.status = #{status}
+        </if>
+        GROUP BY m.id, m.project_id, m.name, m.description, m.status, m.start_date, m.end_date,
+                 m.sort_order, m.create_time, m.update_time
+        ORDER BY m.sort_order ASC, m.id ASC
+    </select>
+
+    <update id="updateStatus">
+        UPDATE lab_milestone
+        SET status = #{targetStatus}, update_time = #{updateTime}
+        WHERE project_id = #{projectId}
+          AND id = #{milestoneId}
+          AND status = #{currentStatus}
+    </update>
+</mapper>

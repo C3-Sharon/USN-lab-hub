@@ -13,20 +13,28 @@ MVP recommended broker:
 ## 2. Topic Rules / Topic 规则
 
 ```text
-Telemetry:   usn/{projectCode}/{deviceCode}/telemetry
-Status:      usn/{projectCode}/{deviceCode}/status
-Command:     usn/{projectCode}/{deviceCode}/command
-Command ACK: usn/{projectCode}/{deviceCode}/command_ack
+Telemetry:   iot/{projectCode}/{deviceCode}/telemetry
+Status:      iot/{projectCode}/{deviceCode}/status
+Command:     iot/{projectCode}/{deviceCode}/command
+Command ACK: iot/{projectCode}/{deviceCode}/ack
 ```
 
 Example:
 
 ```text
-usn/power-monitor/PM-001/telemetry
-usn/power-monitor/PM-001/status
-usn/power-monitor/PM-001/command
-usn/power-monitor/PM-001/command_ack
+iot/power-monitor/PM-001/telemetry
+iot/power-monitor/PM-001/status
+iot/power-monitor/PM-001/command
+iot/power-monitor/PM-001/ack
 ```
+
+Week 1 status / 第一周状态：
+
+- Backend HTTP API currently uses code-level mock data.
+- Backend does not subscribe to MQTT yet.
+- Backend does not read telemetry from database yet.
+- Backend does not depend on `pm001_simulator.py` yet.
+- Next integration target topic is `iot/power-monitor/PM-001/telemetry`.
 
 ## 3. Device Code Rule / 设备编号规则
 
@@ -53,7 +61,7 @@ Rules:
 Topic:
 
 ```text
-usn/{projectCode}/{deviceCode}/telemetry
+iot/{projectCode}/{deviceCode}/telemetry
 ```
 
 Payload:
@@ -61,7 +69,7 @@ Payload:
 ```json
 {
   "deviceCode": "PM-001",
-  "timestamp": 1783333800000,
+  "reportTime": "2026-07-09 20:00:00",
   "metrics": {
     "voltage": 220.3,
     "current": 0.42,
@@ -76,7 +84,7 @@ Field meaning / 字段含义：
 | Field | Type | Required | 中文说明 |
 |---|---|---|---|
 | deviceCode | string | yes | 设备编号 |
-| timestamp | number | yes | 设备侧时间戳，毫秒 |
+| reportTime | string | yes | 设备上报时间，格式 `yyyy-MM-dd HH:mm:ss` |
 | metrics | object | yes | 指标键值对 |
 | status | string | no | online/offline/alert/maintenance |
 
@@ -91,7 +99,7 @@ Metric naming rule / 指标命名：
 Topic:
 
 ```text
-usn/{projectCode}/{deviceCode}/status
+iot/{projectCode}/{deviceCode}/status
 ```
 
 Payload:
@@ -116,20 +124,36 @@ online / offline / alert / maintenance
 Topic:
 
 ```text
-usn/{projectCode}/{deviceCode}/command
+iot/{projectCode}/{deviceCode}/command
+```
+
+Week 4 fixed command / 第四周固定指令：
+
+```text
+SET_SAMPLE_INTERVAL，参数固定为 intervalSeconds=5
 ```
 
 Payload:
 
 ```json
 {
-  "commandId": "CMD-20260706-0001",
+  "commandId": "cmd-20260714123045001",
   "command": "SET_SAMPLE_INTERVAL",
   "params": {
     "intervalSeconds": 5
-  }
+  },
+  "sentAt": "2026-07-14 12:30:45"
 }
 ```
+
+Field meaning / 字段含义：
+
+| Field | Type | Required | 中文说明 |
+|---|---|---|---|
+| commandId | string | yes | 指令编号，全局唯一，ACK 必须原样带回 |
+| command | string | yes | 指令编码，本周固定为 `SET_SAMPLE_INTERVAL` |
+| params | object | yes | 指令参数，本周固定为 `{ "intervalSeconds": 5 }` |
+| sentAt | string | yes | 后端发送时间，格式 `yyyy-MM-dd HH:mm:ss` |
 
 Rules:
 
@@ -145,19 +169,32 @@ Rules:
 Topic:
 
 ```text
-usn/{projectCode}/{deviceCode}/command_ack
+iot/{projectCode}/{deviceCode}/ack
 ```
 
 Payload:
 
 ```json
 {
-  "commandId": "CMD-20260706-0001",
+  "commandId": "cmd-20260714123045001",
+  "command": "SET_SAMPLE_INTERVAL",
   "status": "ACKED",
-  "message": "sample interval updated",
-  "timestamp": 1783333801000
+  "result": {
+    "intervalSeconds": 5
+  },
+  "ackedAt": "2026-07-14 12:30:46"
 }
 ```
+
+Field meaning / 字段含义：
+
+| Field | Type | Required | 中文说明 |
+|---|---|---|---|
+| commandId | string | yes | 对应 command 消息的 `commandId` |
+| command | string | yes | 指令编码，与 command 消息一致 |
+| status | string | yes | `ACKED` 或 `FAILED` |
+| result | object | no | 执行结果，例如 `{ "intervalSeconds": 5 }` |
+| ackedAt | string | yes | 设备回执时间，格式 `yyyy-MM-dd HH:mm:ss` |
 
 Allowed ACK status:
 
@@ -171,11 +208,21 @@ Backend command status:
 PENDING / SENT / ACKED / FAILED / TIMEOUT
 ```
 
+ACK timeout / ACK 超时：
+
+```text
+10 秒
+```
+
+- 后端发布 command 并将指令状态置为 `SENT` 后开始计时。
+- 10 秒内未收到 ACK，则状态自动变为 `TIMEOUT`。
+- 超时后再收到 ACK，不再更新该指令状态。
+
 ## 8. MVP Hardware Confirmation Table / MVP 硬件确认表
 
 | Device | deviceCode | Metrics | Units | Report interval | Control action | ACK support |
 |---|---|---|---|---|---|---|
-| 功耗检测 | PM-001 | voltage/current/power | V/A/W | 待确认 | SET_SAMPLE_INTERVAL | 待确认 |
+| 功耗检测 | PM-001 | voltage/current/power | V/A/W | 默认 5s（由 SET_SAMPLE_INTERVAL 下发） | SET_SAMPLE_INTERVAL | 已支持 |
 | 串行采集数据监测仪 | DAQ-001 | analog_value | 待确认 | 待确认 | 待确认 | 待确认 |
 
 ## 9. MQTT Test Checklist / MQTT 测试清单
@@ -205,4 +252,4 @@ Expected telemetry test result:
 | Date | Change | Owner | Impact |
 |---|---|---|---|
 | 2026-07-06 | Initial MQTT contract draft | Codex | Hardware/backend alignment |
-
+| 2026-07-14 | Freeze command/ack payload and SET_SAMPLE_INTERVAL for Week 4 | Product | Command/ack topics aligned with `week4-product-spec.md` |

@@ -126,15 +126,16 @@ Simulator should publish:
 Topic:
 
 ```text
-usn/power-monitor/PM-001/telemetry
+iot/power-monitor/PM-001/telemetry
 ```
 
 Payload:
 
 ```json
 {
+  "projectCode": "power-monitor",
   "deviceCode": "PM-001",
-  "timestamp": 1783333800000,
+  "reportTime": "2026-07-10 10:45:00",
   "metrics": {
     "voltage": 220.3,
     "current": 0.42,
@@ -147,13 +148,13 @@ Payload:
 Simulator or hardware should subscribe:
 
 ```text
-usn/power-monitor/PM-001/command
+iot/power-monitor/PM-001/command
 ```
 
 And publish ACK:
 
 ```text
-usn/power-monitor/PM-001/command_ack
+iot/power-monitor/PM-001/ack
 ```
 
 ## 7. Acceptance Test / 验收测试
@@ -203,4 +204,3 @@ Can PM-001 complete more of the vertical slice this week?
 Do not accept isolated progress that cannot connect to the slice.
 
 不验收无法接入主链路的孤立功能。
-

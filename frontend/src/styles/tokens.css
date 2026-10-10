@@ -1,0 +1,60 @@
+/*
+ * UI_SPEC Token / 视觉设计 token
+ *
+ * 来源：docs/design/UI_SPEC.md §2
+ * 本周（M01-W02）冻结到代码，任何对颜色的修改必须先更新 UI_SPEC 文档。
+ * 不要硬编码颜色，全部走 var(--usn-*)；其它变量名视为非法。
+ */
+
+:root {
+  /* 蓝色（主交互） */
+  --usn-blue-700: #07598f;
+  --usn-blue-600: #0b6db6;
+  --usn-blue-100: #dceefa;
+
+  /* 紫色（仅用于知识/Agent 小面积识别色） */
+  --usn-purple-600: #93559c;
+  --usn-indigo-500: #6365a9;
+
+  /* 墨色（正文与中性） */
+  --usn-ink-900: #17212b;
+  --usn-ink-700: #3d4b59;
+  --usn-ink-500: #667482;
+
+  /* 中性表面与线条 */
+  --usn-line: #d8dee5;
+  --usn-surface: #ffffff;
+  --usn-canvas: #f4f6f8;
+
+  /* 状态色 */
+  --usn-success: #1d7a4d;
+  --usn-warning: #a66100;
+  --usn-danger: #b42318;
+
+  /* 形状与阴影 */
+  --usn-radius-sm: 4px;
+  --usn-radius-md: 8px;
+  --usn-shadow-panel: 0 1px 2px rgba(23, 33, 43, 0.08);
+
+  /* 排版 */
+  --usn-font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --usn-font-size-body: 14px;
+  --usn-font-size-help: 12px;
+  --usn-font-size-panel-title: 16px;
+  --usn-font-size-page-title: 22px;
+
+  /* 尺寸 */
+  --usn-sidebar-width: 224px;
+  --usn-sidebar-width-collapsed: 64px;
+  --usn-topbar-height: 56px;
+  --usn-content-max-width: 1600px;
+
+  /* 间距（4px 基准，常用 8/12/16/24/32） */
+  --usn-space-1: 4px;
+  --usn-space-2: 8px;
+  --usn-space-3: 12px;
+  --usn-space-4: 16px;
+  --usn-space-5: 20px;
+  --usn-space-6: 24px;
+  --usn-space-8: 32px;
+}

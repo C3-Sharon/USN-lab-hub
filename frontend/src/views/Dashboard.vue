@@ -1,203 +1,617 @@
 <template>
-  <div class="page-shell">
-    <section class="hero-panel">
+  <div class="workbench-page">
+    <header class="workbench-page__header">
       <div>
-        <h2>欢迎回来，{{ userInfo.username || '同学' }}</h2>
-        <p>{{ userInfo.memberId || '-' }} · {{ userInfo.groupName || '未分组' }}</p>
+        <h1 class="page-title">个人工作台</h1>
+        <p class="page-subtitle muted">今日考勤、进行中项目、本周任务、学习、设备提醒</p>
       </div>
-      <el-tag size="large" effect="dark" :type="attendanceTag.type">{{ attendanceTag.label }}</el-tag>
-    </section>
-
-    <el-row :gutter="18">
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>姓名</span>
-          <strong>{{ userInfo.username || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>专业</span>
-          <strong>{{ userInfo.majorName || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>身份</span>
-          <strong>{{ userInfo.identity || '-' }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="never" class="info-card">
-          <span>学院</span>
-          <strong>{{ userInfo.facultyName || '-' }}</strong>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="18">
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="metric-card">
-          <span>本周学时</span>
-          <strong>{{ formatHours(attendance.weekHours) }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="metric-card">
-          <span>本学期学时</span>
-          <strong>{{ formatHours(attendance.semesterHours) }}</strong>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card shadow="never" class="action-card">
-          <el-button
-            class="attendance-button"
-            :type="actionButton.type"
-            size="large"
-            :loading="submitting"
-            :disabled="submitting || !actionButton.actionType"
-            @click="handleAttendanceAction"
-          >
-            {{ actionButton.text }}
-          </el-button>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <section class="data-panel">
-      <div class="page-heading table-heading">
-        <div>
-          <h3 class="page-title">今日打卡明细</h3>
-          <p class="page-subtitle">签到、签退和单次累计时长</p>
-        </div>
+      <div class="header-meta">
+        <el-tag :type="roleMeta.tagType" size="large" effect="dark" class="role-tag">
+          {{ roleMeta.name }}
+        </el-tag>
+        <span class="muted text-help">欢迎回来，{{ user?.username || '同学' }}</span>
       </div>
-      <el-table :data="attendance.todayRecords || []" empty-text="今日暂无打卡记录">
-        <el-table-column prop="inTime" label="签到时间" min-width="140" />
-        <el-table-column prop="outTime" label="签退时间" min-width="140" />
-        <el-table-column label="时长累计" min-width="140">
-          <template #default="{ row }">{{ formatMinutes(row.durationMins) }}</template>
-        </el-table-column>
-      </el-table>
-    </section>
+    </header>
+
+    <div v-loading="overviewLoading" class="workbench-grid">
+      <section class="region region--attendance">
+        <header class="region__head">
+          <h2 class="region__title">今日考勤</h2>
+          <span class="region__sub muted text-help">签到/签退/累计时长</span>
+        </header>
+        <RegionState
+          :state="attendanceState"
+          :variant="'card'"
+          :error-message="overviewError"
+          @retry="loadOverview"
+        >
+          <div v-if="attendance" class="attendance-content">
+            <div class="attendance-content__hero">
+              <el-tag :type="attendance.tagType" effect="dark" size="large">
+                {{ attendance.statusLabel }}
+              </el-tag>
+              <div class="attendance-content__hours">
+                <span class="muted text-help">本周学时</span>
+                <strong>{{ formatHours(attendance.weekHours) }}</strong>
+              </div>
+              <div class="attendance-content__hours">
+                <span class="muted text-help">本学期学时</span>
+                <strong>{{ formatHours(attendance.semesterHours) }}</strong>
+              </div>
+            </div>
+            <el-table :data="attendance.todayRecords || []" size="small" empty-text="今日暂无打卡记录">
+              <el-table-column prop="inTime" label="签到时间" min-width="120" />
+              <el-table-column prop="outTime" label="签退时间" min-width="120" />
+              <el-table-column label="时长累计" min-width="100">
+                <template #default="{ row }">{{ formatMinutes(row.durationMins) }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </RegionState>
+      </section>
+
+      <section class="region region--projects">
+        <header class="region__head">
+          <h2 class="region__title">我参与的项目</h2>
+          <span class="region__sub muted text-help">{{ projectsHint }}</span>
+        </header>
+        <RegionState
+          :state="projectsState"
+          :variant="'list'"
+          :description="projectsHint"
+          :error-message="overview?.projects?.message || overviewError"
+          @retry="loadOverview"
+        >
+          <div v-if="projectsList.length" class="project-mini-list">
+            <div
+              v-for="item in projectsList"
+              :key="item.id"
+              class="project-mini-card"
+              @click="$router.push(`/projects/${item.id}`)"
+            >
+              <ProjectCover :code="item.code" :size="36" />
+              <div class="project-mini-info">
+                <span class="project-mini-name">{{ item.name }}</span>
+                <span class="project-mini-code muted text-help">{{ item.code }}</span>
+              </div>
+              <el-tag :type="projectStatusMeta(item.status).tagType" size="small" effect="light">
+                {{ projectStatusMeta(item.status).label }}
+              </el-tag>
+            </div>
+          </div>
+          <el-empty v-else description="暂无参与的项目">
+            <el-button v-if="canCreateProject" type="primary" size="small" @click="$router.push('/projects')">去创建</el-button>
+          </el-empty>
+        </RegionState>
+      </section>
+
+      <section class="region region--tasks">
+        <header class="region__head">
+          <h2 class="region__title">本周任务</h2>
+          <span class="region__sub muted text-help">{{ tasksHint }}</span>
+        </header>
+        <RegionState
+          :state="tasksState"
+          :variant="'list'"
+          :description="tasksHint"
+          :error-message="overview?.tasks?.message || overviewError"
+          @retry="loadOverview"
+        >
+          <div v-if="tasksSummary" class="task-region">
+            <div class="task-stats">
+              <div class="task-stat">
+                <span class="muted text-help">待开始</span>
+                <strong>{{ tasksSummary.todo }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">进行中</span>
+                <strong>{{ tasksSummary.inProgress }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">已阻塞</span>
+                <strong>{{ tasksSummary.blocked }}</strong>
+              </div>
+              <div class="task-stat">
+                <span class="muted text-help">本周完成</span>
+                <strong>{{ tasksSummary.doneThisWeek }}</strong>
+              </div>
+            </div>
+            <div v-if="tasksList.length" class="task-mini-list">
+              <div
+                v-for="task in tasksList"
+                :key="task.id"
+                class="task-mini-card"
+                @click="openTask(task)"
+              >
+                <div class="task-mini-main">
+                  <span class="task-mini-title">{{ task.title }}</span>
+                  <span class="task-mini-meta muted text-help">
+                    {{ task.projectName }}<template v-if="task.milestoneName"> · {{ task.milestoneName }}</template>
+                  </span>
+                </div>
+                <div class="task-mini-tags">
+                  <el-tag :type="taskStatusMeta(task.status).tagType" size="small" effect="light">
+                    {{ taskStatusMeta(task.status).label }}
+                  </el-tag>
+                  <el-tag :type="taskPriorityMeta(task.priority).tagType" size="small" effect="plain">
+                    {{ taskPriorityMeta(task.priority).label }}
+                  </el-tag>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无任务">
+              <el-button type="primary" size="small" @click="$router.push('/projects')">查看全部任务</el-button>
+            </el-empty>
+          </div>
+        </RegionState>
+      </section>
+
+      <section class="region region--learning">
+        <header class="region__head">
+          <h2 class="region__title">学习实验</h2>
+          <span class="region__sub muted text-help">{{ learningHint }}</span>
+        </header>
+        <RegionState
+          :state="learningState"
+          :variant="'list'"
+          :description="learningHint"
+          :error-message="overview?.learning?.message || overviewError"
+          @retry="loadOverview"
+        />
+      </section>
+
+      <section class="region region--notifications">
+        <header class="region__head">
+          <h2 class="region__title">待处理事项</h2>
+          <span class="region__sub muted text-help">{{ notificationsHint }}</span>
+        </header>
+        <RegionState
+          :state="notificationsState"
+          :variant="'list'"
+          :description="notificationsHint"
+          :error-message="overview?.notifications?.message || overviewError"
+          @retry="loadOverview"
+        />
+      </section>
+
+      <section class="region region--device">
+        <header class="region__head">
+          <h2 class="region__title">设备提醒</h2>
+          <span class="region__sub muted text-help">设备在线与告警汇总</span>
+        </header>
+        <RegionState
+          :state="deviceState"
+          :variant="'card'"
+          :error-message="deviceReminder?.message || overviewError"
+          @retry="loadOverview"
+        >
+          <div v-if="deviceReminder" class="device-content">
+            <div class="device-content__metric">
+              <span class="muted text-help">在线设备</span>
+              <strong>{{ deviceReminder.onlineCount }}</strong>
+            </div>
+            <div class="device-content__metric">
+              <span class="muted text-help">告警数</span>
+              <strong>{{ deviceReminder.alertCount }}</strong>
+            </div>
+          </div>
+        </RegionState>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { doAttendanceAction } from '@/api/attendance'
-import { userStore } from '@/store/user'
+import { userStore, hasAnyRole } from '@/store/user'
+import { currentPrimaryRole, currentRoles } from '@/store/user'
+import { ROLE_META, ROLE } from '@/utils/permission'
+import { fetchWorkbenchOverview } from '@/api/workbench'
 import { formatHours, formatMinutes } from '@/utils/format'
+import { PROJECT_STATUS_META } from '@/api/projects'
+import { TASK_STATUS_META, TASK_PRIORITY_META } from '@/api/tasks'
+import RegionState from '@/components/RegionState.vue'
+import ProjectCover from '@/components/ProjectCover.vue'
 
-const submitting = ref(false)
+const route = useRoute()
+const router = useRouter()
 
-const userInfo = computed(() => userStore.userInfo || {})
-const attendance = computed(() => userStore.todayAttendance || { todayStatus: 0, todayRecords: [] })
+const user = computed(() => userStore.userInfo || {})
+const primaryRole = computed(() => currentPrimaryRole() || ROLE.MEMBER)
+const roleMeta = computed(() => ROLE_META[primaryRole.value] || ROLE_META[ROLE.MEMBER])
 
-const attendanceTag = computed(() => {
-  if (attendance.value.todayStatus === 1) {
-    return { label: '进行中', type: 'warning' }
+const overviewLoading = ref(false)
+const overviewError = ref('')
+const overview = ref(null)
+
+const attendance = computed(() => {
+  const source = overview.value?.attendance
+  if (!source || source.state !== 'READY') return null
+  const statusMeta = {
+    0: { statusLabel: '未签到', tagType: 'info' },
+    1: { statusLabel: '已签到', tagType: 'success' },
+    2: { statusLabel: '已签退', tagType: 'warning' }
   }
-  if (attendance.value.todayStatus === 2) {
-    return { label: '已签退', type: 'success' }
-  }
-  return { label: '未签到', type: 'info' }
+  return { ...source, ...(statusMeta[source.todayStatus] || statusMeta[0]) }
+})
+const attendanceState = computed(() => regionState(overview.value?.attendance))
+
+const projectsHint = computed(() => {
+  const r = overview.value?.projects
+  if (r?.state === 'NOT_AVAILABLE') return '尚未开放'
+  if (r?.state === 'READY') return `${r.total ?? 0} 个项目，${r.active ?? 0} 个进行中`
+  if (!r) return '加载中'
+  return ''
+})
+const projectsList = computed(() => overview.value?.projects?.list || [])
+const projectsState = computed(() => {
+  if (overviewError.value) return 'error'
+  if (overviewLoading.value && !overview.value) return 'loading'
+  if (!overview.value) return 'loading'
+  return regionState(overview.value.projects)
 })
 
-const actionButton = computed(() => {
-  if (attendance.value.todayStatus === 1) {
-    return { text: '执行签退', type: 'warning', actionType: 2 }
-  }
-  return { text: '执行签到', type: 'primary', actionType: 1 }
-})
+const canCreateProject = computed(() => hasAnyRole([ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.MEMBER]))
 
-async function handleAttendanceAction() {
-  submitting.value = true
+function projectStatusMeta(status) {
+  return PROJECT_STATUS_META[status] || { label: status, tagType: 'info' }
+}
+
+const tasksSummary = computed(() => {
+  const region = overview.value?.tasks
+  return region && region.state === 'READY' ? region : null
+})
+const tasksList = computed(() => tasksSummary.value?.list || [])
+const tasksHint = computed(() => {
+  const region = overview.value?.tasks
+  if (!region) return '加载中'
+  if (region.state === 'NOT_AVAILABLE') return '尚未开放'
+  if (region.state === 'READY') {
+    const pending = (region.todo || 0) + (region.inProgress || 0) + (region.blocked || 0)
+    return pending ? `${pending} 个待办任务` : '暂无任务'
+  }
+  return ''
+})
+const tasksState = computed(() => regionState(overview.value?.tasks))
+
+function taskStatusMeta(status) {
+  return TASK_STATUS_META[status] || { label: status, tagType: 'info' }
+}
+
+function taskPriorityMeta(priority) {
+  return TASK_PRIORITY_META[priority] || { label: priority || '--', tagType: 'info' }
+}
+
+function openTask(task) {
+  if (!task?.projectId) return
+  router.push({ path: `/projects/${task.projectId}`, query: { tab: 'kanban' } })
+}
+
+const learningHint = computed(() => regionHint(overview.value?.learning))
+const learningState = computed(() => regionState(overview.value?.learning))
+
+const notificationsHint = computed(() => regionHint(overview.value?.notifications))
+const notificationsState = computed(() => regionState(overview.value?.notifications))
+
+const deviceReminder = computed(() => overview.value?.deviceReminder || null)
+const deviceState = computed(() => regionState(deviceReminder.value))
+
+function regionHint(region) {
+  if (!region) return '加载中'
+  if (region.state === 'NOT_AVAILABLE') return '尚未开放'
+  return ''
+}
+
+function regionState(region) {
+  if (overviewError.value) return 'error'
+  if (overviewLoading.value && !overview.value) return 'loading'
+  if (!region) return 'loading'
+  if (region.state === 'NOT_AVAILABLE') return 'not-available'
+  if (region.state === 'READY') return 'success'
+  if (region.state === 'ERROR') return 'error'
+  return 'empty'
+}
+
+async function loadOverview() {
+  overviewLoading.value = true
+  overviewError.value = ''
   try {
-    const newAttendance = await doAttendanceAction(actionButton.value.actionType)
-    userStore.setAttendance(newAttendance)
-    ElMessage.success('考勤状态已更新')
+    overview.value = await fetchWorkbenchOverview()
+  } catch (err) {
+    overviewError.value = err?.msg || err?.message || '工作台数据加载失败'
+    if (err?.code === 403 || err?.code === 'ACCESS_DENIED') {
+      ElMessage.warning('当前账号无权访问工作台')
+    }
   } finally {
-    submitting.value = false
+    overviewLoading.value = false
   }
 }
+
+onMounted(() => {
+  loadOverview()
+  if (route.query.reason === 'ACCOUNT_DISABLED') {
+    ElMessage.error('账号已被禁用，请联系管理员')
+  } else if (route.query.reason) {
+    ElMessage.warning('登录状态已失效，请重新登录')
+  }
+})
+
+defineExpose({ currentRoles })
 </script>
 
 <style scoped>
-.hero-panel {
-  min-height: 142px;
+.workbench-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+  max-width: var(--usn-content-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.workbench-page__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 28px;
-  border-radius: 8px;
-  color: #fff;
-  background:
-    linear-gradient(rgba(23, 32, 51, 0.68), rgba(23, 32, 51, 0.78)),
-    url("https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80") center / cover;
+  gap: var(--usn-space-4);
+  flex-wrap: wrap;
 }
 
-.hero-panel h2 {
-  margin: 0 0 10px;
-  font-size: 28px;
-  letter-spacing: 0;
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
 }
 
-.hero-panel p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.82);
+.role-tag {
+  font-weight: 600;
 }
 
-.info-card,
-.metric-card,
-.action-card {
-  height: 132px;
-  border-radius: 8px;
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--usn-space-4);
+  width: 100%;
 }
 
-.info-card :deep(.el-card__body),
-.metric-card :deep(.el-card__body),
-.action-card :deep(.el-card__body) {
-  height: 100%;
+.region {
+  background: var(--usn-surface);
+  border: 1px solid var(--usn-line);
+  border-radius: var(--usn-radius-md);
+  padding: var(--usn-space-4);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: var(--usn-space-3);
+  box-shadow: var(--usn-shadow-panel);
+  min-height: 240px;
 }
 
-.info-card span,
-.metric-card span {
-  color: #7c8798;
-  font-size: 14px;
+.region--attendance {
+  grid-column: span 2;
 }
 
-.info-card strong {
-  margin-top: 10px;
+.region__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--usn-space-3);
+  flex-wrap: wrap;
+}
+
+.region__title {
+  margin: 0;
+  font-size: var(--usn-font-size-panel-title);
+  font-weight: 700;
+  color: var(--usn-ink-900);
+}
+
+.region__sub {
+  font-size: var(--usn-font-size-help);
+}
+
+.attendance-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.attendance-content__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-6);
+  flex-wrap: wrap;
+}
+
+.attendance-content__hours {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attendance-content__hours strong {
   font-size: 20px;
-  color: #172033;
-}
-
-.metric-card strong {
-  margin-top: 12px;
-  font-size: 34px;
-  color: #1d4f91;
-}
-
-.attendance-button {
-  width: 100%;
-  height: 56px;
-  font-size: 18px;
+  color: var(--usn-blue-700);
   font-weight: 700;
 }
 
-.table-heading {
-  margin-bottom: 16px;
+.device-content {
+  display: flex;
+  gap: var(--usn-space-6);
+  flex-wrap: wrap;
+}
+
+.device-content__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-content__metric strong {
+  font-size: 24px;
+  color: var(--usn-blue-700);
+  font-weight: 700;
+}
+
+.project-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.project-mini-card {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  border: 1px solid var(--usn-line);
+  background: var(--usn-surface);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.project-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.1);
+}
+
+.project-mini-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-mini-name {
+  font-size: var(--usn-font-size-body);
+  font-weight: 600;
+  color: var(--usn-ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-mini-code {
+  font-size: var(--usn-font-size-help);
+  font-family: 'Courier New', monospace;
+}
+
+.task-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-4);
+}
+
+.task-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--usn-space-3);
+}
+
+.task-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  background: var(--usn-canvas);
+  border: 1px solid var(--usn-line);
+}
+
+.task-stat strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--usn-blue-700);
+}
+
+.task-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--usn-space-3);
+}
+
+.task-mini-card {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-3);
+  padding: var(--usn-space-3);
+  border-radius: var(--usn-radius-md);
+  border: 1px solid var(--usn-line);
+  background: var(--usn-surface);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.task-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.1);
+}
+
+.task-mini-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-mini-title {
+  font-size: var(--usn-font-size-body);
+  font-weight: 600;
+  color: var(--usn-ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-mini-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-mini-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-2);
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
-  .hero-panel {
+  .task-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-mini-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 1280px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .region--attendance {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .workbench-page__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .attendance-content__hero,
+  .device-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--usn-space-3);
   }
 }
 </style>
