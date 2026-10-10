@@ -4,12 +4,23 @@ import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.learning.LearningRoadmapCreateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningRoadmapStatusUpdateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningRoadmapUpdateDTO;
+import com.usn.labhub.user.domain.dto.learning.LearningStageCreateDTO;
+import com.usn.labhub.user.domain.dto.learning.LearningStageUpdateDTO;
+import com.usn.labhub.user.domain.dto.learning.LearningUnitCreateDTO;
+import com.usn.labhub.user.domain.dto.learning.LearningUnitUpdateDTO;
 import com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningStageRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningUnitRecord;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapCreateVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapDetailVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapPageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapStatusVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO;
+import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
+import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
+import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
 import com.usn.labhub.user.learning.LearningApiException;
 import com.usn.labhub.user.learning.LearningRoadmapStateMachine;
 import com.usn.labhub.user.mapper.LearningRoadmapMapper;
@@ -19,6 +30,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -153,12 +165,148 @@ public class LearningRoadmapService {
         return roadmapMapper.selectSummary(roadmapId);
     }
 
+    @Transactional
+    public LearningStageSummaryVO createStage(Long roadmapId, LearningStageCreateDTO request) {
+        requireManager();
+        validateId(roadmapId);
+        LearningRoadmapRecord roadmap = requiredRecord(roadmapId);
+        requireMutableRoadmap(roadmap.getStatus());
+
+        LocalDateTime now = LocalDateTime.now();
+        LearningStageRecord stage = new LearningStageRecord();
+        stage.setRoadmapId(roadmapId);
+        stage.setName(requiredTrimmed(request.getName()));
+        stage.setDescription(trimToNull(request.getDescription()));
+        stage.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
+        stage.setCreateTime(now);
+        stage.setUpdateTime(now);
+        roadmapMapper.insertStage(stage);
+        return roadmapMapper.selectStageSummary(stage.getId());
+    }
+
+    public List<LearningStageVO> listStages(Long roadmapId) {
+        requireLearningAccess();
+        validateId(roadmapId);
+        if (roadmapMapper.selectDetail(roadmapId, isManager()) == null) {
+            throw LearningApiException.roadmapNotFound();
+        }
+
+        List<LearningStageVO> stages = roadmapMapper.selectStages(roadmapId);
+        Map<Long, List<LearningUnitVO>> unitsByStage = new LinkedHashMap<>();
+        for (LearningUnitVO unit : roadmapMapper.selectUnitsForRoadmap(roadmapId, requiredUserId())) {
+            unitsByStage.computeIfAbsent(unit.getStageId(), ignored -> new java.util.ArrayList<>()).add(unit);
+        }
+        for (LearningStageVO stage : stages) {
+            stage.setUnits(unitsByStage.getOrDefault(stage.getId(), List.of()));
+        }
+        return stages;
+    }
+
+    @Transactional
+    public LearningStageSummaryVO updateStage(Long stageId, LearningStageUpdateDTO request) {
+        requireManager();
+        validateId(stageId);
+        LearningStageAccessRecord access = requiredStageAccess(stageId);
+        requireMutableRoadmap(access.getRoadmapStatus());
+        if (request.getName() == null && !request.isDescriptionSpecified() && request.getSortOrder() == null) {
+            throw LearningApiException.invalidParameter();
+        }
+
+        LearningStageRecord update = new LearningStageRecord();
+        update.setId(stageId);
+        update.setName(request.getName() == null ? null : requiredTrimmed(request.getName()));
+        update.setDescription(trimToNull(request.getDescription()));
+        update.setDescriptionSpecified(request.isDescriptionSpecified());
+        update.setSortOrder(request.getSortOrder());
+        update.setUpdateTime(LocalDateTime.now());
+        if (roadmapMapper.updateStage(update) != 1) {
+            LearningStageAccessRecord concurrent = roadmapMapper.selectStageAccess(stageId);
+            if (concurrent != null && "ARCHIVED".equals(concurrent.getRoadmapStatus())) {
+                throw LearningApiException.archived();
+            }
+            throw LearningApiException.stageNotFound();
+        }
+        return roadmapMapper.selectStageSummary(stageId);
+    }
+
+    @Transactional
+    public LearningUnitVO createUnit(Long stageId, LearningUnitCreateDTO request) {
+        requireManager();
+        validateId(stageId);
+        LearningStageAccessRecord access = requiredStageAccess(stageId);
+        requireMutableRoadmap(access.getRoadmapStatus());
+
+        LocalDateTime now = LocalDateTime.now();
+        LearningUnitRecord unit = new LearningUnitRecord();
+        unit.setStageId(stageId);
+        unit.setTitle(requiredTrimmed(request.getTitle()));
+        unit.setDescription(trimToNull(request.getDescription()));
+        unit.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
+        unit.setTemplateId(null);
+        unit.setCreateTime(now);
+        unit.setUpdateTime(now);
+        roadmapMapper.insertUnit(unit);
+        if ("PUBLISHED".equals(access.getRoadmapStatus())) {
+            roadmapMapper.recalibrateCompletedRecords(access.getRoadmapId(), now);
+        }
+        return roadmapMapper.selectUnitForUser(unit.getId(), requiredUserId());
+    }
+
+    @Transactional
+    public LearningUnitVO updateUnit(Long unitId, LearningUnitUpdateDTO request) {
+        requireManager();
+        validateId(unitId);
+        LearningUnitAccessRecord access = requiredUnitAccess(unitId);
+        requireMutableRoadmap(access.getRoadmapStatus());
+        if (request.getTitle() == null && !request.isDescriptionSpecified() && request.getSortOrder() == null) {
+            throw LearningApiException.invalidParameter();
+        }
+
+        LearningUnitRecord update = new LearningUnitRecord();
+        update.setId(unitId);
+        update.setTitle(request.getTitle() == null ? null : requiredTrimmed(request.getTitle()));
+        update.setDescription(trimToNull(request.getDescription()));
+        update.setDescriptionSpecified(request.isDescriptionSpecified());
+        update.setSortOrder(request.getSortOrder());
+        update.setUpdateTime(LocalDateTime.now());
+        if (roadmapMapper.updateUnit(update) != 1) {
+            LearningUnitAccessRecord concurrent = roadmapMapper.selectUnitAccess(unitId);
+            if (concurrent != null && "ARCHIVED".equals(concurrent.getRoadmapStatus())) {
+                throw LearningApiException.archived();
+            }
+            throw LearningApiException.unitNotFound();
+        }
+        return roadmapMapper.selectUnitForUser(unitId, requiredUserId());
+    }
+
     private LearningRoadmapRecord requiredRecord(Long roadmapId) {
         LearningRoadmapRecord record = roadmapMapper.selectRecord(roadmapId);
         if (record == null) {
             throw LearningApiException.roadmapNotFound();
         }
         return record;
+    }
+
+    private LearningStageAccessRecord requiredStageAccess(Long stageId) {
+        LearningStageAccessRecord access = roadmapMapper.selectStageAccess(stageId);
+        if (access == null) {
+            throw LearningApiException.stageNotFound();
+        }
+        return access;
+    }
+
+    private LearningUnitAccessRecord requiredUnitAccess(Long unitId) {
+        LearningUnitAccessRecord access = roadmapMapper.selectUnitAccess(unitId);
+        if (access == null) {
+            throw LearningApiException.unitNotFound();
+        }
+        return access;
+    }
+
+    private void requireMutableRoadmap(String status) {
+        if ("ARCHIVED".equals(status)) {
+            throw LearningApiException.archived();
+        }
     }
 
     private void requireManager() {

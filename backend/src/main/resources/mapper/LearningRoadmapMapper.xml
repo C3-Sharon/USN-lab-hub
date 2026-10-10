@@ -137,4 +137,123 @@
         INNER JOIN sys_user creator ON creator.id = r.created_by
         WHERE r.id = #{roadmapId}
     </select>
+
+    <insert id="insertStage" parameterType="com.usn.labhub.user.domain.entity.learning.LearningStageRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_learning_stage
+            (roadmap_id, name, description, sort_order, create_time, update_time)
+        VALUES
+            (#{roadmapId}, #{name}, #{description}, #{sortOrder}, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="selectStageAccess" resultType="com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord">
+        SELECT s.id, s.roadmap_id AS roadmapId, r.status AS roadmapStatus
+        FROM lab_learning_stage s
+        INNER JOIN lab_learning_roadmap r ON r.id = s.roadmap_id
+        WHERE s.id = #{stageId}
+    </select>
+
+    <select id="selectStageSummary" resultType="com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO">
+        SELECT s.id, s.roadmap_id AS roadmapId, s.name, s.description,
+               s.sort_order AS sortOrder,
+               (SELECT COUNT(*) FROM lab_learning_unit u WHERE u.stage_id = s.id) AS unitCount,
+               s.create_time AS createTime, s.update_time AS updateTime
+        FROM lab_learning_stage s
+        WHERE s.id = #{stageId}
+    </select>
+
+    <update id="updateStage" parameterType="com.usn.labhub.user.domain.entity.learning.LearningStageRecord">
+        UPDATE lab_learning_stage
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="descriptionSpecified">description = #{description},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            update_time = #{updateTime}
+        </set>
+        WHERE id = #{id}
+          AND EXISTS (
+              SELECT 1 FROM lab_learning_roadmap r
+              WHERE r.id = lab_learning_stage.roadmap_id AND r.status != 'ARCHIVED'
+          )
+    </update>
+
+    <select id="selectStages" resultType="com.usn.labhub.user.domain.vo.learning.LearningStageVO">
+        SELECT s.id, s.roadmap_id AS roadmapId, s.name, s.description,
+               s.sort_order AS sortOrder,
+               (SELECT COUNT(*) FROM lab_learning_unit u WHERE u.stage_id = s.id) AS unitCount,
+               s.create_time AS createTime, s.update_time AS updateTime
+        FROM lab_learning_stage s
+        WHERE s.roadmap_id = #{roadmapId}
+        ORDER BY s.sort_order ASC, s.id ASC
+    </select>
+
+    <select id="selectUnitsForRoadmap" resultType="com.usn.labhub.user.domain.vo.learning.LearningUnitVO">
+        SELECT u.id, u.stage_id AS stageId, u.title, u.description,
+               u.sort_order AS sortOrder, u.template_id AS templateId,
+               NULL AS templateName,
+               CASE WHEN lr.id IS NOT NULL AND completion.id IS NOT NULL THEN TRUE ELSE FALSE END AS completed,
+               u.create_time AS createTime, u.update_time AS updateTime
+        FROM lab_learning_unit u
+        INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+        LEFT JOIN lab_learning_record lr
+            ON lr.roadmap_id = s.roadmap_id AND lr.user_id = #{userId}
+        LEFT JOIN lab_learning_unit_completion completion
+            ON completion.unit_id = u.id AND completion.user_id = #{userId}
+        WHERE s.roadmap_id = #{roadmapId}
+        ORDER BY s.sort_order ASC, s.id ASC, u.sort_order ASC, u.id ASC
+    </select>
+
+    <insert id="insertUnit" parameterType="com.usn.labhub.user.domain.entity.learning.LearningUnitRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_learning_unit
+            (stage_id, title, description, sort_order, template_id, create_time, update_time)
+        VALUES
+            (#{stageId}, #{title}, #{description}, #{sortOrder}, NULL, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="selectUnitAccess" resultType="com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord">
+        SELECT u.id, u.stage_id AS stageId, s.roadmap_id AS roadmapId, r.status AS roadmapStatus
+        FROM lab_learning_unit u
+        INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+        INNER JOIN lab_learning_roadmap r ON r.id = s.roadmap_id
+        WHERE u.id = #{unitId}
+    </select>
+
+    <select id="selectUnitForUser" resultType="com.usn.labhub.user.domain.vo.learning.LearningUnitVO">
+        SELECT u.id, u.stage_id AS stageId, u.title, u.description,
+               u.sort_order AS sortOrder, u.template_id AS templateId,
+               NULL AS templateName,
+               CASE WHEN lr.id IS NOT NULL AND completion.id IS NOT NULL THEN TRUE ELSE FALSE END AS completed,
+               u.create_time AS createTime, u.update_time AS updateTime
+        FROM lab_learning_unit u
+        INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+        LEFT JOIN lab_learning_record lr
+            ON lr.roadmap_id = s.roadmap_id AND lr.user_id = #{userId}
+        LEFT JOIN lab_learning_unit_completion completion
+            ON completion.unit_id = u.id AND completion.user_id = #{userId}
+        WHERE u.id = #{unitId}
+    </select>
+
+    <update id="updateUnit" parameterType="com.usn.labhub.user.domain.entity.learning.LearningUnitRecord">
+        UPDATE lab_learning_unit
+        <set>
+            <if test="title != null">title = #{title},</if>
+            <if test="descriptionSpecified">description = #{description},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            update_time = #{updateTime}
+        </set>
+        WHERE id = #{id}
+          AND EXISTS (
+              SELECT 1
+              FROM lab_learning_stage s
+              INNER JOIN lab_learning_roadmap r ON r.id = s.roadmap_id
+              WHERE s.id = lab_learning_unit.stage_id AND r.status != 'ARCHIVED'
+          )
+    </update>
+
+    <update id="recalibrateCompletedRecords">
+        UPDATE lab_learning_record
+        SET status = 'IN_PROGRESS', completed_at = NULL, update_time = #{updateTime}
+        WHERE roadmap_id = #{roadmapId} AND status = 'COMPLETED'
+    </update>
 </mapper>

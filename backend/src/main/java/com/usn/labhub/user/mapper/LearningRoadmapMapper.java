@@ -1,10 +1,16 @@
 package com.usn.labhub.user.mapper;
 
 import com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningStageRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningUnitRecord;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapCreateVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapDetailVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
+import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
+import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -45,4 +51,29 @@ public interface LearningRoadmapMapper {
     int updateBasics(LearningRoadmapRecord roadmap);
 
     LearningRoadmapSummaryVO selectSummary(@Param("roadmapId") Long roadmapId);
+
+    int insertStage(LearningStageRecord stage);
+
+    LearningStageAccessRecord selectStageAccess(@Param("stageId") Long stageId);
+
+    LearningStageSummaryVO selectStageSummary(@Param("stageId") Long stageId);
+
+    int updateStage(LearningStageRecord stage);
+
+    List<LearningStageVO> selectStages(@Param("roadmapId") Long roadmapId);
+
+    List<LearningUnitVO> selectUnitsForRoadmap(@Param("roadmapId") Long roadmapId,
+                                                @Param("userId") Long userId);
+
+    int insertUnit(LearningUnitRecord unit);
+
+    LearningUnitAccessRecord selectUnitAccess(@Param("unitId") Long unitId);
+
+    LearningUnitVO selectUnitForUser(@Param("unitId") Long unitId,
+                                     @Param("userId") Long userId);
+
+    int updateUnit(LearningUnitRecord unit);
+
+    int recalibrateCompletedRecords(@Param("roadmapId") Long roadmapId,
+                                    @Param("updateTime") LocalDateTime updateTime);
 }

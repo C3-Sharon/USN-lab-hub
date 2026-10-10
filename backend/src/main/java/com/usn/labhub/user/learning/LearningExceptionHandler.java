@@ -2,6 +2,7 @@ package com.usn.labhub.user.learning;
 
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.controller.LearningRoadmapController;
+import com.usn.labhub.user.controller.LearningStructureController;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = LearningRoadmapController.class)
+@RestControllerAdvice(assignableTypes = {LearningRoadmapController.class, LearningStructureController.class})
 public class LearningExceptionHandler {
 
     @ExceptionHandler(LearningApiException.class)
