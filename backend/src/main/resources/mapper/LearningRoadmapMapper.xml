@@ -256,4 +256,98 @@
         SET status = 'IN_PROGRESS', completed_at = NULL, update_time = #{updateTime}
         WHERE roadmap_id = #{roadmapId} AND status = 'COMPLETED'
     </update>
+
+    <insert id="insertEnrollmentIgnore"
+            parameterType="com.usn.labhub.user.domain.entity.learning.LearningRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO lab_learning_record
+            (roadmap_id, user_id, status, started_at, completed_at, create_time, update_time)
+        VALUES
+            (#{roadmapId}, #{userId}, #{status}, #{startedAt}, NULL, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="selectEnrollmentForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.learning.LearningRecord">
+        SELECT id, roadmap_id AS roadmapId, user_id AS userId, status,
+               started_at AS startedAt, completed_at AS completedAt,
+               create_time AS createTime, update_time AS updateTime
+        FROM lab_learning_record
+        WHERE roadmap_id = #{roadmapId} AND user_id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <sql id="progressJoins">
+        LEFT JOIN (
+            SELECT s.roadmap_id, COUNT(*) AS total_unit_count
+            FROM lab_learning_unit u
+            INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+            GROUP BY s.roadmap_id
+        ) totals ON totals.roadmap_id = lr.roadmap_id
+        LEFT JOIN (
+            SELECT s.roadmap_id, c.user_id, COUNT(*) AS completed_unit_count
+            FROM lab_learning_unit_completion c
+            INNER JOIN lab_learning_unit u ON u.id = c.unit_id
+            INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+            GROUP BY s.roadmap_id, c.user_id
+        ) completions ON completions.roadmap_id = lr.roadmap_id
+                     AND completions.user_id = lr.user_id
+    </sql>
+
+    <sql id="progressColumns">
+        COALESCE(completions.completed_unit_count, 0) AS completedUnitCount,
+        COALESCE(totals.total_unit_count, 0) AS totalUnitCount,
+        CASE
+            WHEN COALESCE(totals.total_unit_count, 0) = 0 THEN 0
+            ELSE FLOOR(COALESCE(completions.completed_unit_count, 0) * 100.0
+                       / totals.total_unit_count)
+        END AS progress
+    </sql>
+
+    <select id="selectEnrollmentView"
+            resultType="com.usn.labhub.user.domain.vo.learning.LearningEnrollmentVO">
+        SELECT lr.id, lr.roadmap_id AS roadmapId, lr.user_id AS userId, lr.status,
+               lr.started_at AS startedAt, lr.completed_at AS completedAt,
+               <include refid="progressColumns"/>,
+               lr.create_time AS createTime, lr.update_time AS updateTime
+        FROM lab_learning_record lr
+        <include refid="progressJoins"/>
+        WHERE lr.roadmap_id = #{roadmapId} AND lr.user_id = #{userId}
+    </select>
+
+    <insert id="insertCompletionIgnore">
+        INSERT IGNORE INTO lab_learning_unit_completion
+            (unit_id, user_id, completed_at, create_time)
+        VALUES
+            (#{unitId}, #{userId}, #{completedAt}, #{completedAt})
+    </insert>
+
+    <delete id="deleteCompletion">
+        DELETE FROM lab_learning_unit_completion
+        WHERE unit_id = #{unitId} AND user_id = #{userId}
+    </delete>
+
+    <update id="updateLearningState">
+        UPDATE lab_learning_record
+        SET status = #{status}, completed_at = #{completedAt}, update_time = #{updateTime}
+        WHERE id = #{recordId}
+    </update>
+
+    <select id="countMyRoadmaps" resultType="long">
+        SELECT COUNT(*) FROM lab_learning_record WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectMyRoadmaps"
+            resultType="com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO">
+        SELECT lr.roadmap_id AS roadmapId, r.title AS roadmapTitle,
+               r.difficulty AS roadmapDifficulty, lr.status,
+               <include refid="progressColumns"/>,
+               lr.started_at AS startedAt, lr.completed_at AS completedAt,
+               lr.update_time AS updateTime
+        FROM lab_learning_record lr
+        INNER JOIN lab_learning_roadmap r ON r.id = lr.roadmap_id
+        <include refid="progressJoins"/>
+        WHERE lr.user_id = #{userId}
+        ORDER BY lr.update_time DESC, lr.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
 </mapper>

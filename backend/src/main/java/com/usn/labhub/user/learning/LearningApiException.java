@@ -38,6 +38,14 @@ public class LearningApiException extends RuntimeException {
         return new LearningApiException(HttpStatus.NOT_FOUND, "LEARNING_UNIT_NOT_FOUND", "学习单元不存在");
     }
 
+    public static LearningApiException notEnrolled() {
+        return new LearningApiException(HttpStatus.BAD_REQUEST, "LEARNING_NOT_ENROLLED", "尚未开始学习该路线");
+    }
+
+    public static LearningApiException emptyRoadmap() {
+        return new LearningApiException(HttpStatus.CONFLICT, "LEARNING_EMPTY_ROADMAP", "空路线无法操作");
+    }
+
     public static LearningApiException invalidTransition() {
         return new LearningApiException(HttpStatus.CONFLICT, "LEARNING_INVALID_TRANSITION", "学习路线状态转换非法");
     }

@@ -9,11 +9,14 @@ import com.usn.labhub.user.domain.dto.learning.LearningStageUpdateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningUnitCreateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningUnitUpdateDTO;
 import com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningUnitRecord;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapCreateVO;
+import com.usn.labhub.user.domain.vo.learning.LearningEnrollmentVO;
+import com.usn.labhub.user.domain.vo.learning.LearningProgressVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapDetailVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapPageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningRoadmapStatusVO;
@@ -21,10 +24,14 @@ import com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
+import com.usn.labhub.user.domain.vo.learning.LearningUnitCompletionVO;
+import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapPageVO;
+import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO;
 import com.usn.labhub.user.learning.LearningApiException;
 import com.usn.labhub.user.learning.LearningRoadmapStateMachine;
 import com.usn.labhub.user.mapper.LearningRoadmapMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -277,6 +284,106 @@ public class LearningRoadmapService {
             throw LearningApiException.unitNotFound();
         }
         return roadmapMapper.selectUnitForUser(unitId, requiredUserId());
+    }
+
+    @Transactional
+    public LearningEnrollmentVO enroll(Long roadmapId) {
+        requireLearningAccess();
+        validateId(roadmapId);
+        LearningRoadmapRecord roadmap = requiredRecord(roadmapId);
+        if ("ARCHIVED".equals(roadmap.getStatus())) {
+            throw LearningApiException.archived();
+        }
+        if (!"PUBLISHED".equals(roadmap.getStatus())) {
+            throw LearningApiException.roadmapNotFound();
+        }
+
+        Long userId = requiredUserId();
+        LocalDateTime now = LocalDateTime.now();
+        LearningRecord record = new LearningRecord();
+        record.setRoadmapId(roadmapId);
+        record.setUserId(userId);
+        record.setStatus("NOT_STARTED");
+        record.setStartedAt(now);
+        record.setCreateTime(now);
+        record.setUpdateTime(now);
+        roadmapMapper.insertEnrollmentIgnore(record);
+        return roadmapMapper.selectEnrollmentView(roadmapId, userId);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public LearningUnitCompletionVO completeUnit(Long unitId) {
+        requireLearningAccess();
+        validateId(unitId);
+        LearningUnitAccessRecord unit = requiredUnitAccess(unitId);
+        if ("ARCHIVED".equals(unit.getRoadmapStatus())) {
+            throw LearningApiException.archived();
+        }
+
+        Long userId = requiredUserId();
+        LearningRecord record = roadmapMapper.selectEnrollmentForUpdate(unit.getRoadmapId(), userId);
+        if (record == null) {
+            throw LearningApiException.notEnrolled();
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int inserted = roadmapMapper.insertCompletionIgnore(unitId, userId, now);
+        LearningEnrollmentVO current = roadmapMapper.selectEnrollmentView(unit.getRoadmapId(), userId);
+        if (current.getTotalUnitCount() == 0) {
+            throw LearningApiException.emptyRoadmap();
+        }
+        if (inserted == 0) {
+            return completionResult(unitId, true, current);
+        }
+
+        boolean completed = current.getCompletedUnitCount().equals(current.getTotalUnitCount());
+        roadmapMapper.updateLearningState(
+                record.getId(), completed ? "COMPLETED" : "IN_PROGRESS",
+                completed ? now : null, now);
+        return completionResult(unitId, true,
+                roadmapMapper.selectEnrollmentView(unit.getRoadmapId(), userId));
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public LearningUnitCompletionVO uncompleteUnit(Long unitId) {
+        requireLearningAccess();
+        validateId(unitId);
+        LearningUnitAccessRecord unit = requiredUnitAccess(unitId);
+        Long userId = requiredUserId();
+        LearningRecord record = roadmapMapper.selectEnrollmentForUpdate(unit.getRoadmapId(), userId);
+        if (record == null) {
+            throw LearningApiException.notEnrolled();
+        }
+
+        int deleted = roadmapMapper.deleteCompletion(unitId, userId);
+        if (deleted == 0) {
+            return completionResult(unitId, false,
+                    roadmapMapper.selectEnrollmentView(unit.getRoadmapId(), userId));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        roadmapMapper.updateLearningState(record.getId(), "IN_PROGRESS", null, now);
+        return completionResult(unitId, false,
+                roadmapMapper.selectEnrollmentView(unit.getRoadmapId(), userId));
+    }
+
+    public MyLearningRoadmapPageVO myRoadmaps(Integer page, Integer pageSize) {
+        requireLearningAccess();
+        if (page == null || page < 1 || pageSize == null || pageSize < 1 || pageSize > 100) {
+            throw LearningApiException.invalidParameter();
+        }
+        Long userId = requiredUserId();
+        long total = roadmapMapper.countMyRoadmaps(userId);
+        List<MyLearningRoadmapVO> list = total == 0 ? List.of() : roadmapMapper.selectMyRoadmaps(
+                userId, (page - 1) * pageSize, pageSize);
+        return new MyLearningRoadmapPageVO(total, page, pageSize, list);
+    }
+
+    private LearningUnitCompletionVO completionResult(
+            Long unitId, boolean completed, LearningEnrollmentVO enrollment) {
+        return new LearningUnitCompletionVO(unitId, completed, new LearningProgressVO(
+                enrollment.getRoadmapId(), enrollment.getStatus(), enrollment.getProgress(),
+                enrollment.getCompletedUnitCount(), enrollment.getTotalUnitCount()));
     }
 
     private LearningRoadmapRecord requiredRecord(Long roadmapId) {

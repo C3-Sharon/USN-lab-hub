@@ -1,6 +1,7 @@
 package com.usn.labhub.user.mapper;
 
 import com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord;
+import com.usn.labhub.user.domain.entity.learning.LearningRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord;
@@ -11,6 +12,8 @@ import com.usn.labhub.user.domain.vo.learning.LearningRoadmapSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageSummaryVO;
 import com.usn.labhub.user.domain.vo.learning.LearningStageVO;
 import com.usn.labhub.user.domain.vo.learning.LearningUnitVO;
+import com.usn.labhub.user.domain.vo.learning.LearningEnrollmentVO;
+import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -76,4 +79,30 @@ public interface LearningRoadmapMapper {
 
     int recalibrateCompletedRecords(@Param("roadmapId") Long roadmapId,
                                     @Param("updateTime") LocalDateTime updateTime);
+
+    int insertEnrollmentIgnore(LearningRecord record);
+
+    LearningRecord selectEnrollmentForUpdate(@Param("roadmapId") Long roadmapId,
+                                             @Param("userId") Long userId);
+
+    LearningEnrollmentVO selectEnrollmentView(@Param("roadmapId") Long roadmapId,
+                                              @Param("userId") Long userId);
+
+    int insertCompletionIgnore(@Param("unitId") Long unitId,
+                               @Param("userId") Long userId,
+                               @Param("completedAt") LocalDateTime completedAt);
+
+    int deleteCompletion(@Param("unitId") Long unitId,
+                         @Param("userId") Long userId);
+
+    int updateLearningState(@Param("recordId") Long recordId,
+                            @Param("status") String status,
+                            @Param("completedAt") LocalDateTime completedAt,
+                            @Param("updateTime") LocalDateTime updateTime);
+
+    long countMyRoadmaps(@Param("userId") Long userId);
+
+    List<MyLearningRoadmapVO> selectMyRoadmaps(@Param("userId") Long userId,
+                                                @Param("offset") int offset,
+                                                @Param("pageSize") int pageSize);
 }
