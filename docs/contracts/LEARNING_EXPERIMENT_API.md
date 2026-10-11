@@ -1,11 +1,12 @@
 # 学习实验域 API 契约 V1
 
 > 状态：FROZEN
-> 版本：v1.0（第 5 周：入门学习路线与学习实验台入口）
-> 最后确认周：第 5 周（2026-W41）
+> 版本：v1.1（第 5 周 v1.0 + 第 6 周校准：模板版本关联）
+> 最后确认周：第 5 周（2026-W41）v1.0 / 第 6 周（2026-W42）v1.1 补充
 > 影响范围：API、数据库、权限、前端字段、首页 learning 区域
-> 关联周文档：`docs/weekly/2026-W41.md`
+> 关联周文档：`docs/weekly/2026-W41.md`、`docs/weekly/2026-W42.md`
 > 前置契约：`docs/contracts/AUTH_WORKBENCH_V1.md`、`docs/contracts/PROJECT_WORKSPACE_API.md`
+> 关联契约：`docs/contracts/EXPERIMENT_TEMPLATE_API.md`（实验模板与版本 V1）
 
 ---
 
@@ -426,6 +427,8 @@ Status: FROZEN
           "sortOrder": 1,
           "templateId": null,
           "templateName": null,
+          "templateVersionId": null,
+          "templateVersion": null,
           "completed": false,
           "createTime": "2026-10-06T10:00:00",
           "updateTime": "2026-10-06T10:00:00"
@@ -482,8 +485,10 @@ Status: FROZEN
 | `title` | string | 是 | 单元标题 | 2-120 字符 |
 | `description` | string | 否 | 单元描述 | 最多 2000 字符 |
 | `sortOrder` | int | 是 | 排序序号 | 非负整数，默认 0 |
-| `templateId` | long | 否 | 实验模板 ID | 第 6 周实现，本周为 null |
-| `templateName` | string | 否 | 实验模板名称 | 冗余字段，本周为 null |
+| `templateId` | long | 否 | 关联实验模板主记录 ID | 第 6 周实现，关联模板主记录 |
+| `templateName` | string | 否 | 模板标题（冗余显示） | 第 6 周实现 |
+| `templateVersionId` | long | 否 | 关联模板版本 ID | 第 6 周新增，必须是 PUBLISHED 版本 |
+| `templateVersion` | string | 否 | 关联模板版本号（冗余显示） | 第 6 周新增 |
 | `completed` | boolean | 自动 | 当前登录用户是否已完成该单元 | 仅查询响应字段，不持久化；未加入路线或无完成记录时为 false |
 | `createTime` | datetime | 自动 | 创建时间 | ISO 8601 |
 | `updateTime` | datetime | 自动 | 更新时间 | ISO 8601 |
@@ -506,10 +511,11 @@ Status: FROZEN
 }
 ```
 
-**成功响应（200）：** `data` 返回新建单元，字段为 id、stageId、title、description、sortOrder、templateId、templateName、completed、createTime、updateTime；新建响应的 completed 固定为 false。
+**成功响应（200）：** `data` 返回新建单元，字段为 id、stageId、title、description、sortOrder、templateId、templateName、templateVersionId、templateVersion、completed、createTime、updateTime；新建响应的 completed 固定为 false。
 
 **业务规则：**
-- templateId 本周不接收（传入将被忽略）
+- templateVersionId 可选；传入时必须引用 PUBLISHED 状态的模板版本
+- 传入 templateVersionId 后，后端自动填充 templateId、templateName、templateVersion
 - 阶段所属路线必须非 ARCHIVED
 - sortOrder 由前端传入，默认 0
 - 在 PUBLISHED 路线新增单元后，totalUnitCount 立即按最新结构重算；原 COMPLETED 记录若不再满足全部完成，则在同一事务内回退为 IN_PROGRESS 并清空 completedAt
@@ -522,7 +528,10 @@ Status: FROZEN
 鉴权：需要登录，需 SYSTEM_ADMIN 或 TEACHER 权限
 ```
 
-可编辑字段：title、description、sortOrder。templateId 本周不可设置。
+可编辑字段：title、description、sortOrder、templateVersionId。
+
+- 修改 templateVersionId 时，重新校验目标版本必须为 PUBLISHED
+- 设为 null 则解除关联
 
 **请求体样例：**
 
@@ -970,19 +979,22 @@ Workbench overview 中 learning 区域结构：
 | 版本 | 变更 | 兼容策略 |
 |---|---|---|
 | v1.0（第 5 周） | 学习路线、阶段、单元、成员学习、首页 learning 区域 | 新增表和接口，不影响现有项目、考勤和 IoT 契约 |
+| v1.1（第 6 周校准） | 学习单元新增 templateVersionId、templateVersion 字段；单元创建/编辑支持 templateVersionId | **向后兼容**：新增字段为 additive，旧前端忽略新字段不影响功能；旧数据新字段为 null |
 
-第 6 周计划（PLANNED，不生效）：
-- 实验模板字段、JSON Schema、模板版本
-- 学习单元的 templateId 字段已预留，但本周不实现
+第 6 周（已发布契约，见 `EXPERIMENT_TEMPLATE_API.md`）：
+- 实验模板与版本管理
+- 学习单元关联具体模板版本（PUBLISHED）
+- 模板版本不可变，保证实验记录结构稳定
 
 第 7 周计划（PLANNED，不生效）：
 - 实验记录、采集计划、采集批次、实验快照
 - 导师反馈
-- 项目草案转换
+- 项目草案转换（阶段门缺口，待第 7 周确认）
 
 ## 13. 变更记录
 
 | 日期 | 变更 | 状态 |
 |---|---|---|
-| 2026-10-06 | 初始草案 v1.0：学习路线、阶段、单元、成员学习、首页 learning 区域 | FROZEN（第 5 周产品 PR，前后端确认后实现） |
+| 2026-10-06 | 初始草案 v1.0：学习路线、阶段、单元、成员学习、首页 learning 区域 | FROZEN（第 5 周） |
 | 2026-10-10 | 统一接口冻结状态，固化后端/前端结论，新增 `units[].completed` 查询字段和路线结构变化后的进度校准语义 | FROZEN |
+| 2026-10-11 | v1.1 校准：单元新增 templateVersionId/templateVersion，关联具体模板版本（PUBLISHED），与 EXPERIMENT_TEMPLATE_API.md 对齐 | FROZEN（第 6 周补充，additive 兼容） |
