@@ -3,6 +3,7 @@ package com.usn.labhub.user.domain.vo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.usn.labhub.user.domain.vo.project.ProjectWorkbenchItemVO;
 import com.usn.labhub.user.domain.vo.project.TaskWorkbenchItemVO;
+import com.usn.labhub.user.domain.vo.learning.LearningWorkbenchItemVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -65,8 +66,15 @@ public class WorkbenchOverviewVO {
     @Data
     public static class LearningSection {
         private String state;
-        private Integer inProgress = 0;
-        private List<Object> list = new ArrayList<>();
+        private Integer inProgressCount = 0;
+        private Integer completedCount = 0;
+        private List<LearningWorkbenchItemVO> list = new ArrayList<>();
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String errorCode;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String message;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private Boolean retryable;
     }
 
     @Data

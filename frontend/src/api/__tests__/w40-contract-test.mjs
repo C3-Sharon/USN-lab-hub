@@ -111,7 +111,9 @@ const workbenchLoaded = await loadModule('../workbench.js', {
   "import request from '@/utils/request'": REQUEST_STUB,
   "import { getMockEnabled } from '@/utils/mock'": MOCK_STUB,
   "import { userStore } from '@/store/user'": USER_STUB,
-  "import { buildMockWorkbenchTasks } from '@/api/tasks'": `import { buildMockWorkbenchTasks } from '${tasksLoaded.url}'`
+  "import { buildMockWorkbenchTasks } from '@/api/tasks'": `import { buildMockWorkbenchTasks } from '${tasksLoaded.url}'`,
+  // 第 5 周新增 learning 摘要依赖；W40 只验证任务区域，使用最小桩保持周际测试隔离。
+  "import { buildMockWorkbenchLearning } from '@/api/learning'": `const buildMockWorkbenchLearning = () => ({ state: 'READY', inProgressCount: 0, completedCount: 0, list: [] })`
 })
 
 const apiError = (await loadModule('../../utils/apiError.js', {

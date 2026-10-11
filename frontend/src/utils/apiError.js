@@ -46,6 +46,46 @@ export function notifyApiError(err) {
   if (msg) ElMessage.error(msg)
 }
 
+// ========== 学习实验域错误码（契约 §7） ==========
+
+const LEARNING_NOT_FOUND_REASONS = [
+  'LEARNING_ROADMAP_NOT_FOUND',
+  'LEARNING_STAGE_NOT_FOUND',
+  'LEARNING_UNIT_NOT_FOUND'
+]
+
+/** 路线/阶段/单元不存在或不可见（404） */
+export function isLearningNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || LEARNING_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 路线已归档（409） */
+export function isLearningArchived(err) {
+  return isReason(err, 'LEARNING_ARCHIVED')
+}
+
+/** 尚未开始学习该路线（400） */
+export function isLearningNotEnrolled(err) {
+  return isReason(err, 'LEARNING_NOT_ENROLLED')
+}
+
+/** 无学习路线管理权限 / GUEST 不可访问（403） */
+export function isLearningDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || reason === 'LEARNING_OPERATION_DENIED' || reason === 'ACCESS_DENIED'
+}
+
+/** 空路线无法标记完成（409） */
+export function isLearningEmptyRoadmap(err) {
+  return isReason(err, 'LEARNING_EMPTY_ROADMAP')
+}
+
+/** 非法路线状态转换（409） */
+export function isLearningInvalidTransition(err) {
+  return isReason(err, 'LEARNING_INVALID_TRANSITION')
+}
+
 /**
  * 乐观锁冲突统一提示（契约 §9.6 / §10.3）。
  * 拦截器对 VERSION_CONFLICT 静默，避免通用 toast；此处由页面给出可操作提示。

@@ -14,6 +14,8 @@ import IotProjects from '@/views/iot/Projects.vue'
 import IotProjectDetail from '@/views/iot/ProjectDetail.vue'
 import ProjectList from '@/views/projects/ProjectList.vue'
 import ProjectDetail from '@/views/projects/ProjectDetail.vue'
+import LearningList from '@/views/learning/LearningList.vue'
+import LearningDetail from '@/views/learning/LearningDetail.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -123,6 +125,18 @@ const routes = [
         name: 'ProjectDetail',
         component: ProjectDetail,
         meta: { title: '项目详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'learning',
+        name: 'LearningList',
+        component: LearningList,
+        meta: { title: '学习实验台', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'learning/:id',
+        name: 'LearningDetail',
+        component: LearningDetail,
+        meta: { title: '学习路线详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       }
     ]
   },

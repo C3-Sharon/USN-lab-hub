@@ -112,7 +112,7 @@
 <script setup>
 import { computed, markRaw, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading } from '@element-plus/icons-vue'
 import { userStore, hasAnyRole } from '@/store/user'
 import { ROLE } from '@/utils/permission'
 
@@ -142,6 +142,7 @@ const pageSubtitle = computed(() => {
   if (route.path.startsWith('/dashboard')) return '今日考勤、进行中项目、本周任务、学习、设备提醒'
   if (route.path === '/members' || route.path === '/attendance') return '实验室成员与考勤检查'
   if (route.path.startsWith('/projects')) return '正式项目档案、成员与权限管理'
+  if (route.path.startsWith('/learning')) return '入门学习路线与学习进度'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -153,6 +154,7 @@ const ICON = markRaw({
   iot: Cpu,
   overview: Monitor,
   folder: FolderOpened,
+  reading: Reading,
   device: Cpu,
   bell: Bell,
   command: SetUp,
@@ -181,6 +183,12 @@ const menuItems = computed(() => {
       index: '/projects',
       title: '项目工作台',
       icon: ICON.folder,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
+    },
+    {
+      index: '/learning',
+      title: '学习实验台',
+      icon: ICON.reading,
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
     },
     {
