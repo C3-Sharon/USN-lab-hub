@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ExperimentTemplateMapper">
+
+    <insert id="insertTemplate" parameterType="com.usn.labhub.user.domain.entity.learning.ExperimentTemplateRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_experiment_template
+            (title, description, scope, project_id, category, published_version_count,
+             created_by, create_time, update_time)
+        VALUES
+            (#{title}, #{description}, #{scope}, #{projectId}, #{category}, 0,
+             #{createdBy}, #{createTime}, #{updateTime})
+    </insert>
+
+    <insert id="insertInitialDraft">
+        INSERT INTO lab_experiment_template_version
+            (template_id, version, version_code, status, draft_slot, schema_json, field_count,
+             created_by, create_time, update_time)
+        VALUES (#{templateId}, '0.1.0', NULL, 'DRAFT', 1, '{}', 0,
+                #{createdBy}, #{now}, #{now})
+    </insert>
+
+    <sql id="visibilityJoin">
+        LEFT JOIN lab_project p ON p.id = t.project_id
+        LEFT JOIN lab_project_member current_member
+            ON current_member.project_id = t.project_id AND current_member.user_id = #{userId}
+    </sql>
+
+    <sql id="publishedExists">
+        EXISTS (SELECT 1 FROM lab_experiment_template_version readable_version
+                WHERE readable_version.template_id = t.id AND readable_version.status = 'PUBLISHED')
+    </sql>
+
+    <sql id="visibleTemplate">
+        AND (
+            #{globalManager} = TRUE
+            OR (t.scope = 'SYSTEM' AND <include refid="publishedExists"/>)
+            OR (t.scope = 'PROJECT' AND current_member.user_id IS NOT NULL
+                AND (current_member.project_role IN ('OWNER', 'MAINTAINER')
+                     OR <include refid="publishedExists"/>))
+        )
+    </sql>
+
+    <sql id="filters">
+        <include refid="visibleTemplate"/>
+        <if test="scope != null">AND t.scope = #{scope}</if>
+        <if test="projectId != null">AND t.project_id = #{projectId}</if>
+        <if test="category != null">AND t.category = #{category}</if>
+        <if test="keyword != null">
+            AND (t.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR t.description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != 'ALL'">
+            AND EXISTS (SELECT 1 FROM lab_experiment_template_version requested_version
+                        WHERE requested_version.template_id = t.id AND requested_version.status = #{status})
+        </if>
+        <if test="status == 'DRAFT'">
+            AND (#{globalManager} = TRUE
+                 OR (t.scope = 'PROJECT' AND current_member.project_role IN ('OWNER', 'MAINTAINER')))
+        </if>
+    </sql>
+
+    <sql id="columns">
+        t.id,
+        t.title,
+        t.description,
+        t.scope,
+        t.project_id AS projectId,
+        p.project_name AS projectName,
+        t.category,
+        t.latest_version AS latestVersion,
+        t.latest_version_id AS latestVersionId,
+        t.published_version_count AS publishedVersionCount,
+        CASE WHEN #{globalManager} = TRUE
+                  OR (t.scope = 'PROJECT' AND current_member.project_role IN ('OWNER', 'MAINTAINER'))
+             THEN EXISTS (SELECT 1 FROM lab_experiment_template_version draft_version
+                          WHERE draft_version.template_id = t.id AND draft_version.status = 'DRAFT')
+             ELSE NULL END AS hasDraft,
+        t.created_by AS createdBy,
+        creator.username AS createdByName,
+        t.create_time AS createTime,
+        t.update_time AS updateTime
+    </sql>
+
+    <select id="countVisible" resultType="long">
+        SELECT COUNT(*)
+        FROM lab_experiment_template t
+        <include refid="visibilityJoin"/>
+        WHERE 1 = 1
+        <include refid="filters"/>
+    </select>
+
+    <select id="selectVisible" resultType="com.usn.labhub.user.domain.vo.learning.ExperimentTemplateVO">
+        SELECT <include refid="columns"/>
+        FROM lab_experiment_template t
+        <include refid="visibilityJoin"/>
+        LEFT JOIN sys_user creator ON creator.id = t.created_by
+        WHERE 1 = 1
+        <include refid="filters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, t.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectVisibleDetail" resultType="com.usn.labhub.user.domain.vo.learning.ExperimentTemplateVO">
+        SELECT <include refid="columns"/>
+        FROM lab_experiment_template t
+        <include refid="visibilityJoin"/>
+        LEFT JOIN sys_user creator ON creator.id = t.created_by
+        WHERE t.id = #{templateId}
+        <include refid="visibleTemplate"/>
+    </select>
+
+    <select id="selectAccess" resultType="com.usn.labhub.user.domain.entity.learning.ExperimentTemplateAccessRecord">
+        SELECT t.id, t.scope, t.project_id AS projectId, current_member.project_role AS projectRole,
+               CASE WHEN EXISTS (SELECT 1 FROM lab_experiment_template_version published_version
+                                 WHERE published_version.template_id = t.id
+                                   AND published_version.status = 'PUBLISHED')
+                    THEN TRUE ELSE FALSE END AS hasPublished
+        FROM lab_experiment_template t
+        LEFT JOIN lab_project_member current_member
+            ON current_member.project_id = t.project_id AND current_member.user_id = #{userId}
+        WHERE t.id = #{templateId}
+    </select>
+
+    <update id="updateMetadata">
+        UPDATE lab_experiment_template
+        SET title = #{title}, description = #{description}, category = #{category}, update_time = #{now}
+        WHERE id = #{templateId}
+    </update>
+</mapper>
