@@ -1,6 +1,6 @@
 # 实验模板与版本 API 契约 V1
 
-> 状态：REVIEW
+> 状态：FROZEN
 > 版本：v1.0（第 6 周：实验模板、JSON Schema 与模板版本）
 > 最后确认周：第 6 周（2026-W42）
 > 影响范围：API、数据库、权限、前端字段、学习单元模板关联
@@ -75,7 +75,7 @@
 
 ```
 POST /api/experiment/templates
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 权限：SYSTEM_ADMIN / TEACHER 可创建系统模板；项目 OWNER / MAINTAINER 可创建项目模板
 ```
@@ -139,7 +139,7 @@ Status: REVIEW
 
 ```
 GET /api/experiment/templates?page=1&pageSize=20&scope=SYSTEM&status=PUBLISHED
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -216,7 +216,7 @@ Status: REVIEW
 
 ```
 GET /api/experiment/templates/{templateId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -266,7 +266,7 @@ Status: REVIEW
 
 ```
 PUT /api/experiment/templates/{templateId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需模板管理权限
 ```
 
@@ -290,7 +290,7 @@ Status: REVIEW
 
 ```
 POST /api/experiment/templates/{templateId}/copy
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需目标项目的 OWNER/MAINTAINER 权限
 ```
 
@@ -358,28 +358,32 @@ Status: REVIEW
 | `id` | long | 自动 | 版本 ID | 自增主键 |
 | `templateId` | long | 是 | 所属模板 ID | 外键 |
 | `version` | string | 是 | 版本号 | 语义化版本，如 "1.0.0" |
-| `versionCode` | int | 是 | 数字版本号 | 用于比较，如 10000 代表 1.0.0 |
+| `versionCode` | int | 否 | 正式数字版本号 | PUBLISHED/DEPRECATED 使用，如 10000 代表 1.0.0；DRAFT 为 null |
 | `status` | string | 是 | 版本状态 | DRAFT / PUBLISHED / DEPRECATED |
 | `schemaJson` | object | 是 | JSON Schema 对象 | 见 §4 Schema 规范 |
 | `fieldCount` | int | 是 | 字段数量 | 从 schemaJson 统计 |
-| `changelog` | string | 否 | 版本变更说明 | 最多 500 字符 |
+| `changelog` | string | 否 | 版本变更说明 | 最多 500 字符；发布后不可修改 |
 | `publishedBy` | long | 否 | 发布人 | PUBLISHED 时填写 |
 | `publishedByName` | string | 否 | 发布人姓名 | 冗余字段 |
 | `publishedAt` | datetime | 否 | 发布时间 | PUBLISHED 时填写 |
+| `deprecatedReason` | string | 否 | 废弃原因 | DEPRECATED 时填写，最多 500 字符 |
+| `deprecatedBy` | long | 否 | 废弃操作人 | DEPRECATED 时填写 |
+| `deprecatedAt` | datetime | 否 | 废弃时间 | DEPRECATED 时填写 |
 | `createdBy` | long | 自动 | 创建人 | |
 | `createTime` | datetime | 自动 | 创建时间 | |
 | `updateTime` | datetime | 自动 | 更新时间 | |
 
 ### 3.2 版本号规则
 
-- DRAFT 版本号格式：`0.X.0`，如 `0.1.0`、`0.2.0`
-- PUBLISHED 版本号格式：`X.Y.0`，如 `1.0.0`、`1.1.0`、`2.0.0`
+- DRAFT 内部版本号格式：`0.X.0`，如 `0.1.0`、`0.2.0`；X 是草稿修订序号
+- PUBLISHED 版本号格式：`1.Y.0`，如 `1.0.0`、`1.1.0`、`1.2.0`
 - 首个发布版本从 `1.0.0` 开始
-- 每次从 DRAFT 发布时，DRAFT 的版本号即为发布后的版本号
-- 发布后自动创建下一个 DRAFT 版本（小版本号 +1）
+- 发布时将当前 DRAFT 映射为下一个正式次版本；本周不提供主版本选择
+- 发布后自动创建下一个 DRAFT 版本（草稿修订序号 +1）
   - 例如：从 `0.1.0` DRAFT 发布为 `1.0.0` PUBLISHED → 自动创建 `0.2.0` DRAFT
   - 例如：从 `0.2.0` DRAFT 发布为 `1.1.0` PUBLISHED → 自动创建 `0.3.0` DRAFT
-- 并发创建版本时，由数据库唯一约束 `(template_id, version)` 防止重复
+- `versionCode` 只比较正式版本；DRAFT 的 `versionCode` 为 null
+- 并发发布由事务内条件状态更新保证单次成功，数据库唯一约束作为最终兜底，详见 §3.8
 
 ### 3.3 版本状态转换
 
@@ -389,8 +393,8 @@ PUBLISHED → DEPRECATED  （废弃）
 ```
 
 - DRAFT：可编辑 schemaJson 和 changelog
-- PUBLISHED：不可修改任何字段（包括 schemaJson）
-- DEPRECATED：不可修改，不可被新引用，已有引用继续有效
+- PUBLISHED：版本内容和发布事实不可修改；只允许执行 PUBLISHED → DEPRECATED 生命周期变更
+- DEPRECATED：版本内容不可修改，不可被新引用，已有引用继续有效；废弃审计写入独立字段
 - 不支持 PUBLISHED → DRAFT（已发布不可回退为草稿）
 - 不支持 DEPRECATED → PUBLISHED（废弃后不可恢复发布）
 - 每个模板同时最多一个 DRAFT 版本
@@ -403,7 +407,7 @@ DRAFT 版本在模板创建时自动生成。每次发布后自动创建新的 D
 
 ```
 GET /api/experiment/templates/{templateId}/versions?page=1&pageSize=20
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -430,7 +434,7 @@ Status: REVIEW
         "id": 3,
         "templateId": 1,
         "version": "0.2.0",
-        "versionCode": 200,
+        "versionCode": null,
         "status": "DRAFT",
         "fieldCount": 5,
         "changelog": "增加电流字段",
@@ -462,7 +466,7 @@ Status: REVIEW
 ```
 
 **业务规则：**
-- 按 versionCode 降序排列（新版本在前）
+- 管理者视图中 DRAFT 固定置顶，其余版本按 versionCode 降序排列；普通成员只看到正式版本
 - 普通成员只能看到 PUBLISHED 和 DEPRECATED 版本（DRAFT 不可见）
 - 有管理权限者可看到所有状态
 - 列表不返回 schemaJson（通过详情接口获取）
@@ -471,7 +475,7 @@ Status: REVIEW
 
 ```
 GET /api/experiment/templates/{templateId}/versions/{versionId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -548,7 +552,7 @@ Status: REVIEW
 
 ```
 PUT /api/experiment/templates/{templateId}/versions/{versionId}
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需模板管理权限
 ```
 
@@ -595,7 +599,7 @@ Status: REVIEW
     "id": 3,
     "templateId": 1,
     "version": "0.2.0",
-    "versionCode": 200,
+    "versionCode": null,
     "status": "DRAFT",
     "fieldCount": 2,
     "changelog": "增加电流测量字段",
@@ -637,7 +641,7 @@ Status: REVIEW
 
 ```
 PUT /api/experiment/templates/{templateId}/versions/{versionId}/publish
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需模板管理权限
 ```
 
@@ -679,10 +683,12 @@ Status: REVIEW
 - 发布时 DRAFT 版本号 `0.X.0` 转为正式版本号：
   - 首次发布：`0.1.0` → `1.0.0`
   - 小版本更新：`0.2.0` → `1.1.0`、`0.3.0` → `1.2.0`
-  - 大版本更新：创建 DRAFT 时可以指定是 minor 还是 major（本周默认 minor）
+- 本周固定为 `1.Y.0` 次版本递增，不提供 major/minor 选择；主版本升级留待后续契约
 - 发布后自动创建新的 DRAFT 版本（小版本号 +1），schemaJson 从刚发布版本复制
 - 发布后更新模板的 latestVersion、latestVersionId、publishedVersionCount
-- 并发发布由数据库唯一约束 `(template_id, version)` 防止重复版本号
+- 发布必须在单个数据库事务内完成：先以 `id + template_id + status=DRAFT` 条件更新当前版本；并发竞争导致影响行数为 0 时返回 409 `TEMPLATE_VERSION_CONFLICT`
+- 条件更新成功后，在同一事务内写入发布事实、创建下一个 DRAFT，并更新模板汇总字段；任一步失败整体回滚
+- 数据库唯一约束 `(template_id, version)` 与“每模板最多一个 DRAFT”的约束负责兜底；本周不引入分布式锁，也不在服务端静默重试发布
 - changelog 在发布时可以更新，作为版本发布说明
 
 **失败样例（Schema 为空）：**
@@ -700,7 +706,7 @@ Status: REVIEW
 
 ```
 PUT /api/experiment/templates/{templateId}/versions/{versionId}/deprecate
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录，需模板管理权限
 ```
 
@@ -722,6 +728,9 @@ Status: REVIEW
     "id": 2,
     "version": "1.0.0",
     "status": "DEPRECATED",
+    "deprecatedReason": "有新版本替代",
+    "deprecatedBy": 1,
+    "deprecatedAt": "2026-10-10T09:00:00",
     "updateTime": "2026-10-10T09:00:00"
   }
 }
@@ -734,7 +743,7 @@ Status: REVIEW
 - 废弃是单向操作，不可恢复为 PUBLISHED
 - 如果废弃的是最新版本，模板的 latestVersion 回退到上一个 PUBLISHED 版本
 - 没有其他 PUBLISHED 版本时 latestVersion 为 null
-- reason 字段保存在 changelog 末尾或单独字段（本周直接追加到 changelog）
+- reason 写入独立的 `deprecated_reason`，并同时记录 `deprecated_by`、`deprecated_at`；不得改写已发布的 changelog
 
 ## 4. JSON Schema 支持规范
 
@@ -838,11 +847,18 @@ Status: REVIEW
 - 字段 key 只能包含小写字母、数字和下划线，首字母必须小写，最长 50 字符
 - 字段 key 在同一模板版本内唯一
 
-### 4.7 数据校验（预览用）
+### 4.7 后端校验实现约束
+
+- `schema_json` 使用 MySQL `TEXT` 存储，由 Jackson 解析为树结构
+- 后端实现面向本契约受控子集的结构校验和数据校验，不引入完整 JSON Schema 引擎
+- 校验错误必须返回稳定的字段路径和消息；禁止执行脚本、解析远程引用或自动纠正未知字段
+- 单版本最多 50 个字段，超限返回 400 `SCHEMA_INVALID`
+
+### 4.8 数据校验（预览用）
 
 ```
 POST /api/experiment/templates/{templateId}/versions/{versionId}/validate-data
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -908,17 +924,17 @@ Status: REVIEW
 - `templateId`：关联**模板主记录**的 ID
 - `templateName`：模板标题的冗余显示字段
 - 新增 `templateVersionId`：关联**具体版本**的 ID（PUBLISHED 版本）
-- 新增 `templateVersion`：版本号字符串的冗余显示字段
+- 新增 `templateVersion`：版本号字符串的响应字段，由版本记录关联查询得到，不单独持久化
 
 ### 5.2 关联规则
 
 - 学习单元只能关联 PUBLISHED 状态的模板版本
 - 不能关联 DRAFT 或 DEPRECATED 版本
-- 关联时需指定 `templateVersionId`，后端自动填充 `templateId`、`templateName`、`templateVersion`
+- 关联时需指定 `templateVersionId`，后端校验并持久化对应 `templateId`；`templateName`、`templateVersion` 查询时关联返回
 - 模板发布新版本后，**学习单元不会自动升级**
 - 老师可以手动将单元升级到新版本（在学习路线编辑中操作）
 - 模板版本被废弃后，已关联的单元仍可查看和使用，但会显示"该版本已废弃"提示
-- 模板被删除（逻辑删除）后，已关联的单元显示"模板已删除"，但 Schema 仍可从版本记录中读取
+- 本周不提供模板删除 API；模板主记录和版本均不得物理删除，生命周期通过版本废弃表达
 
 ### 5.3 学习单元字段更新（向后兼容）
 
@@ -945,7 +961,7 @@ Status: REVIEW
 
 ```
 GET /api/experiment/templates/{templateId}/versions/published
-Status: REVIEW
+Status: FROZEN
 鉴权：需要登录
 ```
 
@@ -1029,11 +1045,11 @@ Status: REVIEW
 | 查看项目模板列表（已发布） | ✓ | ✓ | ✓（本项目） | ✓（本项目） | ✓（本项目） | ✓（本项目） | ✗ |
 | 查看模板详情（已发布版本） | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ |
 | 查看模板 DRAFT 版本 | ✓ | ✓ | ✓（本项目） | ✓（本项目） | ✗ | ✗ | ✗ |
-| 查看版本列表 | ✓ | ✓ | ✓ | ✓ | ✓（仅 PUBLISHED/DEPRECATED） | ✗ | ✗ |
-| 预览模板（Schema 和数据校验） | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| 查看版本列表 | ✓ | ✓ | ✓（本项目） | ✓（本项目） | ✓（仅 SYSTEM 或所在项目的 PUBLISHED/DEPRECATED） | ✓（仅 SYSTEM 或所在项目的 PUBLISHED/DEPRECATED） | ✗ |
+| 预览模板（Schema 和数据校验） | ✓ | ✓ | ✓（本项目） | ✓（本项目） | ✓（SYSTEM 或所在项目） | ✓（SYSTEM 或所在项目） | ✗ |
 | 学习单元关联模板 | ✓ | ✓ | — | — | — | — | — |
 
-注：MEMBER 可以在学习路线中查看关联的模板（只读），但不能直接管理模板。学习单元关联模板的操作由 TEACHER/SYSTEM_ADMIN 在编辑学习路线时完成。
+注：MEMBER/STOCK_KEEPER 可以只读查看系统模板，以及自己所属项目的已发布或已废弃版本；项目模板的任何详情和版本查询都必须先校验项目成员关系。SYSTEM_ADMIN/TEACHER 具有全局监督权限。学习单元关联模板的操作由 TEACHER/SYSTEM_ADMIN 在编辑学习路线时完成。
 
 ## 8. 错误响应
 
@@ -1180,12 +1196,11 @@ Status: REVIEW
 | latest_version_id | BIGINT NULL | 最新已发布版本 ID |
 | latest_version | VARCHAR(20) NULL | 最新已发布版本号 |
 | published_version_count | INT | 已发布版本数 |
-| is_deleted | TINYINT | 逻辑删除标记 |
 | created_by | BIGINT | 创建人 |
 | create_time | DATETIME | 创建时间 |
 | update_time | DATETIME | 更新时间 |
 
-索引：scope + is_deleted、project_id + is_deleted
+索引：scope + id、project_id + id
 
 ### lab_experiment_template_version
 
@@ -1194,19 +1209,28 @@ Status: REVIEW
 | id | BIGINT PK | 自增主键 |
 | template_id | BIGINT | 模板 ID |
 | version | VARCHAR(20) | 版本号字符串 |
-| version_code | INT | 数字版本号（用于比较） |
+| version_code | INT NULL | 正式版本数字码；DRAFT 为 null |
 | status | VARCHAR(20) | DRAFT / PUBLISHED / DEPRECATED |
 | schema_json | TEXT | JSON Schema |
 | field_count | INT | 字段数量 |
 | changelog | VARCHAR(500) NULL | 变更说明 |
 | published_by | BIGINT NULL | 发布人 |
 | published_at | DATETIME NULL | 发布时间 |
+| deprecated_reason | VARCHAR(500) NULL | 废弃原因 |
+| deprecated_by | BIGINT NULL | 废弃操作人 |
+| deprecated_at | DATETIME NULL | 废弃时间 |
 | created_by | BIGINT | 创建人 |
 | create_time | DATETIME | 创建时间 |
 | update_time | DATETIME | 更新时间 |
 
 唯一约束：(template_id, version)
+约束：每个 template_id 同时最多一个 DRAFT（迁移采用可被唯一索引约束的生成列或等价方案）
 索引：template_id + status、template_id + version_code DESC
+
+### lab_learning_unit 增量
+
+- V9 已存在 `template_id`；V10 只新增 `template_version_id BIGINT NULL`
+- `templateName`、`templateVersion` 均为 API 响应字段，通过关联查询得到，不新增冗余列
 
 Flyway 迁移版本：V10（第 6 周新增）
 
@@ -1214,7 +1238,7 @@ Flyway 迁移版本：V10（第 6 周新增）
 
 | 版本 | 变更 | 兼容策略 |
 |---|---|---|
-| v1.0（第 6 周） | 实验模板、版本管理、JSON Schema 子集、学习单元模板版本关联、系统/项目模板区分 | 新增表和接口；学习单元新增 templateVersionId/templateVersion 字段（additive，不破坏 W5 接口） |
+| v1.0（第 6 周） | 实验模板、版本管理、JSON Schema 子集、学习单元模板版本关联、系统/项目模板区分 | 新增表和接口；学习单元持久化新增 template_version_id，API 响应新增 templateVersionId/templateVersion（additive，不破坏 W5 接口） |
 
 **与第 5 周兼容性：**
 - `LEARNING_EXPERIMENT_API.md` 中的单元接口新增字段为 additive
@@ -1230,4 +1254,5 @@ Flyway 迁移版本：V10（第 6 周新增）
 
 | 日期 | 变更 | 状态 |
 |---|---|---|
-| 2026-10-11 | 初始草案 v1.0：模板、版本、JSON Schema 子集、学习单元关联、第 7 周引用规则 | REVIEW（待前后端确认） |
+| 2026-10-11 | 初始草案 v1.0：模板、版本、JSON Schema 子集、学习单元关联、第 7 周引用规则 | REVIEW |
+| 2026-10-11 | 冻结校准：固定次版本规则、事务化并发发布、独立废弃审计、权限边界、V10 持久化和受控校验实现 | FROZEN |
