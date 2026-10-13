@@ -107,7 +107,7 @@
     </select>
 
     <select id="selectProjectAccess" resultType="com.usn.labhub.user.domain.entity.project.ProjectAccessRecord">
-        SELECT p.id, p.status, current_member.project_role AS myRole
+        SELECT p.id, p.project_name AS projectName, p.status, current_member.project_role AS myRole
         FROM lab_project p
         LEFT JOIN lab_project_member current_member
             ON current_member.project_id = p.id AND current_member.user_id = #{userId}

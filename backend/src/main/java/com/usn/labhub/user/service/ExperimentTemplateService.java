@@ -2,9 +2,11 @@ package com.usn.labhub.user.service;
 
 import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateCreateDTO;
+import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateCopyDTO;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateUpdateDTO;
 import com.usn.labhub.user.domain.entity.learning.ExperimentTemplateAccessRecord;
 import com.usn.labhub.user.domain.entity.learning.ExperimentTemplateRecord;
+import com.usn.labhub.user.domain.entity.learning.ExperimentTemplateVersionRecord;
 import com.usn.labhub.user.domain.entity.project.ProjectAccessRecord;
 import com.usn.labhub.user.domain.vo.learning.ExperimentTemplatePageVO;
 import com.usn.labhub.user.domain.vo.learning.ExperimentTemplateVO;
@@ -158,6 +160,63 @@ public class ExperimentTemplateService {
         return withoutDraftFlag(requiredVisibleDetail(templateId, userId, globalManager));
     }
 
+    @Transactional
+    public ExperimentTemplateVO copy(Long templateId, ExperimentTemplateCopyDTO request) {
+        Long userId = requiredUserId();
+        ensureNotGuest();
+        if (templateId == null || templateId < 1) {
+            throw ExperimentTemplateApiException.notFound();
+        }
+
+        boolean globalManager = isGlobalManager();
+        ExperimentTemplateVO source = requiredVisibleDetail(templateId, userId, globalManager);
+        if (!"SYSTEM".equals(source.getScope())) {
+            throw ExperimentTemplateApiException.notSystemTemplate();
+        }
+
+        ProjectAccessRecord targetProject = projectMapper.selectProjectAccess(request.getTargetProjectId(), userId);
+        if (targetProject == null) {
+            throw ExperimentTemplateApiException.projectNotFound();
+        }
+        if (!globalManager && !PROJECT_MANAGERS.contains(targetProject.getMyRole())) {
+            throw ExperimentTemplateApiException.operationDenied();
+        }
+
+        String title = StringUtils.hasText(request.getTitle())
+                ? request.getTitle().trim() : defaultCopyTitle(source.getTitle(), targetProject.getProjectName());
+        if (title.length() < 2 || title.length() > 120) {
+            throw ExperimentTemplateApiException.invalidRequest();
+        }
+        String description = request.getDescription() == null
+                ? source.getDescription() : trimToNull(request.getDescription());
+        LocalDateTime now = LocalDateTime.now();
+
+        ExperimentTemplateRecord copied = new ExperimentTemplateRecord();
+        copied.setTitle(title);
+        copied.setDescription(description);
+        copied.setScope("PROJECT");
+        copied.setProjectId(request.getTargetProjectId());
+        copied.setCategory(source.getCategory());
+        copied.setCreatedBy(userId);
+        copied.setCreateTime(now);
+        copied.setUpdateTime(now);
+        templateMapper.insertTemplate(copied);
+
+        ExperimentTemplateVersionRecord sourceVersion = templateMapper.selectLatestPublished(templateId);
+        ExperimentTemplateVersionRecord draft = new ExperimentTemplateVersionRecord();
+        draft.setTemplateId(copied.getId());
+        draft.setVersion("0.1.0");
+        draft.setStatus("DRAFT");
+        draft.setSchemaJson(sourceVersion == null ? "{}" : sourceVersion.getSchemaJson());
+        draft.setFieldCount(sourceVersion == null ? 0 : sourceVersion.getFieldCount());
+        draft.setCreatedBy(userId);
+        draft.setCreateTime(now);
+        draft.setUpdateTime(now);
+        templateMapper.insertDraftVersion(draft);
+
+        return withoutDraftFlag(requiredVisibleDetail(copied.getId(), userId, true));
+    }
+
     private ExperimentTemplateVO requiredVisibleDetail(Long templateId, Long userId, boolean globalManager) {
         ExperimentTemplateVO template = templateMapper.selectVisibleDetail(templateId, userId, globalManager);
         if (template == null) {
@@ -214,5 +273,14 @@ public class ExperimentTemplateService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String defaultCopyTitle(String sourceTitle, String projectName) {
+        String suffix = "（" + projectName + "）";
+        int sourceLength = Math.max(1, 120 - suffix.length());
+        String normalizedSource = sourceTitle.length() > sourceLength
+                ? sourceTitle.substring(0, sourceLength) : sourceTitle;
+        String title = normalizedSource + suffix;
+        return title.length() > 120 ? title.substring(0, 120) : title;
     }
 }

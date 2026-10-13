@@ -3,6 +3,7 @@ package com.usn.labhub.user.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateCreateDTO;
+import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateCopyDTO;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateUpdateDTO;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateVersionDeprecateDTO;
 import com.usn.labhub.user.domain.dto.learning.ExperimentTemplateVersionPublishDTO;
@@ -70,6 +71,14 @@ public class ExperimentTemplateController {
     public Result<ExperimentTemplateVO> update(@PathVariable Long templateId,
                                                @Valid @RequestBody ExperimentTemplateUpdateDTO request) {
         return Result.success(templateService.update(templateId, request));
+    }
+
+    @PostMapping("/{templateId}/copy")
+    public Result<ExperimentTemplateVO> copy(@PathVariable Long templateId,
+                                             @Valid @RequestBody ExperimentTemplateCopyDTO request) {
+        Result<ExperimentTemplateVO> result = Result.success(templateService.copy(templateId, request));
+        result.setMsg("复制成功");
+        return result;
     }
 
     @GetMapping("/{templateId}/versions")

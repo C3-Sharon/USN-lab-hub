@@ -70,6 +70,11 @@ public class ExperimentTemplateApiException extends RuntimeException {
                 "Schema 为空，无法发布");
     }
 
+    public static ExperimentTemplateApiException notSystemTemplate() {
+        return new ExperimentTemplateApiException(HttpStatus.BAD_REQUEST, "TEMPLATE_NOT_SYSTEM",
+                "只能从系统模板复制");
+    }
+
     public static ExperimentTemplateApiException schemaInvalid(Object errors) {
         return new ExperimentTemplateApiException(HttpStatus.BAD_REQUEST, "SCHEMA_INVALID", "Schema 校验失败",
                 java.util.Map.of("errors", errors));
