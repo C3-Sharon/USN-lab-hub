@@ -1,0 +1,238 @@
+{
+  "base": "http://localhost:4173",
+  "generatedAt": "2026-10-13T14:43:41.366Z",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "390x844"
+  ],
+  "shots": 45,
+  "horizontalOverflow": 0,
+  "results": [
+    {
+      "viewport": "1440x900",
+      "shot": "template-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-list",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-list-project",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-detail-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-detail-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-publish-confirm",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-editor-schema",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-editor-preview",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-editor-readonly",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "learning-unit-template",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "learning-unit-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "template-picker",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-list",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-list-project",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-detail-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-detail-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-publish-confirm",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-editor-schema",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-editor-preview",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-editor-readonly",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "learning-unit-template",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "learning-unit-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "template-picker",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-list",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-list-project",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-detail-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-detail-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-publish-confirm",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-editor-schema",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-editor-preview",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-editor-readonly",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "learning-unit-template",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "learning-unit-deprecated",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "template-picker",
+      "overflow": false
+    }
+  ]
+}

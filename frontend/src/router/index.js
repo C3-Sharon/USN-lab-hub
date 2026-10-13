@@ -16,6 +16,9 @@ import ProjectList from '@/views/projects/ProjectList.vue'
 import ProjectDetail from '@/views/projects/ProjectDetail.vue'
 import LearningList from '@/views/learning/LearningList.vue'
 import LearningDetail from '@/views/learning/LearningDetail.vue'
+import TemplateList from '@/views/experiment/TemplateList.vue'
+import TemplateDetail from '@/views/experiment/TemplateDetail.vue'
+import TemplateEditor from '@/views/experiment/TemplateEditor.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -137,6 +140,24 @@ const routes = [
         name: 'LearningDetail',
         component: LearningDetail,
         meta: { title: '学习路线详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/templates',
+        name: 'ExperimentTemplateList',
+        component: TemplateList,
+        meta: { title: '实验模板', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/templates/:id/editor/:versionId',
+        name: 'ExperimentTemplateEditor',
+        component: TemplateEditor,
+        meta: { title: '模板编辑器', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/templates/:id',
+        name: 'ExperimentTemplateDetail',
+        component: TemplateDetail,
+        meta: { title: '模板详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       }
     ]
   },

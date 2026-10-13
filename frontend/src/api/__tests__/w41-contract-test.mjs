@@ -108,7 +108,9 @@ const learningLoaded = await loadModule('../learning.js', {
   "import request from '@/utils/request'": REQUEST_STUB,
   "import { getMockEnabled } from '@/utils/mock'": MOCK_STUB,
   "import { userStore, currentRoles } from '@/store/user'": USER_STUB,
-  "import { ROLE } from '@/utils/permission'": ROLE_STUB
+  "import { ROLE } from '@/utils/permission'": ROLE_STUB,
+  // W42 起单元模板关联依赖实验模板域；历史回归用桩替代，避免解析 @/ 别名
+  "import { resolveMockTemplateVersion } from '@/api/experimentTemplates'": `const resolveMockTemplateVersion = () => null`
 })
 
 const workbenchLoaded = await loadModule('../workbench.js', {
@@ -167,7 +169,11 @@ function assertUnitShape(u) {
   assert.equal(typeof u.title, 'string', 'unit.title 为 string')
   assert.equal(typeof u.sortOrder, 'number', 'unit.sortOrder 为 number')
   assert.equal(typeof u.completed, 'boolean', 'unit.completed 为 boolean')
-  assert.equal(u.templateId, null, '本周 templateId 为 null')
+  // W42（M02-W02）additive 字段：模板主记录与版本关联；未关联时为 null
+  assert.ok('templateId' in u, 'unit 含 templateId')
+  assert.ok(u.templateId === null || typeof u.templateId === 'number', 'templateId 为 null 或 number')
+  assert.ok(u.templateVersionId === null || typeof u.templateVersionId === 'number', 'templateVersionId 为 null 或 number')
+  assert.ok(u.templateVersion === null || typeof u.templateVersion === 'string', 'templateVersion 为 null 或 string')
 }
 
 // ========== 枚举与映射（§2.2 / §5.2） ==========
