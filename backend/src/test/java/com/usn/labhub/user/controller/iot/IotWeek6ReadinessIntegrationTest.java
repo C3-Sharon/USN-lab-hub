@@ -40,13 +40,13 @@ class IotWeek6ReadinessIntegrationTest {
     private Flyway flyway;
 
     @Test
-    void allMvpMigrationsAreAppliedInOrder() {
+    void allMigrationsAreAppliedInOrder() {
         List<String> versions = Arrays.stream(flyway.info().applied())
                 .map(MigrationInfo::getVersion)
                 .map(Object::toString)
                 .toList();
 
-        assertEquals(List.of("1", "2", "4", "5", "6", "7", "8", "9"), versions);
+        assertEquals(List.of("1", "2", "4", "5", "6", "7", "8", "9", "10"), versions);
     }
 
     @Test
