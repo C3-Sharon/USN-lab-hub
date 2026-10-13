@@ -78,6 +78,8 @@ class LearningStructureApiIntegrationTest {
                 + "(SELECT id FROM lab_learning_stage WHERE roadmap_id != ?)", seedRoadmapId);
         jdbc.update("DELETE FROM lab_learning_stage WHERE roadmap_id != ?", seedRoadmapId);
         jdbc.update("DELETE FROM lab_learning_roadmap WHERE id != ?", seedRoadmapId);
+        jdbc.update("DELETE FROM lab_experiment_template_version");
+        jdbc.update("DELETE FROM lab_experiment_template");
         jdbc.update("UPDATE lab_learning_roadmap SET status = 'PUBLISHED' WHERE id = ?", seedRoadmapId);
         jdbc.update("DELETE FROM sys_user_role WHERE user_id = 2 AND role_id IN (2, 3, 4)");
         jdbc.update("INSERT INTO sys_user_role(user_id, role_id) VALUES (2, 2)");
@@ -231,6 +233,103 @@ class LearningStructureApiIntegrationTest {
                 HttpStatus.CONFLICT, "LEARNING_ARCHIVED");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void learningUnitPinsPublishedTemplateVersionWhenNewerVersionAppears() {
+        String adminToken = token(login("admin", "admin123"));
+        Long roadmapId = createRoadmap(adminToken, "模板固定版本路线");
+        Long stageId = createStage(adminToken, roadmapId, "模板阶段", 0);
+        TemplateFixture template = createTemplate("电压采集模板", "0.1.0", "PUBLISHED", 100);
+
+        ResponseEntity<Map> created = post(
+                "/api/learning/stages/" + stageId + "/units",
+                adminToken,
+                unitBodyWithVersion("固定版本单元", 0, template.versionId()));
+        assertEquals(HttpStatus.OK, created.getStatusCode());
+        assertTemplateAssociation((Map<String, Object>) created.getBody().get("data"),
+                template.templateId(), template.versionId(), "电压采集模板", "0.1.0");
+
+        createVersion(template.templateId(), "0.2.0", "PUBLISHED", 200);
+        List<Map<String, Object>> stages = (List<Map<String, Object>>) get(
+                stagesPath(roadmapId), adminToken).getBody().get("data");
+        Map<String, Object> queried = flattenUnits(stages).get(0);
+        assertTemplateAssociation(queried, template.templateId(), template.versionId(),
+                "电压采集模板", "0.1.0");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void learningUnitAssociationCanBePreservedSwitchedAndExplicitlyCleared() {
+        String adminToken = token(login("admin", "admin123"));
+        Long roadmapId = createRoadmap(adminToken, "模板切换路线");
+        Long stageId = createStage(adminToken, roadmapId, "模板阶段", 0);
+        TemplateFixture template = createTemplate("温度采集模板", "0.1.0", "PUBLISHED", 100);
+        Long secondVersionId = createVersion(template.templateId(), "0.2.0", "PUBLISHED", 200);
+        Long unitId = createAssociatedUnit(
+                adminToken, stageId, "可切换模板单元", template.versionId());
+
+        ResponseEntity<Map> titleOnly = put(
+                "/api/learning/units/" + unitId, adminToken, Map.of("title", "仅修改标题"));
+        assertEquals(HttpStatus.OK, titleOnly.getStatusCode());
+        assertTemplateAssociation((Map<String, Object>) titleOnly.getBody().get("data"),
+                template.templateId(), template.versionId(), "温度采集模板", "0.1.0");
+
+        ResponseEntity<Map> switched = put(
+                "/api/learning/units/" + unitId,
+                adminToken,
+                Map.of("templateVersionId", secondVersionId));
+        assertEquals(HttpStatus.OK, switched.getStatusCode());
+        assertTemplateAssociation((Map<String, Object>) switched.getBody().get("data"),
+                template.templateId(), secondVersionId, "温度采集模板", "0.2.0");
+
+        Map<String, Object> clearBody = new LinkedHashMap<>();
+        clearBody.put("templateVersionId", null);
+        ResponseEntity<Map> cleared = put(
+                "/api/learning/units/" + unitId, adminToken, clearBody);
+        assertEquals(HttpStatus.OK, cleared.getStatusCode());
+        Map<String, Object> clearedData = (Map<String, Object>) cleared.getBody().get("data");
+        assertNull(clearedData.get("templateId"));
+        assertNull(clearedData.get("templateName"));
+        assertNull(clearedData.get("templateVersionId"));
+        assertNull(clearedData.get("templateVersion"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void onlyPublishedVersionCanBeAssociatedButExistingDeprecatedLinkRemainsReadable() {
+        String adminToken = token(login("admin", "admin123"));
+        Long roadmapId = createRoadmap(adminToken, "模板状态边界路线");
+        Long stageId = createStage(adminToken, roadmapId, "模板阶段", 0);
+        TemplateFixture published = createTemplate("状态模板", "0.1.0", "PUBLISHED", 100);
+        TemplateFixture draft = createTemplate("草稿模板", "DRAFT", "DRAFT", null);
+        TemplateFixture deprecated = createTemplate("废弃模板", "0.1.0", "DEPRECATED", 100);
+
+        assertReason(post("/api/learning/stages/" + stageId + "/units", adminToken,
+                        unitBodyWithVersion("草稿关联", 0, draft.versionId())),
+                HttpStatus.NOT_FOUND, "TEMPLATE_VERSION_NOT_FOUND");
+        assertReason(post("/api/learning/stages/" + stageId + "/units", adminToken,
+                        unitBodyWithVersion("废弃关联", 0, deprecated.versionId())),
+                HttpStatus.NOT_FOUND, "TEMPLATE_VERSION_NOT_FOUND");
+        assertReason(post("/api/learning/stages/" + stageId + "/units", adminToken,
+                        unitBodyWithVersion("不存在关联", 0, 999999L)),
+                HttpStatus.NOT_FOUND, "TEMPLATE_VERSION_NOT_FOUND");
+
+        Long unitId = createAssociatedUnit(
+                adminToken, stageId, "保留历史关联", published.versionId());
+        assertReason(put("/api/learning/units/" + unitId, adminToken,
+                        Map.of("templateVersionId", deprecated.versionId())),
+                HttpStatus.NOT_FOUND, "TEMPLATE_VERSION_NOT_FOUND");
+        jdbc.update("UPDATE lab_experiment_template_version SET status = 'DEPRECATED' WHERE id = ?",
+                published.versionId());
+
+        List<Map<String, Object>> stages = (List<Map<String, Object>>) get(
+                stagesPath(roadmapId), adminToken).getBody().get("data");
+        Map<String, Object> queried = flattenUnits(stages).get(0);
+        assertEquals(unitId, longValue(queried.get("id")));
+        assertTemplateAssociation(queried, published.templateId(), published.versionId(),
+                "状态模板", "0.1.0");
+    }
+
     private Long createRoadmap(String token, String title) {
         ResponseEntity<Map> response = post("/api/learning/roadmaps", token,
                 Map.of("title", title, "difficulty", "BEGINNER", "sortOrder", 0));
@@ -253,6 +352,70 @@ class LearningStructureApiIntegrationTest {
         assertFalse((Boolean) data.get("completed"));
         assertNull(data.get("templateId"));
         return longValue(data.get("id"));
+    }
+
+    private Long createAssociatedUnit(String token, Long stageId, String title, Long versionId) {
+        ResponseEntity<Map> response = post(
+                "/api/learning/stages/" + stageId + "/units",
+                token, unitBodyWithVersion(title, 0, versionId));
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        return longValue(((Map<?, ?>) response.getBody().get("data")).get("id"));
+    }
+
+    private TemplateFixture createTemplate(
+            String title, String version, String status, Integer versionCode) {
+        jdbc.update("""
+                INSERT INTO lab_experiment_template
+                    (title, description, scope, project_id, category, published_version_count,
+                     created_by, create_time, update_time)
+                VALUES (?, '测试模板', 'SYSTEM', NULL, 'SENSOR', ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, title, "PUBLISHED".equals(status) ? 1 : 0);
+        Long templateId = jdbc.queryForObject(
+                "SELECT id FROM lab_experiment_template WHERE title = ?", Long.class, title);
+        Long versionId = createVersion(templateId, version, status, versionCode);
+        if ("PUBLISHED".equals(status)) {
+            jdbc.update("""
+                    UPDATE lab_experiment_template
+                    SET latest_version_id = ?, latest_version = ?
+                    WHERE id = ?
+                    """, versionId, version, templateId);
+        }
+        return new TemplateFixture(templateId, versionId);
+    }
+
+    private Long createVersion(Long templateId, String version, String status, Integer versionCode) {
+        jdbc.update("""
+                INSERT INTO lab_experiment_template_version
+                    (template_id, version, version_code, status, draft_slot, schema_json,
+                     field_count, published_by, published_at, created_by, create_time, update_time)
+                VALUES (?, ?, ?, ?, ?, '{"type":"object","properties":{}}', 0,
+                        ?, CASE WHEN ? = 'PUBLISHED' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                        1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, templateId, version, versionCode, status,
+                "DRAFT".equals(status) ? 1 : null,
+                "PUBLISHED".equals(status) ? 1 : null, status);
+        return jdbc.queryForObject("""
+                SELECT id FROM lab_experiment_template_version
+                WHERE template_id = ? AND version = ?
+                """, Long.class, templateId, version);
+    }
+
+    private Map<String, Object> unitBodyWithVersion(
+            String title, int sortOrder, Long templateVersionId) {
+        Map<String, Object> body = unitBody(title, sortOrder, null);
+        body.put("templateVersionId", templateVersionId);
+        return body;
+    }
+
+    private void assertTemplateAssociation(Map<String, Object> unit,
+                                           Long templateId,
+                                           Long templateVersionId,
+                                           String templateName,
+                                           String templateVersion) {
+        assertEquals(templateId, longValue(unit.get("templateId")));
+        assertEquals(templateVersionId, longValue(unit.get("templateVersionId")));
+        assertEquals(templateName, unit.get("templateName"));
+        assertEquals(templateVersion, unit.get("templateVersion"));
     }
 
     private Map<String, Object> stageBody(String name, int sortOrder) {
@@ -335,5 +498,8 @@ class LearningStructureApiIntegrationTest {
     private void assertReason(ResponseEntity<Map> response, HttpStatus status, String reason) {
         assertEquals(status, response.getStatusCode());
         assertEquals(reason, response.getBody().get("reason"));
+    }
+
+    private record TemplateFixture(Long templateId, Long versionId) {
     }
 }

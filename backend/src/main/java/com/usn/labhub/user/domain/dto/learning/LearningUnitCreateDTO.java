@@ -2,6 +2,7 @@ package com.usn.labhub.user.domain.dto.learning;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -18,4 +19,7 @@ public class LearningUnitCreateDTO {
     private Integer sortOrder = 0;
 
     private Long templateId;
+
+    @Positive
+    private Long templateVersionId;
 }

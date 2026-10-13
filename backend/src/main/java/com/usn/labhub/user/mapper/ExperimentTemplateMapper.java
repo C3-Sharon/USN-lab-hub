@@ -55,6 +55,9 @@ public interface ExperimentTemplateMapper {
     ExperimentTemplateVersionRecord selectVersion(@Param("templateId") Long templateId,
                                                    @Param("versionId") Long versionId);
 
+    ExperimentTemplateVersionRecord selectPublishedVersionForAssociation(
+            @Param("versionId") Long versionId);
+
     int updateDraft(@Param("templateId") Long templateId, @Param("versionId") Long versionId,
                     @Param("schemaJson") String schemaJson, @Param("fieldCount") int fieldCount,
                     @Param("changelog") String changelog, @Param("now") LocalDateTime now);

@@ -185,6 +185,15 @@
         WHERE v.template_id = #{templateId} AND v.id = #{versionId}
     </select>
 
+    <select id="selectPublishedVersionForAssociation"
+            resultType="com.usn.labhub.user.domain.entity.learning.ExperimentTemplateVersionRecord">
+        SELECT <include refid="versionColumns"/>
+        FROM lab_experiment_template_version v
+        LEFT JOIN sys_user publisher ON publisher.id = v.published_by
+        WHERE v.id = #{versionId} AND v.status = 'PUBLISHED'
+        FOR UPDATE
+    </select>
+
     <update id="updateDraft">
         UPDATE lab_experiment_template_version
         SET schema_json = #{schemaJson}, field_count = #{fieldCount},
