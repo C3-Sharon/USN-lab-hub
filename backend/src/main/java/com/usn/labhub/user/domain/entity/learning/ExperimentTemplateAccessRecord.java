@@ -9,4 +9,5 @@ public class ExperimentTemplateAccessRecord {
     private Long projectId;
     private String projectRole;
     private boolean hasPublished;
+    private boolean hasFormalVersion;
 }

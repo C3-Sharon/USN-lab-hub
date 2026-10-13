@@ -16,9 +16,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice(assignableTypes = ExperimentTemplateController.class)
 public class ExperimentTemplateExceptionHandler {
     @ExceptionHandler(ExperimentTemplateApiException.class)
-    public ResponseEntity<Result<Void>> handleTemplateException(ExperimentTemplateApiException exception) {
-        return ResponseEntity.status(exception.getStatus())
-                .body(Result.error(exception.getStatus().value(), exception.getMessage(), exception.getReason()));
+    public ResponseEntity<Result<Object>> handleTemplateException(ExperimentTemplateApiException exception) {
+        Result<Object> result = Result.error(
+                exception.getStatus().value(), exception.getMessage(), exception.getReason());
+        result.setData(exception.getData());
+        return ResponseEntity.status(exception.getStatus()).body(result);
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class,
