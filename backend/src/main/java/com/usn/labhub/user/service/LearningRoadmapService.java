@@ -9,6 +9,7 @@ import com.usn.labhub.user.domain.dto.learning.LearningStageUpdateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningUnitCreateDTO;
 import com.usn.labhub.user.domain.dto.learning.LearningUnitUpdateDTO;
 import com.usn.labhub.user.domain.entity.learning.LearningRoadmapRecord;
+import com.usn.labhub.user.domain.entity.learning.ExperimentTemplateVersionRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageAccessRecord;
 import com.usn.labhub.user.domain.entity.learning.LearningStageRecord;
@@ -32,6 +33,7 @@ import com.usn.labhub.user.domain.vo.learning.MyLearningRoadmapVO;
 import com.usn.labhub.user.learning.LearningApiException;
 import com.usn.labhub.user.learning.LearningRoadmapStateMachine;
 import com.usn.labhub.user.mapper.LearningRoadmapMapper;
+import com.usn.labhub.user.mapper.ExperimentTemplateMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,9 +58,12 @@ public class LearningRoadmapService {
             "updateTime", "r.update_time");
 
     private final LearningRoadmapMapper roadmapMapper;
+    private final ExperimentTemplateMapper templateMapper;
 
-    public LearningRoadmapService(LearningRoadmapMapper roadmapMapper) {
+    public LearningRoadmapService(LearningRoadmapMapper roadmapMapper,
+                                  ExperimentTemplateMapper templateMapper) {
         this.roadmapMapper = roadmapMapper;
+        this.templateMapper = templateMapper;
     }
 
     @Transactional
@@ -251,7 +256,10 @@ public class LearningRoadmapService {
         unit.setTitle(requiredTrimmed(request.getTitle()));
         unit.setDescription(trimToNull(request.getDescription()));
         unit.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
-        unit.setTemplateId(null);
+        ExperimentTemplateVersionRecord templateVersion = publishedTemplateVersion(
+                request.getTemplateVersionId());
+        unit.setTemplateId(templateVersion == null ? null : templateVersion.getTemplateId());
+        unit.setTemplateVersionId(templateVersion == null ? null : templateVersion.getId());
         unit.setCreateTime(now);
         unit.setUpdateTime(now);
         roadmapMapper.insertUnit(unit);
@@ -267,7 +275,8 @@ public class LearningRoadmapService {
         validateId(unitId);
         LearningUnitAccessRecord access = requiredUnitAccess(unitId);
         requireMutableRoadmap(access.getRoadmapStatus());
-        if (request.getTitle() == null && !request.isDescriptionSpecified() && request.getSortOrder() == null) {
+        if (request.getTitle() == null && !request.isDescriptionSpecified()
+                && request.getSortOrder() == null && !request.isTemplateVersionSpecified()) {
             throw LearningApiException.invalidParameter();
         }
 
@@ -277,6 +286,13 @@ public class LearningRoadmapService {
         update.setDescription(trimToNull(request.getDescription()));
         update.setDescriptionSpecified(request.isDescriptionSpecified());
         update.setSortOrder(request.getSortOrder());
+        update.setTemplateVersionSpecified(request.isTemplateVersionSpecified());
+        if (request.isTemplateVersionSpecified()) {
+            ExperimentTemplateVersionRecord templateVersion = publishedTemplateVersion(
+                    request.getTemplateVersionId());
+            update.setTemplateId(templateVersion == null ? null : templateVersion.getTemplateId());
+            update.setTemplateVersionId(templateVersion == null ? null : templateVersion.getId());
+        }
         update.setUpdateTime(LocalDateTime.now());
         if (roadmapMapper.updateUnit(update) != 1) {
             LearningUnitAccessRecord concurrent = roadmapMapper.selectUnitAccess(unitId);
@@ -286,6 +302,18 @@ public class LearningRoadmapService {
             throw LearningApiException.unitNotFound();
         }
         return roadmapMapper.selectUnitForUser(unitId, requiredUserId());
+    }
+
+    private ExperimentTemplateVersionRecord publishedTemplateVersion(Long versionId) {
+        if (versionId == null) {
+            return null;
+        }
+        ExperimentTemplateVersionRecord version =
+                templateMapper.selectPublishedVersionForAssociation(versionId);
+        if (version == null) {
+            throw LearningApiException.templateVersionNotFound();
+        }
+        return version;
     }
 
     @Transactional

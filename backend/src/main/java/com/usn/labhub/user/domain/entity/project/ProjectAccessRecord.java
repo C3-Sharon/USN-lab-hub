@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class ProjectAccessRecord {
     private Long id;
+    private String projectName;
     private String status;
     private String myRole;
 }

@@ -38,6 +38,10 @@ public class LearningApiException extends RuntimeException {
         return new LearningApiException(HttpStatus.NOT_FOUND, "LEARNING_UNIT_NOT_FOUND", "学习单元不存在");
     }
 
+    public static LearningApiException templateVersionNotFound() {
+        return new LearningApiException(HttpStatus.NOT_FOUND, "TEMPLATE_VERSION_NOT_FOUND", "模板版本不存在或不可关联");
+    }
+
     public static LearningApiException notEnrolled() {
         return new LearningApiException(HttpStatus.BAD_REQUEST, "LEARNING_NOT_ENROLLED", "尚未开始学习该路线");
     }

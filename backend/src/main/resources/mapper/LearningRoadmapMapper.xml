@@ -190,11 +190,14 @@
     <select id="selectUnitsForRoadmap" resultType="com.usn.labhub.user.domain.vo.learning.LearningUnitVO">
         SELECT u.id, u.stage_id AS stageId, u.title, u.description,
                u.sort_order AS sortOrder, u.template_id AS templateId,
-               NULL AS templateName,
+               t.title AS templateName, u.template_version_id AS templateVersionId,
+               tv.version AS templateVersion,
                CASE WHEN lr.id IS NOT NULL AND completion.id IS NOT NULL THEN TRUE ELSE FALSE END AS completed,
                u.create_time AS createTime, u.update_time AS updateTime
         FROM lab_learning_unit u
         INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+        LEFT JOIN lab_experiment_template t ON t.id = u.template_id
+        LEFT JOIN lab_experiment_template_version tv ON tv.id = u.template_version_id
         LEFT JOIN lab_learning_record lr
             ON lr.roadmap_id = s.roadmap_id AND lr.user_id = #{userId}
         LEFT JOIN lab_learning_unit_completion completion
@@ -206,9 +209,11 @@
     <insert id="insertUnit" parameterType="com.usn.labhub.user.domain.entity.learning.LearningUnitRecord"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO lab_learning_unit
-            (stage_id, title, description, sort_order, template_id, create_time, update_time)
+            (stage_id, title, description, sort_order, template_id, template_version_id,
+             create_time, update_time)
         VALUES
-            (#{stageId}, #{title}, #{description}, #{sortOrder}, NULL, #{createTime}, #{updateTime})
+            (#{stageId}, #{title}, #{description}, #{sortOrder}, #{templateId}, #{templateVersionId},
+             #{createTime}, #{updateTime})
     </insert>
 
     <select id="selectUnitAccess" resultType="com.usn.labhub.user.domain.entity.learning.LearningUnitAccessRecord">
@@ -222,11 +227,14 @@
     <select id="selectUnitForUser" resultType="com.usn.labhub.user.domain.vo.learning.LearningUnitVO">
         SELECT u.id, u.stage_id AS stageId, u.title, u.description,
                u.sort_order AS sortOrder, u.template_id AS templateId,
-               NULL AS templateName,
+               t.title AS templateName, u.template_version_id AS templateVersionId,
+               tv.version AS templateVersion,
                CASE WHEN lr.id IS NOT NULL AND completion.id IS NOT NULL THEN TRUE ELSE FALSE END AS completed,
                u.create_time AS createTime, u.update_time AS updateTime
         FROM lab_learning_unit u
         INNER JOIN lab_learning_stage s ON s.id = u.stage_id
+        LEFT JOIN lab_experiment_template t ON t.id = u.template_id
+        LEFT JOIN lab_experiment_template_version tv ON tv.id = u.template_version_id
         LEFT JOIN lab_learning_record lr
             ON lr.roadmap_id = s.roadmap_id AND lr.user_id = #{userId}
         LEFT JOIN lab_learning_unit_completion completion
@@ -240,6 +248,9 @@
             <if test="title != null">title = #{title},</if>
             <if test="descriptionSpecified">description = #{description},</if>
             <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            <if test="templateVersionSpecified">
+                template_id = #{templateId}, template_version_id = #{templateVersionId},
+            </if>
             update_time = #{updateTime}
         </set>
         WHERE id = #{id}

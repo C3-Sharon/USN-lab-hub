@@ -13,6 +13,8 @@ public class LearningUnitRecord {
     private Boolean descriptionSpecified;
     private Integer sortOrder;
     private Long templateId;
+    private Long templateVersionId;
+    private Boolean templateVersionSpecified;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

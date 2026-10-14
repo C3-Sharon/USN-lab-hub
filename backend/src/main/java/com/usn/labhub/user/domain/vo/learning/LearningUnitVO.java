@@ -13,6 +13,8 @@ public class LearningUnitVO {
     private Integer sortOrder;
     private Long templateId;
     private String templateName;
+    private Long templateVersionId;
+    private String templateVersion;
     private Boolean completed;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
