@@ -112,6 +112,28 @@
                     <span class="unit-item__title">{{ unit.title }}</span>
                   </el-checkbox>
                   <p v-if="!isMobile && unit.description" class="unit-item__desc">{{ unit.description }}</p>
+
+                  <div class="unit-template">
+                    <template v-if="unit.templateVersionId">
+                      <span class="unit-template__label text-help muted">实验模板</span>
+                      <span class="unit-template__name">{{ unit.templateName }} · {{ unit.templateVersion }}</span>
+                      <VersionStatusTag v-if="unit.templateVersionStatus" :status="unit.templateVersionStatus" />
+                      <span v-if="unit.templateVersionStatus === 'DEPRECATED'" class="unit-template__warn text-help">
+                        已废弃，仅可查看，不可用于新关联
+                      </span>
+                    </template>
+                    <span v-else class="unit-template__label text-help muted">未关联实验模板</span>
+
+                    <el-button
+                      v-if="canManage"
+                      size="small"
+                      text
+                      type="primary"
+                      @click="openTemplatePicker(unit)"
+                    >
+                      {{ unit.templateVersionId ? '更换模板' : '关联模板' }}
+                    </el-button>
+                  </div>
                 </li>
               </ul>
             </div>
@@ -119,6 +141,13 @@
         </ol>
       </section>
     </div>
+
+    <UnitTemplatePicker
+      v-model="pickerVisible"
+      :unit="pickerUnit"
+      :submitting="associating"
+      @submit="handleTemplateSubmit"
+    />
   </div>
 </template>
 
@@ -134,14 +163,19 @@ import {
   enrollRoadmap,
   completeUnit,
   cancelUnitComplete,
+  updateUnit,
+  canManageLearning,
   roadmapStatusMeta,
   learningStatusMeta
 } from '@/api/learning'
+import { getVersionDetail } from '@/api/experimentTemplates'
 import { notifyApiError, isLearningNotFound, isLearningDenied } from '@/utils/apiError'
 import RoadmapCover from '@/components/RoadmapCover.vue'
 import DifficultyTag from '@/components/DifficultyTag.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import RegionState from '@/components/RegionState.vue'
+import VersionStatusTag from '@/components/templates/VersionStatusTag.vue'
+import UnitTemplatePicker from '@/views/learning/UnitTemplatePicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,6 +191,11 @@ const record = ref(null)
 const enrolling = ref(false)
 const collapsedStages = ref(new Set())
 const isMobile = ref(false)
+
+const canManage = computed(() => canManageLearning())
+const pickerVisible = ref(false)
+const pickerUnit = ref(null)
+const associating = ref(false)
 
 let mediaQuery = null
 
@@ -216,6 +255,36 @@ function handleResize() {
   }
 }
 
+async function enrichTemplateVersionStatuses(stageList) {
+  const references = new Map()
+  for (const stage of stageList || []) {
+    for (const unit of stage.units || []) {
+      unit.templateVersionStatus = null
+      if (!unit.templateId || !unit.templateVersionId) continue
+      const key = `${unit.templateId}:${unit.templateVersionId}`
+      const entry = references.get(key) || {
+        templateId: unit.templateId,
+        versionId: unit.templateVersionId,
+        units: []
+      }
+      entry.units.push(unit)
+      references.set(key, entry)
+    }
+  }
+
+  await Promise.all(
+    [...references.values()].map(async ({ templateId, versionId, units }) => {
+      try {
+        const version = await getVersionDetail(templateId, versionId)
+        for (const unit of units) unit.templateVersionStatus = version?.status || null
+      } catch {
+        // 状态是补充展示信息，查询失败不能让整条学习路线不可用。
+      }
+    })
+  )
+  return stageList || []
+}
+
 async function loadAll() {
   loading.value = true
   pageState.value = 'loading'
@@ -226,7 +295,7 @@ async function loadAll() {
       listMyRoadmaps({ page: 1, pageSize: 100 })
     ])
     roadmap.value = detail
-    stages.value = stageList || []
+    stages.value = await enrichTemplateVersionStatuses(stageList || [])
     record.value = (myRes?.list || []).find((r) => r.roadmapId === roadmapId.value) || null
     applyMobileDefault()
     pageState.value = 'success'
@@ -300,6 +369,26 @@ async function toggleUnit(unit, val) {
   } catch (err) {
     unit.completed = previous
     notifyApiError(err)
+  }
+}
+
+function openTemplatePicker(unit) {
+  pickerUnit.value = unit
+  pickerVisible.value = true
+}
+
+async function handleTemplateSubmit({ templateVersionId }) {
+  if (!pickerUnit.value) return
+  associating.value = true
+  try {
+    await updateUnit(pickerUnit.value.id, { templateVersionId })
+    ElMessage.success(templateVersionId ? '已关联实验模板版本' : '已清除模板关联')
+    pickerVisible.value = false
+    stages.value = await enrichTemplateVersionStatuses((await listStages(roadmapId.value)) || [])
+  } catch (err) {
+    notifyApiError(err)
+  } finally {
+    associating.value = false
   }
 }
 
@@ -583,6 +672,24 @@ onBeforeUnmount(() => {
   font-size: var(--usn-font-size-help);
   color: var(--usn-ink-500);
   line-height: 1.5;
+}
+
+.unit-template {
+  display: flex;
+  align-items: center;
+  gap: var(--usn-space-2);
+  flex-wrap: wrap;
+  margin: 2px 0 0 24px;
+}
+
+.unit-template__name {
+  font-size: var(--usn-font-size-help);
+  font-weight: 600;
+  color: var(--usn-ink-700);
+}
+
+.unit-template__warn {
+  color: #b88230;
 }
 
 @media (max-width: 1024px) {

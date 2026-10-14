@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import { getMockEnabled } from '@/utils/mock'
 import { userStore, currentRoles } from '@/store/user'
 import { ROLE } from '@/utils/permission'
+import { resolveMockTemplateVersion } from '@/api/experimentTemplates'
 
 /**
  * 学习实验域 API（第 5 周 M02-W01）
@@ -31,6 +32,9 @@ import { ROLE } from '@/utils/permission'
  *   - listStages 返回的每个 unit 附带 `completed`（boolean，当前用户是否已完成该单元）。
  *     契约 §9.3 要求详情页单元项展示「完成状态勾选框」，但 §5 未定义按单元查询完成态的接口，
  *     故在阶段列表接口为单元补充 completed 字段（未开始时恒为 false）。
+ *   - 第 6 周（M02-W02）仍只返回冻结的四个模板关联字段。
+ *     §5.2 所需的废弃提示由页面使用 templateId/templateVersionId 查询版本详情后派生，
+ *     不向学习单元响应追加 templateVersionStatus。
  */
 
 // ========== 枚举 ==========
@@ -159,7 +163,7 @@ const MOCK_ROADMAPS = [
         description: '基础电路知识和焊接技能。',
         sortOrder: 2,
         units: [
-          { id: 104, title: '电路基础', description: '欧姆定律、串并联与常用元器件识别。', sortOrder: 1 },
+          { id: 104, title: '电路基础', description: '欧姆定律、串并联与常用元器件识别。', sortOrder: 1, templateVersionId: 2 },
           { id: 105, title: '万用表使用', description: '测量电压、电流、电阻与通断。', sortOrder: 2 },
           { id: 106, title: '手工焊接', description: '直插与贴片元件的手工焊接练习。', sortOrder: 3 },
           { id: 107, title: '焊接质量检查', description: '识别虚焊、冷焊与连锡。', sortOrder: 4 }
@@ -182,7 +186,7 @@ const MOCK_ROADMAPS = [
         description: '常用传感器的原理与数据读取。',
         sortOrder: 4,
         units: [
-          { id: 111, title: '温湿度传感器', description: 'DHT22 数据采集与校验。', sortOrder: 1 },
+          { id: 111, title: '温湿度传感器', description: 'DHT22 数据采集与校验。', sortOrder: 1, templateVersionId: 22 },
           { id: 112, title: '光照传感器', description: '光敏电阻与 ADC 采集。', sortOrder: 2 },
           { id: 113, title: '传感器数据读取', description: '多传感器数据整合与上报。', sortOrder: 3 }
         ]
@@ -301,7 +305,7 @@ const MOCK_ROADMAPS = [
         sortOrder: 1,
         units: [
           { id: 401, title: '选型方法', description: '量程、精度与接口选择。', sortOrder: 1 },
-          { id: 402, title: '成本评估', description: '方案成本对比。', sortOrder: 2 }
+          { id: 402, title: '成本评估', description: '方案成本对比。', sortOrder: 2, templateVersionId: 41 }
         ]
       },
       {
@@ -458,6 +462,55 @@ function toStageSummary(stage, roadmapId) {
   }
 }
 
+/**
+ * 解析单元关联的模板版本（契约 §5.2 / §5.3）。
+ * 动态读取实验模板域 mock，保持四个冻结关联字段与真实响应一致。
+ * 版本当前状态不属于学习单元响应，由页面通过版本详情接口补查。
+ */
+function resolveUnitTemplate(unit) {
+  const base = {
+    templateId: unit.templateId ?? null,
+    templateName: unit.templateName ?? null,
+    templateVersionId: unit.templateVersionId ?? null,
+    templateVersion: unit.templateVersion ?? null
+  }
+  if (unit.templateVersionId == null) return base
+  const found = resolveMockTemplateVersion(unit.templateVersionId)
+  if (!found) return base
+  return {
+    templateId: found.template.id,
+    templateName: found.template.title,
+    templateVersionId: found.version.id,
+    templateVersion: found.version.version
+  }
+}
+
+/**
+ * 校验并写入单元模板关联（契约 §5.2：只能关联 PUBLISHED 版本）。
+ * 返回错误对象或 null（成功时直接写入 unit）。
+ */
+function applyTemplateAssociation(unit, templateVersionId) {
+  if (templateVersionId == null || templateVersionId === '') {
+    unit.templateId = null
+    unit.templateName = null
+    unit.templateVersionId = null
+    unit.templateVersion = null
+    return null
+  }
+  const found = resolveMockTemplateVersion(templateVersionId)
+  if (!found) {
+    return { code: 404, msg: '模板版本不存在', reason: 'TEMPLATE_VERSION_NOT_FOUND' }
+  }
+  if (found.version.status !== 'PUBLISHED') {
+    return { code: 400, msg: '只能关联已发布的模板版本', reason: 'INVALID_PARAMETER' }
+  }
+  unit.templateId = found.template.id
+  unit.templateName = found.template.title
+  unit.templateVersionId = found.version.id
+  unit.templateVersion = found.version.version
+  return null
+}
+
 function toUnit(unit, stageId, userId) {
   return {
     id: unit.id,
@@ -465,8 +518,7 @@ function toUnit(unit, stageId, userId) {
     title: unit.title,
     description: unit.description,
     sortOrder: unit.sortOrder,
-    templateId: unit.templateId ?? null,
-    templateName: unit.templateName ?? null,
+    ...resolveUnitTemplate(unit),
     completed: isUnitCompleted(unit.id, userId),
     createTime: unit.createTime || '2026-10-06T10:00:00',
     updateTime: unit.updateTime || '2026-10-06T10:00:00'
@@ -769,8 +821,14 @@ export function createUnit(stageId, data) {
     sortOrder: data?.sortOrder != null ? Number(data.sortOrder) : 0,
     templateId: null,
     templateName: null,
+    templateVersionId: null,
+    templateVersion: null,
     createTime: now,
     updateTime: now
+  }
+  if (data?.templateVersionId !== undefined) {
+    const assocError = applyTemplateAssociation(unit, data.templateVersionId)
+    if (assocError) return Promise.reject(assocError)
   }
   found.stage.units.push(unit)
   found.stage.updateTime = now
@@ -799,6 +857,10 @@ export function updateUnit(unitId, data) {
   }
   if (data?.description !== undefined) found.unit.description = data.description || null
   if (data?.sortOrder !== undefined) found.unit.sortOrder = Number(data.sortOrder) || 0
+  if (data?.templateVersionId !== undefined) {
+    const assocError = applyTemplateAssociation(found.unit, data.templateVersionId)
+    if (assocError) return Promise.reject(assocError)
+  }
   found.unit.updateTime = nowIso()
   found.roadmap.updateTime = found.unit.updateTime
   return Promise.resolve(toUnit(found.unit, found.stage.id, currentUserId()))

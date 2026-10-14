@@ -102,3 +102,68 @@ export function promptVersionConflict(onRefresh) {
     })
     .catch(() => {})
 }
+
+// ========== 实验模板域错误码（EXPERIMENT_TEMPLATE_API.md §8） ==========
+
+const TEMPLATE_NOT_FOUND_REASONS = ['TEMPLATE_NOT_FOUND', 'TEMPLATE_VERSION_NOT_FOUND']
+
+/** 模板/版本不存在或不可见（404） */
+export function isTemplateNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || TEMPLATE_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 模板版本不存在或不可见（404） */
+export function isTemplateVersionNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || reason === 'TEMPLATE_VERSION_NOT_FOUND'
+}
+
+/** 无模板管理权限 / GUEST 不可访问（403） */
+export function isTemplateDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || reason === 'TEMPLATE_OPERATION_DENIED' || reason === 'ACCESS_DENIED'
+}
+
+/** Schema 不符合受控子集或为空（400） */
+export function isSchemaInvalid(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 400 || reason === 'SCHEMA_INVALID' || reason === 'SCHEMA_EMPTY'
+}
+
+/** 源模板非系统模板（400） */
+export function isTemplateNotSystem(err) {
+  return isReason(err, 'TEMPLATE_NOT_SYSTEM')
+}
+
+/** 尝试修改 scope / projectId（409） */
+export function isTemplateScopeImmutable(err) {
+  return isReason(err, 'TEMPLATE_SCOPE_IMMUTABLE')
+}
+
+/** 版本不可编辑（409） */
+export function isTemplateVersionNotEditable(err) {
+  return isReason(err, 'TEMPLATE_VERSION_NOT_EDITABLE')
+}
+
+/** 版本不可发布（409） */
+export function isTemplateVersionNotPublishable(err) {
+  return isReason(err, 'TEMPLATE_VERSION_NOT_PUBLISHABLE')
+}
+
+/** 版本不可废弃（409） */
+export function isTemplateVersionNotDeprecatable(err) {
+  return isReason(err, 'TEMPLATE_VERSION_NOT_DEPRECATABLE')
+}
+
+/** 并发发布版本号冲突（409） */
+export function isTemplateVersionConflict(err) {
+  return isReason(err, 'TEMPLATE_VERSION_CONFLICT')
+}
+
+/** 提取 SCHEMA_INVALID 响应中的字段级错误列表 */
+export function schemaErrors(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'SCHEMA_INVALID' || !data || !Array.isArray(data.errors)) return []
+  return data.errors
+}
