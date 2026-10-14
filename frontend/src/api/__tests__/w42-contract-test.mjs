@@ -750,7 +750,7 @@ await group('复制系统模板为项目模板（契约 §2.6）', async () => {
 
 // ========== learning.js 单元模板关联（§5.4） ==========
 await group('学习单元模板关联 additive 字段（契约 §5.4）', async () => {
-  await test('已关联单元返回模板名与版本（PUBLISHED）', async () => {
+  await test('已关联单元只返回契约字段，状态通过版本详情读取', async () => {
     setRoles(['MEMBER'])
     const stages = await learning.listStages(1)
     const unit = stages.flatMap((s) => s.units).find((u) => u.id === 104)
@@ -758,17 +758,21 @@ await group('学习单元模板关联 additive 字段（契约 §5.4）', async 
     assert.equal(unit.templateId, 1)
     assert.equal(unit.templateName, '电压测量实验（修订）')
     assert.equal(unit.templateVersion, '1.0.0')
-    assert.equal(unit.templateVersionStatus, 'PUBLISHED')
+    assert.equal(Object.hasOwn(unit, 'templateVersionStatus'), false)
+    const version = await tpl.getVersionDetail(unit.templateId, unit.templateVersionId)
+    assert.equal(version.status, 'PUBLISHED')
   })
 
-  await test('已废弃版本的关联保留并标记 DEPRECATED（§5.2）', async () => {
+  await test('已废弃版本关联保留，状态通过版本详情读取（§5.2）', async () => {
     // 单元 402 位于已归档路线 4（§2.5：归档路线仅管理角色可见），故以管理角色读取
     setRoles(['TEACHER'])
     const stages = await learning.listStages(4)
     const unit = stages.flatMap((s) => s.units).find((u) => u.id === 402)
     assert.ok(unit, '单元 402 存在')
     assert.equal(unit.templateVersionId, 41)
-    assert.equal(unit.templateVersionStatus, 'DEPRECATED', '已废弃版本关联保留且标记状态')
+    assert.equal(Object.hasOwn(unit, 'templateVersionStatus'), false)
+    const version = await tpl.getVersionDetail(unit.templateId, unit.templateVersionId)
+    assert.equal(version.status, 'DEPRECATED', '已废弃版本关联保留且可通过版本接口读取状态')
   })
 
   await test('未关联单元各关联字段为 null', async () => {
@@ -778,7 +782,7 @@ await group('学习单元模板关联 additive 字段（契约 §5.4）', async 
     assert.equal(unit.templateId, null)
     assert.equal(unit.templateVersionId, null)
     assert.equal(unit.templateVersion, null)
-    assert.equal(unit.templateVersionStatus, null)
+    assert.equal(Object.hasOwn(unit, 'templateVersionStatus'), false)
   })
 
   await test('MEMBER 关联单元：403 LEARNING_OPERATION_DENIED', async () => {
@@ -801,7 +805,8 @@ await group('学习单元模板关联 additive 字段（契约 §5.4）', async 
     setRoles(['TEACHER'])
     const res = await learning.updateUnit(105, { templateVersionId: 2 })
     assert.equal(res.templateVersionId, 2)
-    assert.equal(res.templateVersionStatus, 'PUBLISHED')
+    assert.equal(Object.hasOwn(res, 'templateVersionStatus'), false)
+    assert.equal((await tpl.getVersionDetail(res.templateId, res.templateVersionId)).status, 'PUBLISHED')
     const cleared = await learning.updateUnit(105, { templateVersionId: null })
     assert.equal(cleared.templateVersionId, null)
     assert.equal(cleared.templateName, null)
@@ -880,6 +885,7 @@ await group('路由 / 侧栏 / 页面 / 选择器静态检查（§5.8）', async
     assert.match(listSrc, /TEMPLATE_SCOPE\.PROJECT/)
     assert.match(listSrc, /createTemplate/)
     assert.match(listSrc, /copyTemplate/)
+    assert.match(listSrc, /listProjects\(\{ page: 1, pageSize: 50 \}\)/)
     assert.match(listSrc, /state="empty"/)
     assert.match(listSrc, /state="permission"/)
     assert.match(listSrc, /grid-template-columns: repeat\(3, 1fr\)/)
@@ -892,6 +898,7 @@ await group('路由 / 侧栏 / 页面 / 选择器静态检查（§5.8）', async
     assert.match(detailSrc, /publishVersion/)
     assert.match(detailSrc, /deprecateVersion/)
     assert.match(detailSrc, /copyTemplate/)
+    assert.match(detailSrc, /listProjects\(\{ page: 1, pageSize: 50 \}\)/)
   })
 
   await test('编辑器：字段列表 + 属性面板 + 拖拽排序 + 实时校验', async () => {
@@ -915,6 +922,10 @@ await group('路由 / 侧栏 / 页面 / 选择器静态检查（§5.8）', async
     assert.match(learningDetailSrc, /unit-template/)
     assert.match(learningDetailSrc, /VersionStatusTag/)
     assert.match(learningDetailSrc, /templateVersionStatus === 'DEPRECATED'/)
+    assert.match(learningDetailSrc, /getVersionDetail/)
+    assert.match(learningDetailSrc, /enrichTemplateVersionStatuses/)
+    assert.doesNotMatch(learningDetailSrc, /templateVersionStatus \|\| 'PUBLISHED'/)
+    assert.doesNotMatch(pickerSrc, /templateVersionStatus \|\| 'PUBLISHED'/)
   })
 })
 

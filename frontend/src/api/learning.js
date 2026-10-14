@@ -32,10 +32,9 @@ import { resolveMockTemplateVersion } from '@/api/experimentTemplates'
  *   - listStages 返回的每个 unit 附带 `completed`（boolean，当前用户是否已完成该单元）。
  *     契约 §9.3 要求详情页单元项展示「完成状态勾选框」，但 §5 未定义按单元查询完成态的接口，
  *     故在阶段列表接口为单元补充 completed 字段（未开始时恒为 false）。
- *   - 第 6 周（M02-W02）为单元补充 `templateVersionStatus`（关联模板版本的当前状态）：
- *     契约 §5.3 只定义 templateVersionId/templateVersion（均为字符串/ID），未定义状态字段，
- *     但 §5.2 要求「已废弃版本的关联显示提示」，故补充该字段用于渲染「该版本已废弃」。
- *     未关联时恒为 null；真实模式下需后端在单元响应中一并返回，否则前端以空处理。
+ *   - 第 6 周（M02-W02）仍只返回冻结的四个模板关联字段。
+ *     §5.2 所需的废弃提示由页面使用 templateId/templateVersionId 查询版本详情后派生，
+ *     不向学习单元响应追加 templateVersionStatus。
  */
 
 // ========== 枚举 ==========
@@ -465,16 +464,15 @@ function toStageSummary(stage, roadmapId) {
 
 /**
  * 解析单元关联的模板版本（契约 §5.2 / §5.3）。
- * 动态读取实验模板域 mock，保证「废弃后单元提示同步更新」；
- * 真实模式下 templateId/templateName/templateVersion/templateVersionStatus 由后端响应提供。
+ * 动态读取实验模板域 mock，保持四个冻结关联字段与真实响应一致。
+ * 版本当前状态不属于学习单元响应，由页面通过版本详情接口补查。
  */
 function resolveUnitTemplate(unit) {
   const base = {
     templateId: unit.templateId ?? null,
     templateName: unit.templateName ?? null,
     templateVersionId: unit.templateVersionId ?? null,
-    templateVersion: unit.templateVersion ?? null,
-    templateVersionStatus: unit.templateVersionStatus ?? null
+    templateVersion: unit.templateVersion ?? null
   }
   if (unit.templateVersionId == null) return base
   const found = resolveMockTemplateVersion(unit.templateVersionId)
@@ -483,8 +481,7 @@ function resolveUnitTemplate(unit) {
     templateId: found.template.id,
     templateName: found.template.title,
     templateVersionId: found.version.id,
-    templateVersion: found.version.version,
-    templateVersionStatus: found.version.status
+    templateVersion: found.version.version
   }
 }
 
@@ -498,7 +495,6 @@ function applyTemplateAssociation(unit, templateVersionId) {
     unit.templateName = null
     unit.templateVersionId = null
     unit.templateVersion = null
-    unit.templateVersionStatus = null
     return null
   }
   const found = resolveMockTemplateVersion(templateVersionId)
@@ -512,7 +508,6 @@ function applyTemplateAssociation(unit, templateVersionId) {
   unit.templateName = found.template.title
   unit.templateVersionId = found.version.id
   unit.templateVersion = found.version.version
-  unit.templateVersionStatus = found.version.status
   return null
 }
 
@@ -828,7 +823,6 @@ export function createUnit(stageId, data) {
     templateName: null,
     templateVersionId: null,
     templateVersion: null,
-    templateVersionStatus: null,
     createTime: now,
     updateTime: now
   }

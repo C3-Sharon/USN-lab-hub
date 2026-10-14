@@ -13,7 +13,7 @@
     <div v-if="unit?.templateVersionId" class="picker-current">
       <span class="picker-current__label text-help muted">当前关联</span>
       <span class="picker-current__value">{{ unit.templateName }} · {{ unit.templateVersion }}</span>
-      <VersionStatusTag :status="unit.templateVersionStatus || 'PUBLISHED'" />
+      <VersionStatusTag v-if="unit.templateVersionStatus" :status="unit.templateVersionStatus" />
     </div>
     <div v-else class="picker-current picker-current--none">
       <span class="text-help muted">当前未关联任何模板版本</span>

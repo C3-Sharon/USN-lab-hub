@@ -244,7 +244,7 @@ function scopeMeta(scope) {
 
 async function loadProjects() {
   try {
-    const res = await listProjects({ page: 1, pageSize: 100 })
+    const res = await listProjects({ page: 1, pageSize: 50 })
     projects.value = res?.list || []
   } catch (err) {
     notifyApiError(err)

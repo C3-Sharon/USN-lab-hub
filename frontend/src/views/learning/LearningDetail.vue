@@ -117,7 +117,7 @@
                     <template v-if="unit.templateVersionId">
                       <span class="unit-template__label text-help muted">实验模板</span>
                       <span class="unit-template__name">{{ unit.templateName }} · {{ unit.templateVersion }}</span>
-                      <VersionStatusTag :status="unit.templateVersionStatus || 'PUBLISHED'" />
+                      <VersionStatusTag v-if="unit.templateVersionStatus" :status="unit.templateVersionStatus" />
                       <span v-if="unit.templateVersionStatus === 'DEPRECATED'" class="unit-template__warn text-help">
                         已废弃，仅可查看，不可用于新关联
                       </span>
@@ -168,6 +168,7 @@ import {
   roadmapStatusMeta,
   learningStatusMeta
 } from '@/api/learning'
+import { getVersionDetail } from '@/api/experimentTemplates'
 import { notifyApiError, isLearningNotFound, isLearningDenied } from '@/utils/apiError'
 import RoadmapCover from '@/components/RoadmapCover.vue'
 import DifficultyTag from '@/components/DifficultyTag.vue'
@@ -254,6 +255,36 @@ function handleResize() {
   }
 }
 
+async function enrichTemplateVersionStatuses(stageList) {
+  const references = new Map()
+  for (const stage of stageList || []) {
+    for (const unit of stage.units || []) {
+      unit.templateVersionStatus = null
+      if (!unit.templateId || !unit.templateVersionId) continue
+      const key = `${unit.templateId}:${unit.templateVersionId}`
+      const entry = references.get(key) || {
+        templateId: unit.templateId,
+        versionId: unit.templateVersionId,
+        units: []
+      }
+      entry.units.push(unit)
+      references.set(key, entry)
+    }
+  }
+
+  await Promise.all(
+    [...references.values()].map(async ({ templateId, versionId, units }) => {
+      try {
+        const version = await getVersionDetail(templateId, versionId)
+        for (const unit of units) unit.templateVersionStatus = version?.status || null
+      } catch {
+        // 状态是补充展示信息，查询失败不能让整条学习路线不可用。
+      }
+    })
+  )
+  return stageList || []
+}
+
 async function loadAll() {
   loading.value = true
   pageState.value = 'loading'
@@ -264,7 +295,7 @@ async function loadAll() {
       listMyRoadmaps({ page: 1, pageSize: 100 })
     ])
     roadmap.value = detail
-    stages.value = stageList || []
+    stages.value = await enrichTemplateVersionStatuses(stageList || [])
     record.value = (myRes?.list || []).find((r) => r.roadmapId === roadmapId.value) || null
     applyMobileDefault()
     pageState.value = 'success'
@@ -353,7 +384,7 @@ async function handleTemplateSubmit({ templateVersionId }) {
     await updateUnit(pickerUnit.value.id, { templateVersionId })
     ElMessage.success(templateVersionId ? '已关联实验模板版本' : '已清除模板关联')
     pickerVisible.value = false
-    stages.value = (await listStages(roadmapId.value)) || []
+    stages.value = await enrichTemplateVersionStatuses((await listStages(roadmapId.value)) || [])
   } catch (err) {
     notifyApiError(err)
   } finally {
