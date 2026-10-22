@@ -93,6 +93,27 @@ export function getMockProjectMembers() {
   return [...MOCK_MEMBERS]
 }
 
+/** W43 项目转换：把已发布实验记录转成 PREPARING 项目草案 */
+export function registerMockProject(data) {
+  const project = {
+    id: Math.max(...MOCK_PROJECTS.map((p) => p.id), 0) + 100,
+    code: data.code,
+    name: data.name,
+    summary: data.summary || '',
+    category: data.category || '',
+    status: 'PREPARING',
+    coverUrl: null,
+    myRole: 'OWNER',
+    memberCount: MOCK_MEMBERS.length,
+    sourceExperimentRecordId: data.sourceExperimentRecordId ?? null,
+    sourcePublishedRevisionId: data.sourcePublishedRevisionId ?? null,
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString()
+  }
+  MOCK_PROJECTS.unshift(project)
+  return project
+}
+
 /**
  * mock 成功响应：与真实模式对齐 —— request.js 拦截器会把
  * { code: 200, data } 解包为 data，因此 mock 也直接 resolve data，

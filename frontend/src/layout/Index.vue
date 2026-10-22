@@ -112,7 +112,7 @@
 <script setup>
 import { computed, markRaw, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection, Tickets } from '@element-plus/icons-vue'
 import { userStore, hasAnyRole } from '@/store/user'
 import { ROLE } from '@/utils/permission'
 
@@ -144,6 +144,8 @@ const pageSubtitle = computed(() => {
   if (route.path.startsWith('/projects')) return '正式项目档案、成员与权限管理'
   if (route.path.startsWith('/learning')) return '入门学习路线与学习进度'
   if (route.path.startsWith('/experiment/templates')) return '实验模板与不可变版本管理'
+  if (route.path.startsWith('/experiment/records')) return '实验记录、修订评审与导师反馈'
+  if (route.path.startsWith('/collection')) return '采集计划、批次、CSV 导入与快照'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -157,6 +159,7 @@ const ICON = markRaw({
   folder: FolderOpened,
   reading: Reading,
   template: Collection,
+  record: Tickets,
   device: Cpu,
   bell: Bell,
   command: SetUp,
@@ -194,7 +197,8 @@ const menuItems = computed(() => {
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
       children: [
         { index: '/learning', title: '学习路线', icon: ICON.reading, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
-        { index: '/experiment/templates', title: '实验模板', icon: ICON.template, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+        { index: '/experiment/templates', title: '实验模板', icon: ICON.template, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/experiment/records', title: '实验记录', icon: ICON.record, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       ]
     },
     {
