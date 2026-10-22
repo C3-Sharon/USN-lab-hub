@@ -204,7 +204,7 @@ W43 状态转换：`DRAFT → READY → ARCHIVED`，以及 `DRAFT/READY → CANC
 | `startedAt/completedAt` | datetime | 自动 | 实际处理边界 |
 | `recordCount/rejectedCount` | long | 自动 | 当前有效记录数/拒绝数 |
 | `observedFrom/observedTo` | datetime | 否 | 数据观测时间范围 |
-| `sourceRevisionId` | long | 否 | 完成时固定的导入修订或人工集合修订 |
+| `sourceRevisionId` | long | 否 | FILE 完成时固定的已确认导入修订 ID；MANUAL 固定为 null |
 | `completionReason` | string | 条件 | 完成/失败/取消说明，最多 500 字符 |
 | `checksum` | string | 否 | 完成时生成的 SHA-256 汇总 |
 | `version` | int | 自动 | 乐观锁 |
@@ -218,7 +218,23 @@ MANUAL: CREATED → REVIEW_REQUIRED → COMPLETED
 COMPLETED → ARCHIVED
 ```
 
-`COMPLETED` 后原件、映射、人工观测、计数、时间范围和 checksum 均不可修改；归档只改变可见状态，不删除证据。
+`COMPLETED` 后原件、映射、人工观测、计数、时间范围和 checksum 均不可修改；归档只改变可见状态，不删除证据。只有 `READY` 计划可以创建批次；批次 `sourceType` 由计划派生，请求若保留该字段则必须与计划完全一致，否则返回 400 `INVALID_PARAMETER`。
+
+### 3.5.1 文件导入 `DataImport` 与映射修订 `DataImportRevision`
+
+`DataImport` 表示同一批次中的一份不可变原件，至少包含 `id/batchId/originalFile/status/currentRevisionId/version/createTime/updateTime`。聚合状态为：
+
+- `UPLOADED`：原件已保存，尚未形成有效映射。
+- `MAPPING_REQUIRED`：当前映射修订待确认，或最近一次处理失败后需要重新映射。
+- `CONFIRMED`：当前映射修订已确认并成为批次有效数据来源。
+- `FAILED`：原件解析或处理失败，未形成可确认结果。
+
+每次保存一份与当前映射摘要不同的映射都追加 `DataImportRevision`，至少包含 `id/dataImportId/importRevisionNo/mappingJson/mappingDigest/status/recordCount/rejectedCount/previousRevisionId/createdBy/createTime/confirmedBy/confirmedAt`。修订状态为 `MAPPING_REQUIRED / CONFIRMED / SUPERSEDED / FAILED`。
+
+- 保存新映射后，`DataImport.currentRevisionId` 指向新修订，聚合状态变为 `MAPPING_REQUIRED`；旧 `CONFIRMED` 修订暂时仍是有效回退证据。
+- 新修订确认成功时，事务内将它置为 `CONFIRMED`，将上一份 `CONFIRMED` 修订置为 `SUPERSEDED`，替换该导入在批次最终集合中的记录；旧记录与修订继续可审计，但不计入最终批次记录数。
+- 批次 `COMPLETED` 后禁止新增、确认或切换导入修订。
+- `GET /api/data-imports/{id}` 至少返回聚合字段、`currentRevision` 和按 `importRevisionNo DESC` 排列的 `revisions` 摘要；修订摘要包含 `id/importRevisionNo/status/mappingDigest/recordCount/rejectedCount/createTime/confirmedAt`。
 
 ### 3.6 统一采集记录与快照
 
@@ -229,6 +245,9 @@ COMPLETED → ARCHIVED
 - FILE 的 method 固定 `FILE_IMPORT`；MANUAL 必须提供 method、instrument、unit、observedAt。
 
 `CollectionSnapshot` 字段：`id/snapshotCode/batchId/snapshotType(FULL_BATCH)/sourceRevisionId/recordCount/rejectedCount/observedFrom/observedTo/batchChecksum/mappingDigest/createdBy/createTime`。快照不可更新、不可删除。
+
+- FILE 快照的 `sourceRevisionId` 是完成批次时生效的 `DataImportRevision.id`，`mappingDigest` 是该修订映射摘要。
+- MANUAL 快照的 `sourceRevisionId` 和 `mappingDigest` 均为 null。完成 MANUAL 批次时，服务端在内部冻结每条人工观测的当前有效修订 ID 集合，并据此计算 `batchChecksum`；通过 `batchId + batchChecksum` 复现，不虚构“人工集合修订”实体。
 
 ## 4. 状态与行为语义
 
@@ -346,19 +365,19 @@ REVISING ──submit──> IN_REVIEW
 | 操作 | SYSTEM_ADMIN | TEACHER | OWNER | MAINTAINER | MEMBER | OBSERVER/非成员 |
 |---|---|---|---|---|---|---|
 | 创建学习实验记录 | 可 | 可 | 按全局身份 | 按全局身份 | 自己 | 不可 |
-| 创建项目实验记录 | 可 | 可 | 可 | 可 | 可（本项目） | 不可 |
-| 编辑实验草稿 | 可 | 可 | 自己或项目监管 | 自己或项目监管 | 仅自己 | 不可 |
+| 创建项目实验记录 | 可 | 仅作为项目成员 | 可 | 可 | 可（本项目） | 不可 |
+| 编辑实验草稿 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 不可 |
 | 查看未发布实验 | 可 | 可 | 本项目 | 本项目 | 自己；项目共享反馈范围内 | 不可 |
 | 查看已发布实验 | 可 | 可 | 本项目 | 本项目 | 本项目或自己的学习记录 | OBSERVER 仅本项目只读 |
-| 提交/重新提交 | 可 | 可 | 仅自己创建 | 仅自己创建 | 仅自己 | 不可 |
+| 提交/重新提交 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 仅自己创建 | 不可 |
 | 评论/要求修改/批准 | 可 | 可 | 本项目 | 本项目 | 不可 | 不可 |
 | 发布实验 | 可 | 可 | 本项目 | 本项目 | 不可（除非兼具前述角色） | 不可 |
-| 管理采集计划 | 可 | 可 | 本项目 | 本项目 | 不可 | 不可 |
-| 创建/执行批次 | 可 | 可 | 本项目 | 本项目 | 本项目且被指定/计划负责人 | 不可 |
+| 管理采集计划 | 可 | 仅作为项目 OWNER/MAINTAINER | 本项目 | 本项目 | 不可 | 不可 |
+| 创建/执行批次 | 可 | 仅作为项目成员且符合项目角色 | 本项目 | 本项目 | 本项目且被指定/计划负责人 | 不可 |
 | 查看批次/快照 | 可 | 可 | 本项目 | 本项目 | 本项目 | OBSERVER 本项目只读 |
 | 转项目草案 | 可 | 可 | 记录作者或监管 | 记录作者或监管 | 仅记录作者 | 不可 |
 
-STOCK_KEEPER 没有采集特权；若同时是项目成员，按项目角色或普通成员规则执行。SYSTEM_ADMIN 是审计性全局覆盖；TEACHER 可评审和监督全部实验，但所有覆盖操作必须记录原因和审计。
+实验内容的编辑、提交和重新提交始终属于记录作者；评审者只能通过不可变反馈推动修改，不能代改作者内容。STOCK_KEEPER 没有采集特权；若同时是项目成员，按项目角色或普通成员规则执行。SYSTEM_ADMIN 是审计性全局覆盖，但也不能编辑或提交他人实验内容。TEACHER 可查看并评审全部实验；未加入项目时沿用项目契约的全局只读能力，不能管理该项目的采集计划或批次。所有全局覆盖评审操作必须记录原因和审计。
 
 ### 7.2 隐藏语义
 
@@ -491,8 +510,8 @@ STOCK_KEEPER 没有采集特权；若同时是项目成员，按项目角色或�
 
 - 计划成功响应至少返回 `id/status/version`。
 - 批次成功响应至少返回 `id/batchCode/status/sourceType/version`。
-- 文件上传成功返回 `id/status/version/importVersion/batchVersion/originalFile{fileName,size,sha256}`。
-- 映射保存成功返回新的 `version/importVersion/status/batchVersion`；确认成功返回 `id/status/version/importVersion/recordCount/rejectedCount/batchVersion`。
+- 文件上传成功返回 `id/status/version/importVersion/batchVersion/originalFile{fileName,size,sha256}`；首次上传的 `importVersion` 为 0。
+- 映射保存成功返回新的 `version/importVersion/status=MAPPING_REQUIRED/batchVersion/currentRevision{id,importRevisionNo,status,mappingDigest}`；确认成功返回 `id/status=CONFIRMED/version/importVersion/recordCount/rejectedCount/batchVersion/currentRevision`。
 - 完成批次返回 `id/status/version/recordCount/rejectedCount/checksum`；快照返回 §3.6 的完整快照字段。
 - 人工记录创建返回 `id/version/revisionNo/batchVersion`；更正返回相同 id、新 `version/revisionNo/batchVersion` 和 `previousRevisionId`。
 
@@ -665,10 +684,11 @@ Idempotency-Key: 01K...
 | `EXPERIMENT_INVALID_TRANSITION` | 非法记录/修订状态转换 |
 | `EXPERIMENT_REVISION_IMMUTABLE` | 修改非 EDITABLE 修订 |
 | `BATCH_INVALID_TRANSITION` | 非法批次状态转换 |
+| `COLLECTION_PLAN_NOT_READY` | 非 READY 计划不能创建批次 |
 | `BATCH_IMMUTABLE` | 修改完成/归档批次 |
 | `BATCH_NOT_COMPLETED` | 未完成批次不能生成快照 |
 | `SNAPSHOT_ALREADY_BOUND` | 当前修订已有快照且未显式替换 |
-| `IMPORT_ALREADY_CONFIRMED` | 导入修订已确认 |
+| `IMPORT_ALREADY_CONFIRMED` | 当前导入修订已确认；新映射应先追加修订 |
 | `PROJECT_ALREADY_CONVERTED` | 记录已经转为项目 |
 | `TEMPLATE_VERSION_MISMATCH` | 学习单元/项目与模板版本不一致 |
 
@@ -676,7 +696,7 @@ Idempotency-Key: 01K...
 
 - W43 不使用 422；业务校验失败统一 400 或状态冲突 409。
 - 原件落盘、解析或数据库事务失败返回 500 `FILE_STORAGE_FAILED` / `IMPORT_PROCESSING_FAILED`，批次不得进入 COMPLETED。
-- 响应必须包含 traceId；不得返回服务器绝对路径、SQL、堆栈或原始凭据。
+- 本契约 API 的错误响应固定沿用 `{code,msg,reason,data}`，`traceId` 放在 `data.traceId`；冲突附加字段（如 `currentVersion`）也放在 `data`。不得返回服务器绝对路径、SQL、堆栈或原始凭据。
 
 ## 11. 页面信息层级与完整状态
 
@@ -748,3 +768,4 @@ Idempotency-Key: 01K...
 |---|---|---|
 | 2026-10-22 | 初始 v1.0-draft：记录修订、反馈、FILE/MANUAL 批次、快照、幂等/乐观锁和项目转换推荐方案 | REVIEW |
 | 2026-10-22 | 用户确认 D1-D6；冻结状态机、不可变证据、文件限制、重复/修订语义和轻量项目转换 | FROZEN |
+| 2026-10-22 | 冻结校准：作者写入边界、DataImport 修订状态、MANUAL 快照来源、READY 批次前置条件和 `data.traceId` | FROZEN |

@@ -1,10 +1,10 @@
 # 项目工作台 API 契约 V1
 
 > 状态：FROZEN
-> 版本：v1.1（第 3 周：项目档案与成员权限；第 4 周新增：里程碑、任务状态机、看板、乐观锁）
-> 最后确认周：第 4 周（2026-W40）
+> 版本：v1.2（第 3-4 周能力；第 7 周 additive 新增实验来源追溯字段）
+> 最后确认周：第 7 周（2026-W43）
 > 影响范围：API、数据库、权限、前端字段
-> 关联周文档：`docs/weekly/2026-W39.md`、`docs/weekly/2026-W40.md`
+> 关联周文档：`docs/weekly/2026-W39.md`、`docs/weekly/2026-W40.md`、`docs/weekly/2026-W43.md`
 > 前置契约：`docs/contracts/AUTH_WORKBENCH_V1.md`
 
 ## 1. 目标与非目标
@@ -147,6 +147,8 @@ Status: FROZEN
     "category": "hardware_project",
     "status": "PREPARING",
     "coverUrl": null,
+    "sourceExperimentRecordId": null,
+    "sourcePublishedRevisionId": null,
     "myRole": "OWNER",
     "memberCount": 1,
     "createTime": "2026-09-21T10:30:00",
@@ -252,6 +254,8 @@ Status: FROZEN
     "category": "hardware_project",
     "status": "PREPARING",
     "coverUrl": null,
+    "sourceExperimentRecordId": 301,
+    "sourcePublishedRevisionId": 904,
     "myRole": "OWNER",
     "memberCount": 2,
     "createTime": "2026-09-21T10:30:00",
@@ -280,6 +284,7 @@ Status: FROZEN
 - 非成员访问统一返回 404 PROJECT_NOT_FOUND，不暴露项目存在性；SYSTEM_ADMIN/TEACHER 的全局查看权限除外
 - ARCHIVED 项目成员仍可查看详情，但不可编辑
 - members 第 3 周不分页，按 OWNER 优先、joinedAt 升序、userId 升序稳定返回
+- `sourceExperimentRecordId/sourcePublishedRevisionId` 仅在项目由已发布实验转换而来时非空；普通创建的项目返回 null。字段对有权查看项目详情的用户可见，但跳转读取来源实验仍必须重新通过实验记录 ACL，无权时返回 404，不从项目响应泄露实验标题或正文。
 
 ### 5.4 添加项目成员
 
@@ -1163,6 +1168,7 @@ SYSTEM_ADMIN 全局覆盖项目 OWNER 权限；TEACHER 全局覆盖项目只读�
 |---|---|---|
 | v1.0（第 3 周） | 项目档案、成员管理、项目角色、基础 CRUD | 新增表和接口，不影响现有 IoT 演示项目路径 |
 | v1.1（第 4 周） | 里程碑、任务状态机、乐观锁、首页 tasks 区域 | 在现有项目接口基础上扩展，不破坏 v1.0 字段和接口 |
+| v1.2（第 7 周） | 项目详情增加可空实验来源记录/发布修订 ID | additive 只读字段；普通项目返回 null，旧客户端可忽略 |
 
 ## 16. 变更记录
 
@@ -1170,3 +1176,4 @@ SYSTEM_ADMIN 全局覆盖项目 OWNER 权限；TEACHER 全局覆盖项目只读�
 |---|---|---|
 | 2026-09-21 | 初始草案 v1.0：项目状态、项目角色、基础 CRUD、成员管理、错误响应 | FROZEN（第 3 周产品 PR，前后端确认后实现） |
 | 2026-09-28 | 扩展 v1.1：里程碑、任务状态机、乐观锁、看板、首页 tasks 区域 | FROZEN（第 4 周产品 PR，前后端确认后实现） |
+| 2026-10-22 | 扩展 v1.2：项目详情增加实验来源追溯字段及可见性边界 | FROZEN（第 7 周契约校准） |
