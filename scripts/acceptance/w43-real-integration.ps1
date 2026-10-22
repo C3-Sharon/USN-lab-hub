@@ -73,7 +73,8 @@ function Assert-ApiError {
         [scriptblock]$Action,
         [int]$Status,
         [string]$Reason,
-        [string]$Label
+        [string]$Label,
+        [switch]$RequireTraceId
     )
 
     try {
@@ -87,6 +88,9 @@ function Assert-ApiError {
         }
         Assert-Equal $actualStatus $Status "$Label HTTP status"
         Assert-Equal $payload.reason $Reason "$Label reason"
+        if ($RequireTraceId) {
+            Assert-True ([bool]$payload.data.traceId) "$Label data.traceId"
+        }
         return
     }
     throw "$Label expected HTTP $Status/$Reason but request succeeded"
@@ -104,7 +108,7 @@ function Login {
 }
 
 try {
-    "observed_at,voltage`n2026-10-22 14:30:00.000,5.12`n2026-10-22 14:31:00.000,5.15" |
+    "observed_at,voltage,note`n2026-10-22 14:30:00.000,5.12,first`n2026-10-22 14:31:00.000,5.15,second" |
         Set-Content -LiteralPath $tempCsv -Encoding utf8NoBOM
 
     $admin = Login -MemberId $AdminMemberId -Password $AdminPassword
@@ -134,7 +138,7 @@ try {
     $recordVersion = [int]$record.data.version
     $revisionVersion = [int]$record.data.currentRevision.version
 
-    # 2. Save once, then prove an old optimistic-lock version cannot overwrite it.
+    # 2. Only the author can edit; then prove an old optimistic-lock version cannot overwrite it.
     $saveBody = @{
         recordVersion = $recordVersion
         revisionVersion = $revisionVersion
@@ -147,10 +151,14 @@ try {
         conclusion = "Pass"
         changeSummary = $null
     }
+    Assert-ApiError -Status 403 -Reason "EXPERIMENT_OPERATION_DENIED" -Label "reviewer cannot edit author content" -RequireTraceId -Action {
+        Invoke-JsonApi -Method PUT -Path "/api/experiment-records/$recordId/revisions/$revisionId" `
+            -Token $admin.token -Body $saveBody
+    }
     $saved = Invoke-JsonApi -Method PUT -Path "/api/experiment-records/$recordId/revisions/$revisionId" `
         -Token $member.token -Body $saveBody
     Assert-Equal $saved.code 200 "save revision"
-    Assert-ApiError -Status 409 -Reason "VERSION_CONFLICT" -Label "stale revision save" -Action {
+    Assert-ApiError -Status 409 -Reason "VERSION_CONFLICT" -Label "stale revision save" -RequireTraceId -Action {
         Invoke-JsonApi -Method PUT -Path "/api/experiment-records/$recordId/revisions/$revisionId" `
             -Token $member.token -Body $saveBody
     }
@@ -165,12 +173,20 @@ try {
             ownerId = [long]$member.user.id
             sourceType = "FILE"
             metricDefinitions = @(
-                @{ code = "voltage"; name = "Voltage"; valueType = "DECIMAL"; unit = "V"; required = $true }
+                @{ code = "voltage"; name = "Voltage"; valueType = "DECIMAL"; unit = "V"; required = $true },
+                @{ code = "note"; name = "Note"; valueType = "STRING"; unit = ""; required = $false }
             )
             linkedExperimentRecordId = $recordId
             retentionNote = "Retain with experiment evidence"
         }
     $filePlanId = [long]$filePlan.data.id
+    Assert-ApiError -Status 409 -Reason "COLLECTION_PLAN_NOT_READY" -Label "draft plan cannot create batch" -RequireTraceId -Action {
+        Invoke-JsonApi -Method POST -Path "/api/collection-plans/$filePlanId/batches" `
+            -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+                planVersion = [int]$filePlan.data.version
+                sourceType = "FILE"
+            }
+    }
     $filePlanReady = Invoke-JsonApi -Method POST -Path "/api/collection-plans/$filePlanId/ready" `
         -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{ version = [int]$filePlan.data.version }
     Assert-Equal $filePlanReady.data.status "READY" "file plan ready"
@@ -204,29 +220,30 @@ try {
     $preview = Invoke-JsonApi -Method GET -Path "/api/data-imports/$importId/preview" -Token $member.token
     Assert-Equal $preview.code 200 "CSV preview"
 
+    $mappingV1 = @{
+        delimiter = ","
+        encoding = "UTF-8"
+        headerRow = 1
+        timeMapping = @{
+            sourceColumn = "observed_at"
+            format = "yyyy-MM-dd HH:mm:ss.SSS"
+            timezone = "Asia/Shanghai"
+        }
+        columns = @(
+            @{
+                sourceColumn = "voltage"
+                metricCode = "voltage"
+                valueType = "DECIMAL"
+                sourceUnit = "V"
+                targetUnit = "V"
+            }
+        )
+        ignoredColumns = @("note")
+    }
     $mapped = Invoke-JsonApi -Method PUT -Path "/api/data-imports/$importId/mapping" -Token $member.token -Body @{
         version = [int]$upload.data.version
         importVersion = [int]$upload.data.importVersion
-        mapping = @{
-            delimiter = ","
-            encoding = "UTF-8"
-            headerRow = 1
-            timeMapping = @{
-                sourceColumn = "observed_at"
-                format = "yyyy-MM-dd HH:mm:ss.SSS"
-                timezone = "Asia/Shanghai"
-            }
-            columns = @(
-                @{
-                    sourceColumn = "voltage"
-                    metricCode = "voltage"
-                    valueType = "DECIMAL"
-                    sourceUnit = "V"
-                    targetUnit = "V"
-                }
-            )
-            ignoredColumns = @()
-        }
+        mapping = $mappingV1
     }
 
     $confirmKey = New-IdempotencyKey
@@ -243,6 +260,36 @@ try {
             batchVersion = [int]$mapped.data.batchVersion
         }
     Assert-Equal $confirmedReplay.data.id $confirmed.data.id "confirm idempotent replay"
+
+    $mappingV2 = $mappingV1.Clone()
+    $mappingV2.columns = @(
+        $mappingV1.columns[0],
+        @{
+            sourceColumn = "note"
+            metricCode = "note"
+            valueType = "STRING"
+            sourceUnit = ""
+            targetUnit = ""
+        }
+    )
+    $mappingV2.ignoredColumns = @()
+    $mappedV2 = Invoke-JsonApi -Method PUT -Path "/api/data-imports/$importId/mapping" -Token $member.token -Body @{
+        version = [int]$confirmed.data.version
+        importVersion = [int]$confirmed.data.importVersion
+        mapping = $mappingV2
+    }
+    Assert-True ($mappedV2.data.importVersion -gt $confirmed.data.importVersion) "new mapping appends import revision"
+    Assert-Equal $mappedV2.data.status "MAPPING_REQUIRED" "new mapping requires confirmation"
+    $confirmedV2 = Invoke-JsonApi -Method POST -Path "/api/data-imports/$importId/confirm" `
+        -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+            version = [int]$mappedV2.data.version
+            importVersion = [int]$mappedV2.data.importVersion
+            batchVersion = [int]$mappedV2.data.batchVersion
+        }
+    $importDetail = Invoke-JsonApi -Method GET -Path "/api/data-imports/$importId" -Token $member.token
+    $supersededRevisions = @($importDetail.data.revisions | Where-Object { $_.status -eq "SUPERSEDED" })
+    Assert-True ($supersededRevisions.Count -ge 1) "previous confirmed import revision is superseded"
+    $confirmed = $confirmedV2
 
     $fileCompleted = Invoke-JsonApi -Method POST -Path "/api/collection-batches/$fileBatchId/complete" `
         -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
@@ -289,7 +336,7 @@ try {
             sourceType = "MANUAL"
         }
     $manualBatchId = [long]$manualBatch.data.id
-    Assert-ApiError -Status 409 -Reason "BATCH_NOT_COMPLETED" -Label "unfinished batch snapshot" -Action {
+    Assert-ApiError -Status 409 -Reason "BATCH_NOT_COMPLETED" -Label "unfinished batch snapshot" -RequireTraceId -Action {
         Invoke-JsonApi -Method POST -Path "/api/collection-batches/$manualBatchId/snapshots" `
             -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
                 batchVersion = [int]$manualBatch.data.version
@@ -329,7 +376,13 @@ try {
             version = [int]$manualUpdated.data.batchVersion
             completionReason = "Manual reading reviewed"
         }
-    Assert-ApiError -Status 409 -Reason "BATCH_IMMUTABLE" -Label "completed manual batch immutable" -Action {
+    $manualSnapshot = Invoke-JsonApi -Method POST -Path "/api/collection-batches/$manualBatchId/snapshots" `
+        -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+            batchVersion = [int]$manualCompleted.data.version
+            snapshotType = "FULL_BATCH"
+        }
+    Assert-True ($null -eq $manualSnapshot.data.sourceRevisionId) "manual snapshot has no synthetic source revision"
+    Assert-ApiError -Status 409 -Reason "BATCH_IMMUTABLE" -Label "completed manual batch immutable" -RequireTraceId -Action {
         Invoke-JsonApi -Method PUT -Path "/api/manual-records/$manualRecordId" -Token $member.token -Body @{
             version = [int]$manualUpdated.data.version
             batchVersion = [int]$manualCompleted.data.version
@@ -350,7 +403,7 @@ try {
             revisionVersion = $revisionVersion
         }
     Assert-Equal $submitted.data.status "IN_REVIEW" "record submitted"
-    Assert-ApiError -Status 403 -Reason "FEEDBACK_OPERATION_DENIED" -Label "self approval denied" -Action {
+    Assert-ApiError -Status 403 -Reason "FEEDBACK_OPERATION_DENIED" -Label "self approval denied" -RequireTraceId -Action {
         Invoke-JsonApi -Method POST -Path "/api/experiment-records/$recordId/feedback" `
             -Token $member.token -IdempotencyKey (New-IdempotencyKey) -Body @{
                 recordVersion = [int]$submitted.data.recordVersion
@@ -422,6 +475,10 @@ try {
     Assert-Equal $projectDraft.data.status "PREPARING" "converted project status"
     Assert-Equal $projectDraft.data.myRole "OWNER" "converter project role"
     Assert-Equal $projectDraft.data.sourceExperimentRecordId $recordId "project source record"
+    Assert-Equal $projectDraft.data.sourcePublishedRevisionId $newRevisionId "project source published revision"
+    $projectDetail = Invoke-JsonApi -Method GET -Path "/api/projects/$($projectDraft.data.id)" -Token $member.token
+    Assert-Equal $projectDetail.data.sourceExperimentRecordId $recordId "project detail source record"
+    Assert-Equal $projectDetail.data.sourcePublishedRevisionId $newRevisionId "project detail source published revision"
     $projectReplay = Invoke-JsonApi -Method POST -Path "/api/experiment-records/$recordId/project-draft" `
         -Token $member.token -IdempotencyKey $conversionKey -Body $conversionBody
     Assert-Equal $projectReplay.data.id $projectDraft.data.id "project conversion idempotent replay"
