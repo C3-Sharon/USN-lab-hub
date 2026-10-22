@@ -20,6 +20,7 @@
 | 项目工作台 API V1.1 | `docs/contracts/PROJECT_WORKSPACE_API.md` | FROZEN | 项目状态、项目角色、项目 CRUD、成员管理、里程碑、任务状态机、乐观锁、首页 tasks 区域 |
 | 学习实验域 API V1 | `docs/contracts/LEARNING_EXPERIMENT_API.md` | FROZEN | 学习路线、阶段、单元、成员学习记录、进度计算、首页 learning 区域 |
 | 实验模板与版本 API V1 | `docs/contracts/EXPERIMENT_TEMPLATE_API.md` | FROZEN | 系统/项目模板、版本状态机、JSON Schema 子集、学习单元版本关联、第7周预留 |
+| 实验记录、采集批次与导师反馈 API V1 | `docs/contracts/EXPERIMENT_RECORD_ACQUISITION_API.md` | FROZEN | 内容修订、导师反馈、FILE/MANUAL 批次、文件映射、人工记录、冻结快照和转项目草案；D1-D6 于 W43 确认 |
 | 首轮 IoT API | `docs/agent-guides/04_API_CONTRACT.md` | ACTIVE_LEGACY | PM-001 latest/history/告警/指令等基线 |
 | 首轮 MQTT | `docs/agent-guides/05_MQTT_CONTRACT.md` | ACTIVE_LEGACY | PM-001 telemetry/command/ack |
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |
