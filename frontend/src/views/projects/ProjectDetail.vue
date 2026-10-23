@@ -52,6 +52,17 @@
                   <span class="info-label">最近更新</span>
                   <span class="info-value">{{ formatTime(project.updateTime) }}</span>
                 </div>
+                <div v-if="project.sourceExperimentRecordId" class="info-row">
+                  <span class="info-label">来源实验</span>
+                  <span class="info-value">
+                    <el-link
+                      type="primary"
+                      @click="$router.push(`/experiment/records/${project.sourceExperimentRecordId}`)"
+                    >
+                      查看已发布实验记录
+                    </el-link>
+                  </span>
+                </div>
               </div>
             </el-card>
 
@@ -92,6 +103,11 @@
         <!-- 任务看板 -->
         <el-tab-pane label="任务看板" name="kanban">
           <TaskKanban v-if="activeTab === 'kanban'" :project="project" />
+        </el-tab-pane>
+
+        <!-- 数据采集 -->
+        <el-tab-pane label="数据采集" name="collection">
+          <CollectionPlanList v-if="activeTab === 'collection'" :project="project" embedded />
         </el-tab-pane>
 
         <!-- 成员 -->
@@ -159,11 +175,12 @@ import ProjectCover from '@/components/ProjectCover.vue'
 import AddMemberDialog from './AddMemberDialog.vue'
 import MilestonePanel from './MilestonePanel.vue'
 import TaskKanban from './TaskKanban.vue'
+import CollectionPlanList from '@/views/collection/CollectionPlanList.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const TAB_NAMES = ['overview', 'milestones', 'kanban', 'members']
+const TAB_NAMES = ['overview', 'milestones', 'kanban', 'collection', 'members']
 
 const project = ref(null)
 const loading = ref(false)

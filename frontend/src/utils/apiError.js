@@ -167,3 +167,132 @@ export function schemaErrors(err) {
   if (reason !== 'SCHEMA_INVALID' || !data || !Array.isArray(data.errors)) return []
   return data.errors
 }
+
+// ========== 实验记录与采集域错误码（EXPERIMENT_RECORD_ACQUISITION_API.md §10） ==========
+
+const EXPERIMENT_NOT_FOUND_REASONS = ['EXPERIMENT_RECORD_NOT_FOUND', 'EXPERIMENT_REVISION_NOT_FOUND']
+const COLLECTION_NOT_FOUND_REASONS = [
+  'COLLECTION_PLAN_NOT_FOUND',
+  'COLLECTION_BATCH_NOT_FOUND',
+  'COLLECTION_SNAPSHOT_NOT_FOUND',
+  'DATA_IMPORT_NOT_FOUND',
+  'MANUAL_RECORD_NOT_FOUND'
+]
+
+/** 记录/修订不存在或不可见（404，隐藏存在性） */
+export function isExperimentNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || EXPERIMENT_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 无记录写权限（403） */
+export function isExperimentDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || reason === 'EXPERIMENT_OPERATION_DENIED'
+}
+
+/** 无导师评审权限（403） */
+export function isFeedbackDenied(err) {
+  return isReason(err, 'FEEDBACK_OPERATION_DENIED')
+}
+
+/** 采集资源不存在或不可见（404） */
+export function isCollectionNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || COLLECTION_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 无计划/批次执行权限（403） */
+export function isCollectionDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || reason === 'COLLECTION_OPERATION_DENIED'
+}
+
+/** 无转项目权限（403） */
+export function isProjectConversionDenied(err) {
+  return isReason(err, 'PROJECT_CONVERSION_DENIED')
+}
+
+/** 非法记录/修订状态转换（409） */
+export function isExperimentInvalidTransition(err) {
+  return isReason(err, 'EXPERIMENT_INVALID_TRANSITION')
+}
+
+/** 修改非 EDITABLE 修订（409） */
+export function isRevisionImmutable(err) {
+  return isReason(err, 'EXPERIMENT_REVISION_IMMUTABLE')
+}
+
+/** 实验内容不符合固定模板版本（400） */
+export function isExperimentContentInvalid(err) {
+  return isReason(err, 'EXPERIMENT_CONTENT_INVALID')
+}
+
+/** 记录已转换项目（409） */
+export function isProjectAlreadyConverted(err) {
+  return isReason(err, 'PROJECT_ALREADY_CONVERTED')
+}
+
+/** 非法批次状态转换（409） */
+export function isBatchInvalidTransition(err) {
+  return isReason(err, 'BATCH_INVALID_TRANSITION')
+}
+
+/** 修改完成/归档批次（409） */
+export function isBatchImmutable(err) {
+  return isReason(err, 'BATCH_IMMUTABLE')
+}
+
+/** 未完成批次不能生成快照（409） */
+export function isBatchNotCompleted(err) {
+  return isReason(err, 'BATCH_NOT_COMPLETED')
+}
+
+/** 当前修订已有快照且未显式替换（409） */
+export function isSnapshotAlreadyBound(err) {
+  return isReason(err, 'SNAPSHOT_ALREADY_BOUND')
+}
+
+/** 导入修订已确认（409） */
+export function isImportAlreadyConfirmed(err) {
+  return isReason(err, 'IMPORT_ALREADY_CONFIRMED')
+}
+
+/** 幂等键复用于不同请求摘要（409） */
+export function isIdempotencyKeyReused(err) {
+  return isReason(err, 'IDEMPOTENCY_KEY_REUSED')
+}
+
+/** 学习单元/项目与模板版本不一致（409） */
+export function isTemplateVersionMismatch(err) {
+  return isReason(err, 'TEMPLATE_VERSION_MISMATCH')
+}
+
+/** CSV 类型/大小/编码限制（400） */
+export function isFileUnsupported(err) {
+  const { reason } = normalizeApiError(err)
+  return ['FILE_TYPE_UNSUPPORTED', 'FILE_TOO_LARGE', 'FILE_ENCODING_UNSUPPORTED'].includes(reason)
+}
+
+/** 映射非法（400） */
+export function isImportMappingInvalid(err) {
+  return isReason(err, 'IMPORT_MAPPING_INVALID')
+}
+
+/** 人工观测非法（400） */
+export function isManualRecordInvalid(err) {
+  return isReason(err, 'MANUAL_RECORD_INVALID')
+}
+
+/** 提取错误响应中的 traceId（契约 §10.5） */
+export function errorTraceId(err) {
+  const { data } = normalizeApiError(err)
+  return data?.traceId || ''
+}
+
+/** 提取 EXPERIMENT_CONTENT_INVALID 的字段级错误列表 */
+export function experimentContentErrors(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'EXPERIMENT_CONTENT_INVALID' || !data || !Array.isArray(data.errors)) return []
+  return data.errors
+}
