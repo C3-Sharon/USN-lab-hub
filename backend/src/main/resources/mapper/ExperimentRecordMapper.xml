@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ExperimentRecordMapper">
+    <sql id="recordColumns">
+        r.id, r.record_code AS recordCode, r.title, r.summary,
+        r.author_id AS authorId, author.username AS authorName,
+        r.project_id AS projectId, p.project_name AS projectName, p.status AS projectStatus,
+        pm.project_role AS projectRole,
+        r.learning_unit_id AS learningUnitId, lu.title AS learningUnitTitle,
+        r.template_id AS templateId, r.template_version_id AS templateVersionId,
+        tv.version AS templateVersion, t.scope AS templateScope, t.project_id AS templateProjectId,
+        tv.schema_json AS schemaJson, r.status,
+        r.current_revision_id AS currentRevisionId,
+        r.published_revision_id AS publishedRevisionId,
+        r.converted_project_id AS convertedProjectId,
+        r.version, r.create_time AS createTime, r.update_time AS updateTime
+    </sql>
+
+    <sql id="recordJoins">
+        LEFT JOIN sys_user author ON author.id = r.author_id
+        LEFT JOIN lab_project p ON p.id = r.project_id
+        LEFT JOIN lab_project_member pm ON pm.project_id = r.project_id AND pm.user_id = #{userId}
+        LEFT JOIN lab_learning_unit lu ON lu.id = r.learning_unit_id
+        JOIN lab_experiment_template t ON t.id = r.template_id
+        JOIN lab_experiment_template_version tv ON tv.id = r.template_version_id
+    </sql>
+
+    <select id="selectTemplateContext" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow">
+        SELECT tv.id AS templateVersionId, tv.template_id AS templateId, tv.version AS templateVersion,
+               tv.status, tv.schema_json AS schemaJson, t.scope AS templateScope,
+               t.project_id AS templateProjectId
+        FROM lab_experiment_template_version tv
+        JOIN lab_experiment_template t ON t.id = tv.template_id
+        WHERE tv.id = #{versionId}
+    </select>
+
+    <select id="selectLearningUnitTemplateVersion" resultType="long">
+        SELECT u.template_version_id
+        FROM lab_learning_unit u
+        JOIN lab_learning_stage s ON s.id = u.stage_id
+        JOIN lab_learning_roadmap r ON r.id = s.roadmap_id
+        WHERE u.id = #{unitId} AND r.status = 'PUBLISHED'
+    </select>
+
+    <select id="selectProjectRole" resultType="string">
+        SELECT project_role FROM lab_project_member WHERE project_id = #{projectId} AND user_id = #{userId}
+    </select>
+
+    <select id="selectProjectStatus" resultType="string">
+        SELECT status FROM lab_project WHERE id = #{projectId}
+    </select>
+
+    <select id="lockRecord" resultType="long">
+        SELECT id FROM lab_experiment_record WHERE id = #{recordId} FOR UPDATE
+    </select>
+
+    <select id="hasProjectMemberFeedback" resultType="boolean">
+        SELECT CASE WHEN EXISTS(
+            SELECT 1 FROM lab_experiment_feedback
+            WHERE record_id=#{recordId} AND visibility='PROJECT_MEMBERS'
+        ) THEN TRUE ELSE FALSE END
+    </select>
+
+    <select id="selectUserName" resultType="string">
+        SELECT username FROM sys_user WHERE id = #{userId} AND status = 1
+    </select>
+
+    <insert id="insertRecord" parameterType="com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_experiment_record(
+            record_code, title, summary, author_id, project_id, learning_unit_id,
+            template_id, template_version_id, status, version, create_time, update_time
+        ) VALUES (
+            #{recordCode}, #{title}, #{summary}, #{authorId}, #{projectId}, #{learningUnitId},
+            #{templateId}, #{templateVersionId}, 'DRAFT', 1, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="assignRecordCode">
+        UPDATE lab_experiment_record SET record_code = #{recordCode} WHERE id = #{id}
+    </update>
+
+    <insert id="insertRevision" parameterType="com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_experiment_revision(
+            record_id, revision_no, status, content_json, purpose, environment, steps,
+            result_text, anomaly, conclusion, hardware_version_ref, device_instance_ref,
+            firmware_version, bom_version_ref, collection_snapshot_id, change_summary,
+            previous_revision_id, created_by, version, create_time, update_time
+        ) VALUES (
+            #{recordId}, #{revisionNo}, #{status}, #{contentJson}, #{purpose}, #{environment}, #{steps},
+            #{result}, #{anomaly}, #{conclusion}, #{hardwareVersionRef}, #{deviceInstanceRef},
+            #{firmwareVersion}, #{bomVersionRef}, #{collectionSnapshotId}, #{changeSummary},
+            #{previousRevisionId}, #{createdBy}, #{version}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="setInitialRevision">
+        UPDATE lab_experiment_record SET current_revision_id = #{revisionId}
+        WHERE id = #{recordId} AND current_revision_id IS NULL
+    </update>
+
+    <select id="selectRecord" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow">
+        SELECT <include refid="recordColumns"/>
+        FROM lab_experiment_record r
+        <include refid="recordJoins"/>
+        WHERE r.id = #{recordId}
+    </select>
+
+    <sql id="visibleRecords">
+        AND (
+            #{globalRead} = TRUE OR r.author_id = #{userId}
+            OR pm.project_role IN ('OWNER', 'MAINTAINER')
+            OR (r.status = 'PUBLISHED' AND pm.project_role IS NOT NULL)
+            OR (pm.project_role IS NOT NULL AND EXISTS (
+                SELECT 1 FROM lab_experiment_feedback visible_feedback
+                WHERE visible_feedback.record_id=r.id AND visible_feedback.visibility='PROJECT_MEMBERS'
+            ))
+        )
+        <if test="projectId != null">AND r.project_id = #{projectId}</if>
+        <if test="status != null and status != ''">AND r.status = #{status}</if>
+        <if test="templateId != null">AND r.template_id = #{templateId}</if>
+        <if test="authorId != null">AND r.author_id = #{authorId}</if>
+    </sql>
+
+    <select id="countVisible" resultType="long">
+        SELECT COUNT(*)
+        FROM lab_experiment_record r
+        LEFT JOIN lab_project_member pm ON pm.project_id = r.project_id AND pm.user_id = #{userId}
+        WHERE 1 = 1 <include refid="visibleRecords"/>
+    </select>
+
+    <select id="selectVisiblePage" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow">
+        SELECT <include refid="recordColumns"/>
+        FROM lab_experiment_record r
+        <include refid="recordJoins"/>
+        WHERE 1 = 1 <include refid="visibleRecords"/>
+        ORDER BY r.update_time DESC, r.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <sql id="revisionColumns">
+        id, record_id AS recordId, revision_no AS revisionNo, status, content_json AS contentJson,
+        purpose, environment, steps, result_text AS result, anomaly, conclusion,
+        hardware_version_ref AS hardwareVersionRef, device_instance_ref AS deviceInstanceRef,
+        firmware_version AS firmwareVersion, bom_version_ref AS bomVersionRef,
+        collection_snapshot_id AS collectionSnapshotId, change_summary AS changeSummary,
+        previous_revision_id AS previousRevisionId, created_by AS createdBy,
+        submitted_by AS submittedBy, submitted_at AS submittedAt,
+        approved_by AS approvedBy, approved_at AS approvedAt,
+        published_by AS publishedBy, published_at AS publishedAt,
+        version, create_time AS createTime, update_time AS updateTime
+    </sql>
+
+    <select id="selectRevision" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow">
+        SELECT <include refid="revisionColumns"/> FROM lab_experiment_revision
+        WHERE record_id = #{recordId} AND id = #{revisionId}
+    </select>
+
+    <select id="selectRevisions" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow">
+        SELECT <include refid="revisionColumns"/> FROM lab_experiment_revision
+        WHERE record_id = #{recordId}
+        ORDER BY revision_no DESC LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countRevisions" resultType="long">
+        SELECT COUNT(*) FROM lab_experiment_revision WHERE record_id = #{recordId}
+    </select>
+
+    <update id="updateEditableRevision" parameterType="com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow">
+        UPDATE lab_experiment_revision
+        SET content_json=#{contentJson}, purpose=#{purpose}, environment=#{environment}, steps=#{steps},
+            result_text=#{result}, anomaly=#{anomaly}, conclusion=#{conclusion},
+            hardware_version_ref=#{hardwareVersionRef}, device_instance_ref=#{deviceInstanceRef},
+            firmware_version=#{firmwareVersion}, bom_version_ref=#{bomVersionRef},
+            change_summary=#{changeSummary}, version=version+1, update_time=#{updateTime}
+        WHERE id=#{id} AND record_id=#{recordId} AND status='EDITABLE' AND version=#{version}
+    </update>
+
+    <update id="touchRecord">
+        UPDATE lab_experiment_record SET version=version+1, update_time=#{now}
+        WHERE id=#{recordId} AND version=#{expectedVersion}
+    </update>
+
+    <update id="submitRevision">
+        UPDATE lab_experiment_revision
+        SET status='SUBMITTED', submitted_by=#{actorId}, submitted_at=#{now},
+            version=version+1, update_time=#{now}
+        WHERE id=#{revisionId} AND status='EDITABLE' AND version=#{expectedVersion}
+    </update>
+
+    <update id="moveRecord">
+        UPDATE lab_experiment_record
+        SET status=#{toStatus}, version=version+1, update_time=#{now}
+        <if test="currentRevisionId != null">, current_revision_id=#{currentRevisionId}</if>
+        <if test="publishedRevisionId != null">, published_revision_id=#{publishedRevisionId}</if>
+        WHERE id=#{recordId} AND status=#{fromStatus} AND version=#{expectedVersion}
+    </update>
+
+    <update id="changeRevisionStatus">
+        UPDATE lab_experiment_revision
+        SET status=#{toStatus}, update_time=#{now}
+        <if test="toStatus == 'APPROVED'">, approved_by=#{actorId}, approved_at=#{now}</if>
+        WHERE id=#{revisionId} AND status=#{fromStatus}
+    </update>
+
+    <insert id="insertFeedback" parameterType="com.usn.labhub.user.domain.entity.experiment.ExperimentFeedbackRow"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_experiment_feedback(
+            record_id, revision_id, feedback_type, content, visibility,
+            reviewer_id, reviewer_name, request_id, create_time
+        ) VALUES (
+            #{recordId}, #{revisionId}, #{type}, #{content}, #{visibility},
+            #{reviewerId}, #{reviewerName}, #{requestId}, #{createTime}
+        )
+    </insert>
+
+    <insert id="cloneRevision">
+        INSERT INTO lab_experiment_revision(
+            record_id, revision_no, status, content_json, purpose, environment, steps,
+            result_text, anomaly, conclusion, hardware_version_ref, device_instance_ref,
+            firmware_version, bom_version_ref, collection_snapshot_id, change_summary,
+            previous_revision_id, created_by, version, create_time, update_time
+        )
+        SELECT record_id, #{nextRevisionNo}, 'EDITABLE', content_json, purpose, environment, steps,
+               result_text, anomaly, conclusion, hardware_version_ref, device_instance_ref,
+               firmware_version, bom_version_ref, collection_snapshot_id, #{changeSummary},
+               id, #{createdBy}, 1, #{now}, #{now}
+        FROM lab_experiment_revision WHERE id=#{sourceRevisionId}
+    </insert>
+
+    <select id="selectLastInsertedRevision" resultType="long">
+        SELECT id FROM lab_experiment_revision WHERE record_id=#{recordId} AND revision_no=#{revisionNo}
+    </select>
+
+    <update id="markPublished">
+        UPDATE lab_experiment_revision
+        SET status='PUBLISHED', published_by=#{actorId}, published_at=#{now}, update_time=#{now}
+        WHERE id=#{revisionId} AND status='APPROVED'
+    </update>
+
+    <update id="supersedePublished">
+        UPDATE lab_experiment_revision SET status='SUPERSEDED' WHERE id=#{revisionId} AND status='PUBLISHED'
+    </update>
+
+    <sql id="feedbackVisible">
+        AND (#{reviewerView}=TRUE OR reviewer_id=#{userId} OR visibility='PROJECT_MEMBERS')
+    </sql>
+
+    <select id="countFeedback" resultType="long">
+        SELECT COUNT(*) FROM lab_experiment_feedback
+        WHERE record_id=#{recordId} <include refid="feedbackVisible"/>
+    </select>
+
+    <select id="selectFeedback" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentFeedbackRow">
+        SELECT id, record_id AS recordId, revision_id AS revisionId, feedback_type AS type,
+               content, visibility, reviewer_id AS reviewerId, reviewer_name AS reviewerName,
+               create_time AS createTime
+        FROM lab_experiment_feedback
+        WHERE record_id=#{recordId} <include refid="feedbackVisible"/>
+        ORDER BY create_time DESC, id DESC LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <insert id="claimIdempotency">
+        INSERT IGNORE INTO lab_request_idempotency(
+            actor_id, operation, idempotency_key, request_digest, status, create_time, update_time
+        ) VALUES (#{actorId}, #{operation}, #{idempotencyKey}, #{requestDigest}, 'PROCESSING', #{now}, #{now})
+    </insert>
+
+    <select id="selectIdempotency" resultType="com.usn.labhub.user.domain.entity.experiment.IdempotencyRow">
+        SELECT request_digest AS requestDigest, status, response_json AS responseJson
+        FROM lab_request_idempotency
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{idempotencyKey}
+    </select>
+
+    <update id="completeIdempotency">
+        UPDATE lab_request_idempotency
+        SET status='COMPLETED', response_code=200, response_json=#{responseJson}, update_time=#{now}
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{idempotencyKey}
+          AND status='PROCESSING'
+    </update>
+
+    <insert id="insertAudit">
+        INSERT INTO lab_experiment_audit_log(
+            request_id, actor_id, action, target_type, target_id, project_id,
+            previous_status, new_status, reason, details_json, create_time
+        ) VALUES (
+            #{requestId}, #{actorId}, #{action}, #{targetType}, #{targetId}, #{projectId},
+            #{previousStatus}, #{newStatus}, #{reason}, #{detailsJson}, #{now}
+        )
+    </insert>
+</mapper>
