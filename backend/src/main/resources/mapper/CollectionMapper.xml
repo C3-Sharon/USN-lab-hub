@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.CollectionMapper">
+    <sql id="planColumns">
+        cp.id, cp.plan_code AS planCode, cp.project_id AS projectId,
+        p.project_name AS projectName, p.status AS projectStatus,
+        pm.project_role AS actorProjectRole, cp.name, cp.purpose,
+        cp.owner_id AS ownerId, owner.username AS ownerName, cp.source_type AS sourceType,
+        cp.metric_definitions_json AS metricDefinitionsJson,
+        cp.linked_experiment_record_id AS linkedExperimentRecordId,
+        cp.retention_note AS retentionNote, cp.status, cp.version,
+        cp.created_by AS createdBy, cp.create_time AS createTime, cp.update_time AS updateTime
+    </sql>
+
+    <sql id="batchColumns">
+        cb.id, cb.batch_code AS batchCode, cb.plan_id AS planId, cp.name AS planName,
+        cp.owner_id AS planOwnerId, cb.project_id AS projectId, p.project_name AS projectName,
+        p.status AS projectStatus, pm.project_role AS actorProjectRole,
+        cb.source_type AS sourceType, cb.status, cb.operator_id AS operatorId,
+        operator.username AS operatorName, cb.started_at AS startedAt, cb.completed_at AS completedAt,
+        cb.record_count AS recordCount, cb.rejected_count AS rejectedCount,
+        cb.observed_from AS observedFrom, cb.observed_to AS observedTo,
+        cb.source_revision_id AS sourceRevisionId, cb.completion_reason AS completionReason,
+        cb.checksum, cb.version, cb.create_time AS createTime, cb.update_time AS updateTime
+    </sql>
+
+    <select id="selectProjectContext" resultType="com.usn.labhub.user.domain.entity.collection.CollectionPlanRow">
+        SELECT NULL AS id, p.id AS projectId, p.project_name AS projectName, p.status AS projectStatus,
+               pm.project_role AS actorProjectRole
+        FROM lab_project p
+        LEFT JOIN lab_project_member pm ON pm.project_id=p.id AND pm.user_id=#{userId}
+        WHERE p.id=#{projectId}
+    </select>
+
+    <select id="selectProjectRole" resultType="string">
+        SELECT project_role FROM lab_project_member WHERE project_id=#{projectId} AND user_id=#{userId}
+    </select>
+
+    <select id="selectExperimentProject" resultType="long">
+        SELECT project_id FROM lab_experiment_record WHERE id=#{recordId}
+    </select>
+
+    <insert id="insertPlan" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_collection_plan(plan_code, project_id, name, purpose, owner_id, source_type,
+            metric_definitions_json, linked_experiment_record_id, retention_note, status, version,
+            created_by, create_time, update_time)
+        VALUES(#{planCode}, #{projectId}, #{name}, #{purpose}, #{ownerId}, #{sourceType},
+            #{metricDefinitionsJson}, #{linkedExperimentRecordId}, #{retentionNote}, 'DRAFT', 1,
+            #{createdBy}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="assignPlanCode">
+        UPDATE lab_collection_plan SET plan_code=#{code} WHERE id=#{id}
+    </update>
+
+    <select id="selectPlan" resultType="com.usn.labhub.user.domain.entity.collection.CollectionPlanRow">
+        SELECT <include refid="planColumns"/>
+        FROM lab_collection_plan cp
+        JOIN lab_project p ON p.id=cp.project_id
+        LEFT JOIN lab_project_member pm ON pm.project_id=cp.project_id AND pm.user_id=#{userId}
+        LEFT JOIN sys_user owner ON owner.id=cp.owner_id
+        WHERE cp.id=#{id}
+    </select>
+
+    <select id="countPlans" resultType="long">
+        SELECT COUNT(*) FROM lab_collection_plan
+        WHERE project_id=#{projectId}
+        <if test="status != null">AND status=#{status}</if>
+        <if test="sourceType != null">AND source_type=#{sourceType}</if>
+    </select>
+
+    <select id="selectPlans" resultType="com.usn.labhub.user.domain.entity.collection.CollectionPlanRow">
+        SELECT <include refid="planColumns"/>
+        FROM lab_collection_plan cp
+        JOIN lab_project p ON p.id=cp.project_id
+        LEFT JOIN lab_project_member pm ON pm.project_id=cp.project_id AND pm.user_id=#{userId}
+        LEFT JOIN sys_user owner ON owner.id=cp.owner_id
+        WHERE cp.project_id=#{projectId}
+        <if test="status != null">AND cp.status=#{status}</if>
+        <if test="sourceType != null">AND cp.source_type=#{sourceType}</if>
+        ORDER BY cp.update_time DESC, cp.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <update id="updateDraftPlan">
+        UPDATE lab_collection_plan
+        SET name=#{name}, purpose=#{purpose}, owner_id=#{ownerId},
+            metric_definitions_json=#{metricDefinitionsJson},
+            linked_experiment_record_id=#{linkedExperimentRecordId}, retention_note=#{retentionNote},
+            version=version+1, update_time=#{updateTime}
+        WHERE id=#{id} AND status='DRAFT' AND version=#{version}
+    </update>
+
+    <update id="movePlan">
+        UPDATE lab_collection_plan SET status=#{toStatus}, version=version+1, update_time=#{now}
+        WHERE id=#{id} AND status=#{fromStatus} AND version=#{expectedVersion}
+    </update>
+
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_collection_batch(batch_code, plan_id, project_id, source_type, status,
+            operator_id, started_at, record_count, rejected_count, version, create_time, update_time)
+        VALUES(#{batchCode}, #{planId}, #{projectId}, #{sourceType}, 'CREATED',
+            #{operatorId}, #{startedAt}, 0, 0, 1, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="assignBatchCode">
+        UPDATE lab_collection_batch SET batch_code=#{code} WHERE id=#{id}
+    </update>
+
+    <select id="selectBatch" resultType="com.usn.labhub.user.domain.entity.collection.CollectionBatchRow">
+        SELECT <include refid="batchColumns"/>
+        FROM lab_collection_batch cb
+        JOIN lab_collection_plan cp ON cp.id=cb.plan_id
+        JOIN lab_project p ON p.id=cb.project_id
+        LEFT JOIN lab_project_member pm ON pm.project_id=cb.project_id AND pm.user_id=#{userId}
+        LEFT JOIN sys_user operator ON operator.id=cb.operator_id
+        WHERE cb.id=#{id}
+    </select>
+
+    <select id="countBatches" resultType="long">
+        SELECT COUNT(*) FROM lab_collection_batch WHERE plan_id=#{planId}
+        <if test="status != null">AND status=#{status}</if>
+    </select>
+
+    <select id="selectBatches" resultType="com.usn.labhub.user.domain.entity.collection.CollectionBatchRow">
+        SELECT <include refid="batchColumns"/>
+        FROM lab_collection_batch cb
+        JOIN lab_collection_plan cp ON cp.id=cb.plan_id
+        JOIN lab_project p ON p.id=cb.project_id
+        LEFT JOIN lab_project_member pm ON pm.project_id=cb.project_id AND pm.user_id=#{userId}
+        LEFT JOIN sys_user operator ON operator.id=cb.operator_id
+        WHERE cb.plan_id=#{planId}
+        <if test="status != null">AND cb.status=#{status}</if>
+        ORDER BY cb.create_time DESC, cb.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectConfirmedSourceRevision" resultType="long">
+        SELECT dir.id
+        FROM lab_data_import di
+        JOIN lab_data_import_revision dir ON dir.id=di.current_revision_id
+        WHERE di.batch_id=#{batchId} AND di.status='CONFIRMED' AND dir.status='CONFIRMED'
+        ORDER BY dir.id DESC LIMIT 1
+    </select>
+
+    <select id="selectRecordSummary" resultType="com.usn.labhub.user.domain.entity.collection.CollectionRecordSummaryRow">
+        SELECT SUM(CASE WHEN quality_status='GOOD' THEN 1 ELSE 0 END) AS recordCount,
+               SUM(CASE WHEN quality_status='REJECTED' THEN 1 ELSE 0 END) AS rejectedCount,
+               MIN(observed_at) AS observedFrom, MAX(observed_at) AS observedTo
+        FROM lab_collection_record WHERE batch_id=#{batchId}
+    </select>
+
+    <select id="selectChecksumRows" resultType="map">
+        SELECT id, source_type AS sourceType, metric_code AS metricCode, value_type AS valueType,
+               value_text AS valueText, unit, observed_at AS observedAt, quality_status AS qualityStatus,
+               data_import_revision_id AS dataImportRevisionId,
+               manual_record_revision_id AS manualRecordRevisionId
+        FROM lab_collection_record WHERE batch_id=#{batchId}
+        ORDER BY observed_at ASC, id ASC
+    </select>
+
+    <update id="completeBatch">
+        UPDATE lab_collection_batch
+        SET status='COMPLETED', completed_at=#{now}, record_count=#{recordCount},
+            rejected_count=#{rejectedCount}, observed_from=#{observedFrom}, observed_to=#{observedTo},
+            source_revision_id=#{sourceRevisionId}, completion_reason=#{completionReason}, checksum=#{checksum},
+            version=version+1, update_time=#{now}
+        WHERE id=#{id} AND status='REVIEW_REQUIRED' AND version=#{expectedVersion}
+    </update>
+
+    <update id="moveBatch">
+        UPDATE lab_collection_batch
+        SET status=#{toStatus}, completion_reason=#{completionReason}, version=version+1, update_time=#{now}
+        WHERE id=#{id} AND version=#{expectedVersion}
+        AND status IN
+        <foreach collection="fromStatuses" item="state" open="(" separator="," close=")">#{state}</foreach>
+    </update>
+
+    <insert id="claimIdempotency">
+        INSERT IGNORE INTO lab_request_idempotency(actor_id, operation, idempotency_key,
+            request_digest, status, create_time, update_time)
+        VALUES(#{actorId}, #{operation}, #{key}, #{digest}, 'PROCESSING', #{now}, #{now})
+    </insert>
+
+    <select id="selectIdempotency" resultType="com.usn.labhub.user.domain.entity.experiment.IdempotencyRow">
+        SELECT request_digest AS requestDigest, status, response_json AS responseJson
+        FROM lab_request_idempotency
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </select>
+
+    <update id="completeIdempotency">
+        UPDATE lab_request_idempotency
+        SET status='COMPLETED', response_code=200, response_json=#{responseJson}, update_time=#{now}
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </update>
+
+    <insert id="insertAudit">
+        INSERT INTO lab_experiment_audit_log(request_id, actor_id, action, target_type, target_id,
+            project_id, previous_status, new_status, reason, details_json, create_time)
+        VALUES(#{requestId}, #{actorId}, #{action}, #{targetType}, #{targetId}, #{projectId},
+            #{previousStatus}, #{newStatus}, #{reason}, #{detailsJson}, #{now})
+    </insert>
+</mapper>
