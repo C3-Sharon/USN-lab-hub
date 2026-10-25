@@ -3,6 +3,7 @@ package com.usn.labhub.user.controller;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentFeedbackDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentPublishDTO;
+import com.usn.labhub.user.domain.dto.experiment.ExperimentProjectDraftDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRecordCreateDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRevisionCreateDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRevisionUpdateDTO;
@@ -126,5 +127,14 @@ public class ExperimentRecordController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody ExperimentRevisionCreateDTO request) {
         return Result.success(service.createRevision(recordId, idempotencyKey, request));
+    }
+
+    @PostMapping("/{recordId}/project-draft")
+    @Operation(summary = "将已发布实验转换为项目草案")
+    public Result<Map<String, Object>> createProjectDraft(
+            @PathVariable Long recordId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody ExperimentProjectDraftDTO request) {
+        return Result.success(service.createProjectDraft(recordId, idempotencyKey, request));
     }
 }

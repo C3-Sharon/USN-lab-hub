@@ -67,4 +67,19 @@ public class ExperimentApiException extends RuntimeException {
         return new ExperimentApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
                 "幂等键已用于不同请求", null);
     }
+
+    public static ExperimentApiException projectConversionDenied() {
+        return new ExperimentApiException(HttpStatus.FORBIDDEN, "PROJECT_CONVERSION_DENIED",
+                "无权将该实验记录转换为项目", null);
+    }
+
+    public static ExperimentApiException projectAlreadyConverted() {
+        return new ExperimentApiException(HttpStatus.CONFLICT, "PROJECT_ALREADY_CONVERTED",
+                "该实验记录已经转换为项目", null);
+    }
+
+    public static ExperimentApiException projectCodeDuplicate() {
+        return new ExperimentApiException(HttpStatus.CONFLICT, "PROJECT_CODE_DUPLICATE",
+                "项目编号已存在", null);
+    }
 }

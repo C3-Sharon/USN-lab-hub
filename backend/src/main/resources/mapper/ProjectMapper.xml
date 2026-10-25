@@ -6,10 +6,12 @@
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO lab_project
             (project_code, project_name, description, owner_id, status, public_visible,
-             category, cover_media_id, create_time, update_time)
+             category, cover_media_id, source_experiment_record_id, source_published_revision_id,
+             create_time, update_time)
         VALUES
             (#{projectCode}, #{projectName}, #{description}, #{ownerId}, #{status}, #{publicVisible},
-             #{category}, #{coverMediaId}, #{createTime}, #{updateTime})
+             #{category}, #{coverMediaId}, #{sourceExperimentRecordId}, #{sourcePublishedRevisionId},
+             #{createTime}, #{updateTime})
     </insert>
 
     <insert id="insertMember">
@@ -84,7 +86,9 @@
     </select>
 
     <select id="selectProjectDetail" resultType="com.usn.labhub.user.domain.vo.project.ProjectDetailVO">
-        SELECT <include refid="projectSummaryColumns"/>
+        SELECT <include refid="projectSummaryColumns"/>,
+               p.source_experiment_record_id AS sourceExperimentRecordId,
+               p.source_published_revision_id AS sourcePublishedRevisionId
         FROM lab_project p
         <include refid="visibleProjectJoin"/>
         WHERE p.id = #{projectId}

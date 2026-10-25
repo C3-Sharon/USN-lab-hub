@@ -243,6 +243,13 @@
         UPDATE lab_experiment_revision SET status='SUPERSEDED' WHERE id=#{revisionId} AND status='PUBLISHED'
     </update>
 
+    <update id="linkConvertedProject">
+        UPDATE lab_experiment_record
+        SET converted_project_id=#{projectId}, version=version+1, update_time=#{now}
+        WHERE id=#{recordId} AND version=#{expectedVersion} AND status='PUBLISHED'
+          AND published_revision_id=#{publishedRevisionId} AND converted_project_id IS NULL
+    </update>
+
     <sql id="feedbackVisible">
         AND (#{reviewerView}=TRUE OR reviewer_id=#{userId} OR visibility='PROJECT_MEMBERS')
     </sql>

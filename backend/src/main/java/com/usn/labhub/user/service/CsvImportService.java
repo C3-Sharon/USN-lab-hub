@@ -291,7 +291,7 @@ public class CsvImportService {
                     || !usedSources.add(column.getSourceColumn()) || metric == null
                     || !VALUE_TYPES.contains(column.getValueType())
                     || !column.getValueType().equals(String.valueOf(metric.get("valueType")))
-                    || !StringUtils.hasText(column.getSourceUnit()) || !StringUtils.hasText(column.getTargetUnit())
+                    || column.getSourceUnit() == null || column.getTargetUnit() == null
                     || !column.getSourceUnit().equals(column.getTargetUnit())
                     || !column.getTargetUnit().equals(String.valueOf(metric.get("unit")))) {
                 throw CollectionApiException.mappingInvalid();

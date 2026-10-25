@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentFeedbackDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentPublishDTO;
+import com.usn.labhub.user.domain.dto.experiment.ExperimentProjectDraftDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRecordCreateDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRevisionCreateDTO;
 import com.usn.labhub.user.domain.dto.experiment.ExperimentRevisionUpdateDTO;
@@ -15,10 +16,14 @@ import com.usn.labhub.user.domain.entity.experiment.ExperimentFeedbackRow;
 import com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow;
 import com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow;
 import com.usn.labhub.user.domain.entity.experiment.IdempotencyRow;
+import com.usn.labhub.user.domain.entity.project.ProjectRecord;
+import com.usn.labhub.user.domain.vo.project.ProjectDetailVO;
 import com.usn.labhub.user.experiment.ExperimentApiException;
 import com.usn.labhub.user.learning.template.ExperimentTemplateSchemaValidator;
 import com.usn.labhub.user.learning.template.TemplateValidationResult;
 import com.usn.labhub.user.mapper.ExperimentRecordMapper;
+import com.usn.labhub.user.mapper.ProjectMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -46,11 +51,14 @@ public class ExperimentRecordService {
 
     private final ExperimentRecordMapper mapper;
     private final ObjectMapper objectMapper;
+    private final ProjectMapper projectMapper;
     private final ExperimentTemplateSchemaValidator schemaValidator;
 
-    public ExperimentRecordService(ExperimentRecordMapper mapper, ObjectMapper objectMapper) {
+    public ExperimentRecordService(ExperimentRecordMapper mapper, ObjectMapper objectMapper,
+                                   ProjectMapper projectMapper) {
         this.mapper = mapper;
         this.objectMapper = objectMapper;
+        this.projectMapper = projectMapper;
         this.schemaValidator = new ExperimentTemplateSchemaValidator(objectMapper);
     }
 
@@ -163,6 +171,13 @@ public class ExperimentRecordService {
                                               ExperimentRevisionCreateDTO request) {
         return idempotent("REVISE_EXPERIMENT:" + recordId, idempotencyKey, request,
                 () -> createRevisionFromPublished(recordId, request, idempotencyKey));
+    }
+
+    @Transactional
+    public Map<String, Object> createProjectDraft(Long recordId, String idempotencyKey,
+                                                   ExperimentProjectDraftDTO request) {
+        return idempotent("CONVERT_EXPERIMENT:" + recordId, idempotencyKey, request,
+                () -> convertToProject(recordId, request, idempotencyKey.trim()));
     }
 
     private Map<String, Object> createRecord(ExperimentRecordCreateDTO request, String requestId) {
@@ -359,6 +374,83 @@ public class ExperimentRecordService {
         return Map.of("recordId", recordId, "recordVersion", request.getRecordVersion() + 1,
                 "status", "REVISING", "newRevision", Map.of("id", revisionId,
                         "revisionNo", nextNo, "status", "EDITABLE", "version", 1));
+    }
+
+    private Map<String, Object> convertToProject(Long recordId, ExperimentProjectDraftDTO request,
+                                                  String requestId) {
+        ExperimentRecordRow record = requireVisibleRecord(recordId);
+        if (!canConvert(record)) {
+            throw ExperimentApiException.projectConversionDenied();
+        }
+        mapper.lockRecord(recordId);
+        record = requireVisibleRecord(recordId);
+        if (!canConvert(record)) {
+            throw ExperimentApiException.projectConversionDenied();
+        }
+        if (record.getConvertedProjectId() != null) {
+            throw ExperimentApiException.projectAlreadyConverted();
+        }
+        if (!"PUBLISHED".equals(record.getStatus()) || record.getPublishedRevisionId() == null) {
+            throw ExperimentApiException.invalidTransition();
+        }
+        if (!record.getVersion().equals(request.getRecordVersion())) {
+            throw ExperimentApiException.versionConflict(record.getVersion());
+        }
+
+        Long actorId = requiredUserId();
+        LocalDateTime now = LocalDateTime.now();
+        ProjectRecord project = new ProjectRecord();
+        project.setProjectCode(request.getCode().trim());
+        project.setProjectName(request.getName().trim());
+        project.setDescription(trim(request.getSummary()));
+        project.setOwnerId(actorId);
+        project.setStatus("PREPARING");
+        project.setPublicVisible(false);
+        project.setCategory(trim(request.getCategory()));
+        project.setSourceExperimentRecordId(recordId);
+        project.setSourcePublishedRevisionId(record.getPublishedRevisionId());
+        project.setCreateTime(now);
+        project.setUpdateTime(now);
+        try {
+            projectMapper.insertProject(project);
+        } catch (DuplicateKeyException exception) {
+            throw ExperimentApiException.projectCodeDuplicate();
+        }
+        projectMapper.insertMember(project.getId(), actorId, "OWNER", now);
+        if (mapper.linkConvertedProject(recordId, request.getRecordVersion(), record.getPublishedRevisionId(),
+                project.getId(), now) != 1) {
+            throw versionConflict(recordId);
+        }
+        mapper.insertAudit(requestId, actorId, "CONVERT_TO_PROJECT", "PROJECT", project.getId(),
+                project.getId(), "PUBLISHED", "PREPARING", null,
+                writeJson(Map.of("sourceExperimentRecordId", recordId,
+                        "sourcePublishedRevisionId", record.getPublishedRevisionId())), now);
+
+        ProjectDetailVO created = projectMapper.selectProjectDetail(project.getId(), actorId, true, false);
+        return projectResponse(created);
+    }
+
+    private boolean canConvert(ExperimentRecordRow record) {
+        return isGlobalReviewer() || record.getAuthorId().equals(requiredUserId())
+                || PROJECT_REVIEWERS.contains(record.getProjectRole());
+    }
+
+    private Map<String, Object> projectResponse(ProjectDetailVO project) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", project.getId());
+        result.put("code", project.getCode());
+        result.put("name", project.getName());
+        result.put("summary", project.getSummary());
+        result.put("category", project.getCategory());
+        result.put("status", project.getStatus());
+        result.put("coverUrl", project.getCoverUrl());
+        result.put("sourceExperimentRecordId", project.getSourceExperimentRecordId());
+        result.put("sourcePublishedRevisionId", project.getSourcePublishedRevisionId());
+        result.put("myRole", project.getMyRole());
+        result.put("memberCount", project.getMemberCount());
+        result.put("createTime", project.getCreateTime());
+        result.put("updateTime", project.getUpdateTime());
+        return result;
     }
 
     private void requireCreateContext(ExperimentRecordCreateDTO request, ExperimentRecordRow template, Long actorId) {

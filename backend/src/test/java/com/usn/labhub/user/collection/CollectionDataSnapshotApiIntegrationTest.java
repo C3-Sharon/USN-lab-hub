@@ -82,7 +82,8 @@ class CollectionDataSnapshotApiIntegrationTest {
     @Test
     void importsImmutableCsvCompletesBatchAndCreatesSnapshot() {
         Long batchId = createBatch("FILE", "file");
-        byte[] csv = "observed_at,voltage\n2026-10-24 14:30:00.000,5.12\n2026-10-24 14:31:00.000,5.08\n"
+        byte[] csv = ("observed_at,voltage,note\n2026-10-24 14:30:00.000,5.12,first\n"
+                + "2026-10-24 14:31:00.000,5.08,second\n")
                 .getBytes(StandardCharsets.UTF_8);
         Map<String, Object> uploaded = data(upload(batchId, "upload-file-1", "readings.csv", csv));
         assertTrue(!uploaded.toString().contains("objectKey") && !uploaded.toString().contains("test-collection-originals"));
@@ -99,8 +100,8 @@ class CollectionDataSnapshotApiIntegrationTest {
         assertEquals("MAPPING_REQUIRED", mapped.get("status"));
         Map<String, Object> confirmed = data(post("/api/data-imports/" + importId + "/confirm",
                 "confirm-file-1", Map.of("version", 2, "importVersion", 1, "batchVersion", 2)));
-        assertEquals(2, ((Number) confirmed.get("recordCount")).intValue());
-        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM lab_collection_record", Integer.class));
+        assertEquals(4, ((Number) confirmed.get("recordCount")).intValue());
+        assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM lab_collection_record", Integer.class));
 
         Map<String, Object> completed = data(post("/api/collection-batches/" + batchId + "/complete",
                 "complete-file-1", Map.of("version", 3, "completionReason", "CSV 已确认")));
@@ -108,9 +109,9 @@ class CollectionDataSnapshotApiIntegrationTest {
         assertNotNull(completed.get("checksum"));
         Map<String, Object> snapshot = data(post("/api/collection-batches/" + batchId + "/snapshots",
                 "snapshot-file-1", Map.of("batchVersion", 4, "snapshotType", "FULL_BATCH")));
-        assertEquals(2, ((Number) snapshot.get("recordCount")).intValue());
+        assertEquals(4, ((Number) snapshot.get("recordCount")).intValue());
         assertNotNull(snapshot.get("mappingDigest"));
-        assertEquals(2, ((List<?>) data(get("/api/collection-batches/" + batchId + "/records?limit=100"))
+        assertEquals(4, ((List<?>) data(get("/api/collection-batches/" + batchId + "/records?limit=100"))
                 .get("list")).size());
 
         Long revisionId = seedEditableExperimentRevision();
@@ -175,9 +176,11 @@ class CollectionDataSnapshotApiIntegrationTest {
     private Long createBatch(String sourceType, String suffix) {
         Map<String, Object> plan = data(post("/api/projects/" + projectId + "/collection-plans",
                 "plan-" + suffix, Map.of("name", "5V " + sourceType + " 采集", "purpose", "测试",
-                        "ownerId", 1, "sourceType", sourceType, "metricDefinitions", List.of(Map.of(
-                                "code", "voltage", "name", "电压", "valueType", "DECIMAL",
-                                "unit", "V", "required", true)))));
+                        "ownerId", 1, "sourceType", sourceType, "metricDefinitions", List.of(
+                                Map.of("code", "voltage", "name", "电压", "valueType", "DECIMAL",
+                                        "unit", "V", "required", true),
+                                Map.of("code", "note", "name", "备注", "valueType", "STRING",
+                                        "unit", "", "required", false)))));
         Long planId = number(plan.get("id"));
         data(post("/api/collection-plans/" + planId + "/ready", "ready-" + suffix, Map.of("version", 1)));
         return number(data(post("/api/collection-plans/" + planId + "/batches", "batch-" + suffix,
@@ -203,8 +206,11 @@ class CollectionDataSnapshotApiIntegrationTest {
         return Map.of("delimiter", ",", "encoding", "UTF-8", "headerRow", 1,
                 "timeMapping", Map.of("sourceColumn", "observed_at", "format", "yyyy-MM-dd HH:mm:ss.SSS",
                         "timezone", "Asia/Shanghai"),
-                "columns", List.of(Map.of("sourceColumn", "voltage", "metricCode", "voltage",
-                        "valueType", "DECIMAL", "sourceUnit", "V", "targetUnit", "V")),
+                "columns", List.of(
+                        Map.of("sourceColumn", "voltage", "metricCode", "voltage",
+                                "valueType", "DECIMAL", "sourceUnit", "V", "targetUnit", "V"),
+                        Map.of("sourceColumn", "note", "metricCode", "note",
+                                "valueType", "STRING", "sourceUnit", "", "targetUnit", "")),
                 "ignoredColumns", List.of());
     }
 

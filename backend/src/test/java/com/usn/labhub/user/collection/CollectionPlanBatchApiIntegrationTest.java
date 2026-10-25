@@ -193,8 +193,11 @@ class CollectionPlanBatchApiIntegrationTest {
         body.put("purpose", "记录负载变化下的输出");
         body.put("ownerId", ownerId);
         body.put("sourceType", sourceType);
-        body.put("metricDefinitions", List.of(Map.of("code", "voltage", "name", "电压",
-                "valueType", "DECIMAL", "unit", "V", "required", true)));
+        body.put("metricDefinitions", List.of(
+                Map.of("code", "voltage", "name", "电压",
+                        "valueType", "DECIMAL", "unit", "V", "required", true),
+                Map.of("code", "note", "name", "备注",
+                        "valueType", "STRING", "unit", "", "required", false)));
         body.put("retentionNote", "随实验长期保留");
         return body;
     }

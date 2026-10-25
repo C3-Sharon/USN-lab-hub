@@ -101,6 +101,8 @@ class ProjectWorkspaceApiIntegrationTest {
         assertEquals("OWNER", data.get("myRole"));
         assertEquals(1, data.get("memberCount"));
         assertNull(data.get("coverUrl"));
+        assertNull(data.get("sourceExperimentRecordId"));
+        assertNull(data.get("sourcePublishedRevisionId"));
 
         Long projectId = ((Number) data.get("id")).longValue();
         assertEquals("OWNER", jdbc.queryForObject("""

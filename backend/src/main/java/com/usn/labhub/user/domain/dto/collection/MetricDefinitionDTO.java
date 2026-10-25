@@ -17,7 +17,7 @@ public class MetricDefinitionDTO {
     @NotBlank
     @Pattern(regexp = "DECIMAL|INTEGER|BOOLEAN|STRING")
     private String valueType;
-    @NotBlank
+    @NotNull
     @Size(max = 50)
     private String unit;
     @NotNull

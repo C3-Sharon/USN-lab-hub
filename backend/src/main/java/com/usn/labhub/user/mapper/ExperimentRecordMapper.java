@@ -67,6 +67,11 @@ public interface ExperimentRecordMapper {
     int markPublished(@Param("revisionId") Long revisionId, @Param("actorId") Long actorId,
                       @Param("now") LocalDateTime now);
     int supersedePublished(@Param("revisionId") Long revisionId);
+    int linkConvertedProject(@Param("recordId") Long recordId,
+                             @Param("expectedVersion") Integer expectedVersion,
+                             @Param("publishedRevisionId") Long publishedRevisionId,
+                             @Param("projectId") Long projectId,
+                             @Param("now") LocalDateTime now);
 
     long countFeedback(@Param("recordId") Long recordId, @Param("userId") Long userId,
                        @Param("reviewerView") boolean reviewerView);
