@@ -73,10 +73,6 @@ public class CollectionBatchService {
             if (!StringUtils.hasText(request.getCompletionReason())) {
                 throw CollectionApiException.invalid();
             }
-            List<Map<String, Object>> checksumRows = mapper.selectChecksumRows(id);
-            if (checksumRows.isEmpty()) {
-                throw CollectionApiException.batchInvalidTransition();
-            }
             Long sourceRevisionId = null;
             if ("FILE".equals(batch.getSourceType())) {
                 sourceRevisionId = mapper.selectConfirmedSourceRevision(id);
@@ -84,9 +80,18 @@ public class CollectionBatchService {
                     throw CollectionApiException.batchInvalidTransition();
                 }
             }
-            CollectionRecordSummaryRow summary = mapper.selectRecordSummary(id);
+            List<Map<String, Object>> checksumRows = mapper.selectEffectiveChecksumRows(
+                    id, batch.getSourceType(), sourceRevisionId);
+            if (checksumRows.isEmpty()) {
+                throw CollectionApiException.batchInvalidTransition();
+            }
+            CollectionRecordSummaryRow summary = mapper.selectEffectiveRecordSummary(
+                    id, batch.getSourceType(), sourceRevisionId);
             long recordCount = value(summary.getRecordCount());
             long rejectedCount = value(summary.getRejectedCount());
+            if (sourceRevisionId != null) {
+                rejectedCount = value(mapper.selectImportRevision(sourceRevisionId).getRejectedCount());
+            }
             String checksum = support.digestValue(checksumRows);
             LocalDateTime now = LocalDateTime.now();
             if (mapper.completeBatch(id, request.getVersion(), recordCount, rejectedCount,

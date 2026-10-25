@@ -176,6 +176,260 @@
         <foreach collection="fromStatuses" item="state" open="(" separator="," close=")">#{state}</foreach>
     </update>
 
+    <select id="lockBatch" resultType="long">
+        SELECT id FROM lab_collection_batch WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectImportByBatch" resultType="com.usn.labhub.user.domain.entity.collection.DataImportRow">
+        SELECT di.id, di.batch_id AS batchId, cb.project_id AS projectId, di.object_key AS objectKey,
+               di.original_file_name AS originalFileName, di.mime_type AS mimeType,
+               di.file_size AS fileSize, di.file_sha256 AS fileSha256, di.status,
+               di.current_revision_id AS currentRevisionId, di.version, di.uploaded_by AS uploadedBy,
+               di.create_time AS createTime, di.update_time AS updateTime
+        FROM lab_data_import di JOIN lab_collection_batch cb ON cb.id=di.batch_id
+        WHERE di.batch_id=#{batchId} ORDER BY di.id LIMIT 1
+    </select>
+
+    <select id="selectImport" resultType="com.usn.labhub.user.domain.entity.collection.DataImportRow">
+        SELECT di.id, di.batch_id AS batchId, cb.project_id AS projectId, di.object_key AS objectKey,
+               di.original_file_name AS originalFileName, di.mime_type AS mimeType,
+               di.file_size AS fileSize, di.file_sha256 AS fileSha256, di.status,
+               di.current_revision_id AS currentRevisionId, di.version, di.uploaded_by AS uploadedBy,
+               di.create_time AS createTime, di.update_time AS updateTime
+        FROM lab_data_import di JOIN lab_collection_batch cb ON cb.id=di.batch_id
+        WHERE di.id=#{id}
+    </select>
+
+    <insert id="insertImport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_data_import(batch_id, object_key, original_file_name, mime_type, file_size,
+            file_sha256, status, version, uploaded_by, create_time, update_time)
+        VALUES(#{batchId}, #{objectKey}, #{originalFileName}, #{mimeType}, #{fileSize},
+            #{fileSha256}, 'UPLOADED', 1, #{uploadedBy}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="markBatchProcessing">
+        UPDATE lab_collection_batch SET status='PROCESSING', started_at=COALESCE(started_at, #{now}),
+            version=version+1, update_time=#{now}
+        WHERE id=#{id} AND status='CREATED' AND version=#{expectedVersion}
+    </update>
+
+    <select id="selectImportRevision" resultType="com.usn.labhub.user.domain.entity.collection.DataImportRevisionRow">
+        SELECT id, data_import_id AS dataImportId, import_revision_no AS importRevisionNo,
+               mapping_json AS mappingJson, mapping_digest AS mappingDigest, status,
+               record_count AS recordCount, rejected_count AS rejectedCount,
+               previous_revision_id AS previousRevisionId, created_by AS createdBy,
+               confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, create_time AS createTime
+        FROM lab_data_import_revision WHERE id=#{id}
+    </select>
+
+    <select id="selectImportRevisions" resultType="com.usn.labhub.user.domain.entity.collection.DataImportRevisionRow">
+        SELECT id, data_import_id AS dataImportId, import_revision_no AS importRevisionNo,
+               mapping_json AS mappingJson, mapping_digest AS mappingDigest, status,
+               record_count AS recordCount, rejected_count AS rejectedCount,
+               previous_revision_id AS previousRevisionId, created_by AS createdBy,
+               confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, create_time AS createTime
+        FROM lab_data_import_revision WHERE data_import_id=#{importId}
+        ORDER BY import_revision_no DESC
+    </select>
+
+    <insert id="insertImportRevision" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_data_import_revision(data_import_id, import_revision_no, mapping_json,
+            mapping_digest, status, record_count, rejected_count, previous_revision_id,
+            created_by, create_time)
+        VALUES(#{dataImportId}, #{importRevisionNo}, #{mappingJson}, #{mappingDigest},
+            'MAPPING_REQUIRED', 0, 0, #{previousRevisionId}, #{createdBy}, #{createTime})
+    </insert>
+
+    <update id="setCurrentImportRevision">
+        UPDATE lab_data_import SET current_revision_id=#{revisionId}, status='MAPPING_REQUIRED',
+            version=version+1, update_time=#{now}
+        WHERE id=#{id} AND version=#{expectedVersion}
+    </update>
+
+    <update id="supersedeConfirmedImportRevisions">
+        UPDATE lab_data_import_revision SET status='SUPERSEDED'
+        WHERE data_import_id=#{importId} AND status='CONFIRMED' AND id&lt;&gt;#{exceptId}
+    </update>
+
+    <update id="confirmImportRevision">
+        UPDATE lab_data_import_revision
+        SET status='CONFIRMED', record_count=#{recordCount}, rejected_count=#{rejectedCount},
+            confirmed_by=#{actorId}, confirmed_at=#{now}
+        WHERE id=#{id} AND status='MAPPING_REQUIRED'
+    </update>
+
+    <update id="confirmImport">
+        UPDATE lab_data_import SET status='CONFIRMED', current_revision_id=#{revisionId},
+            version=version+1, update_time=#{now}
+        WHERE id=#{id} AND version=#{expectedVersion}
+    </update>
+
+    <update id="markBatchReviewRequired">
+        UPDATE lab_collection_batch SET status='REVIEW_REQUIRED', version=version+1, update_time=#{now}
+        WHERE id=#{id} AND status IN ('CREATED','PROCESSING','REVIEW_REQUIRED') AND version=#{expectedVersion}
+    </update>
+
+    <insert id="insertCollectionRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_collection_record(batch_id, data_import_revision_id, manual_record_revision_id,
+            source_type, metric_code, value_type, value_text, unit, observed_at, recorded_by,
+            method, instrument, raw_row_no, quality_status, parser_version, create_time)
+        VALUES(#{batchId}, #{dataImportRevisionId}, #{manualRecordRevisionId}, #{sourceType},
+            #{metricCode}, #{valueType}, #{valueText}, #{unit}, #{observedAt}, #{recordedBy},
+            #{method}, #{instrument}, #{rawRowNo}, #{qualityStatus}, #{parserVersion}, #{createTime})
+    </insert>
+
+    <select id="selectManualRecord" resultType="com.usn.labhub.user.domain.entity.collection.ManualRecordRow">
+        SELECT mr.id, mr.batch_id AS batchId, cb.project_id AS projectId, mr.metric_code AS metricCode,
+               mr.current_revision_id AS currentRevisionId, mr.version, mr.created_by AS createdBy,
+               mr.create_time AS createTime, mr.update_time AS updateTime
+        FROM lab_manual_record mr JOIN lab_collection_batch cb ON cb.id=mr.batch_id
+        WHERE mr.id=#{id}
+    </select>
+
+    <insert id="insertManualRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_manual_record(batch_id, metric_code, version, created_by, create_time, update_time)
+        VALUES(#{batchId}, #{metricCode}, 1, #{createdBy}, #{createTime}, #{updateTime})
+    </insert>
+
+    <insert id="insertManualRevision" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_manual_record_revision(manual_record_id, revision_no, value_type, value_text,
+            unit, observed_at, method, instrument, note, change_reason, previous_revision_id,
+            created_by, create_time)
+        VALUES(#{manualRecordId}, #{revisionNo}, #{valueType}, #{valueText}, #{unit}, #{observedAt},
+            #{method}, #{instrument}, #{note}, #{changeReason}, #{previousRevisionId}, #{createdBy}, #{createTime})
+    </insert>
+
+    <update id="setInitialManualRevision">
+        UPDATE lab_manual_record SET current_revision_id=#{revisionId}, update_time=#{now}
+        WHERE id=#{id} AND current_revision_id IS NULL
+    </update>
+
+    <update id="setCurrentManualRevision">
+        UPDATE lab_manual_record SET current_revision_id=#{revisionId}, version=version+1, update_time=#{now}
+        WHERE id=#{id} AND version=#{expectedVersion}
+    </update>
+
+    <select id="selectManualRevisions" resultType="com.usn.labhub.user.domain.entity.collection.ManualRecordRevisionRow">
+        SELECT id, manual_record_id AS manualRecordId, revision_no AS revisionNo,
+               value_type AS valueType, value_text AS valueText, unit, observed_at AS observedAt,
+               method, instrument, note, change_reason AS changeReason,
+               previous_revision_id AS previousRevisionId, created_by AS createdBy, create_time AS createTime
+        FROM lab_manual_record_revision WHERE manual_record_id=#{recordId} ORDER BY revision_no DESC
+    </select>
+
+    <select id="selectEffectiveRecordSummary" resultType="com.usn.labhub.user.domain.entity.collection.CollectionRecordSummaryRow">
+        SELECT SUM(CASE WHEN cr.quality_status='GOOD' THEN 1 ELSE 0 END) AS recordCount,
+               SUM(CASE WHEN cr.quality_status='REJECTED' THEN 1 ELSE 0 END) AS rejectedCount,
+               MIN(cr.observed_at) AS observedFrom, MAX(cr.observed_at) AS observedTo
+        FROM lab_collection_record cr
+        <if test="sourceType == 'MANUAL'">
+            JOIN lab_manual_record mr ON mr.current_revision_id=cr.manual_record_revision_id
+        </if>
+        WHERE cr.batch_id=#{batchId}
+        <choose>
+            <when test="sourceType == 'FILE'">AND cr.data_import_revision_id=#{sourceRevisionId}</when>
+            <otherwise>AND cr.source_type='MANUAL'</otherwise>
+        </choose>
+    </select>
+
+    <select id="selectEffectiveChecksumRows" resultType="map">
+        SELECT cr.id, cr.source_type AS sourceType, cr.metric_code AS metricCode,
+               cr.value_type AS valueType, cr.value_text AS valueText, cr.unit,
+               cr.observed_at AS observedAt, cr.quality_status AS qualityStatus,
+               cr.data_import_revision_id AS dataImportRevisionId,
+               cr.manual_record_revision_id AS manualRecordRevisionId
+        FROM lab_collection_record cr
+        <if test="sourceType == 'MANUAL'">
+            JOIN lab_manual_record mr ON mr.current_revision_id=cr.manual_record_revision_id
+        </if>
+        WHERE cr.batch_id=#{batchId}
+        <choose>
+            <when test="sourceType == 'FILE'">AND cr.data_import_revision_id=#{sourceRevisionId}</when>
+            <otherwise>AND cr.source_type='MANUAL'</otherwise>
+        </choose>
+        ORDER BY cr.observed_at ASC, cr.id ASC
+    </select>
+
+    <select id="selectEffectiveRecords" resultType="com.usn.labhub.user.domain.entity.collection.CollectionRecordRow">
+        SELECT cr.id, cr.batch_id AS batchId, cr.data_import_revision_id AS dataImportRevisionId,
+               cr.manual_record_revision_id AS manualRecordRevisionId, cr.source_type AS sourceType,
+               cr.metric_code AS metricCode, cr.value_type AS valueType, cr.value_text AS valueText,
+               cr.unit, cr.observed_at AS observedAt, cr.recorded_by AS recordedBy,
+               cr.method, cr.instrument, cr.raw_row_no AS rawRowNo,
+               cr.quality_status AS qualityStatus, cr.parser_version AS parserVersion,
+               cr.create_time AS createTime
+        FROM lab_collection_record cr
+        <if test="sourceType == 'MANUAL'">
+            JOIN lab_manual_record mr ON mr.current_revision_id=cr.manual_record_revision_id
+        </if>
+        WHERE cr.batch_id=#{batchId}
+        <choose>
+            <when test="sourceType == 'FILE'">AND cr.data_import_revision_id=#{sourceRevisionId}</when>
+            <otherwise>AND cr.source_type='MANUAL'</otherwise>
+        </choose>
+        <if test="cursorTime != null">
+            AND (cr.observed_at&gt;#{cursorTime} OR (cr.observed_at=#{cursorTime} AND cr.id&gt;#{cursorId}))
+        </if>
+        ORDER BY cr.observed_at ASC, cr.id ASC LIMIT #{limit}
+    </select>
+
+    <select id="selectSnapshotByBatch" resultType="com.usn.labhub.user.domain.entity.collection.CollectionSnapshotRow">
+        SELECT id, snapshot_code AS snapshotCode, batch_id AS batchId, snapshot_type AS snapshotType,
+               source_revision_id AS sourceRevisionId, record_count AS recordCount,
+               rejected_count AS rejectedCount, observed_from AS observedFrom, observed_to AS observedTo,
+               batch_checksum AS batchChecksum, mapping_digest AS mappingDigest,
+               created_by AS createdBy, create_time AS createTime
+        FROM lab_collection_snapshot WHERE batch_id=#{batchId} AND snapshot_type='FULL_BATCH'
+    </select>
+
+    <select id="selectSnapshot" resultType="com.usn.labhub.user.domain.entity.collection.CollectionSnapshotRow">
+        SELECT id, snapshot_code AS snapshotCode, batch_id AS batchId, snapshot_type AS snapshotType,
+               source_revision_id AS sourceRevisionId, record_count AS recordCount,
+               rejected_count AS rejectedCount, observed_from AS observedFrom, observed_to AS observedTo,
+               batch_checksum AS batchChecksum, mapping_digest AS mappingDigest,
+               created_by AS createdBy, create_time AS createTime
+        FROM lab_collection_snapshot WHERE id=#{id}
+    </select>
+
+    <insert id="insertSnapshot" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_collection_snapshot(snapshot_code, batch_id, snapshot_type, source_revision_id,
+            record_count, rejected_count, observed_from, observed_to, batch_checksum, mapping_digest,
+            created_by, create_time)
+        VALUES(#{snapshotCode}, #{batchId}, #{snapshotType}, #{sourceRevisionId}, #{recordCount},
+            #{rejectedCount}, #{observedFrom}, #{observedTo}, #{batchChecksum}, #{mappingDigest},
+            #{createdBy}, #{createTime})
+    </insert>
+
+    <insert id="insertSnapshotManualRevisions">
+        INSERT INTO lab_snapshot_manual_revision(snapshot_id, manual_record_id, manual_revision_id)
+        SELECT #{snapshotId}, id, current_revision_id FROM lab_manual_record WHERE batch_id=#{batchId}
+    </insert>
+
+    <select id="selectImportMappingDigest" resultType="string">
+        SELECT mapping_digest FROM lab_data_import_revision WHERE id=#{revisionId}
+    </select>
+
+    <select id="selectExperimentRevisionBinding" resultType="com.usn.labhub.user.domain.entity.collection.ExperimentSnapshotBindingRow">
+        SELECT er.id AS recordId, er.author_id AS authorId, er.version AS recordVersion,
+               er.project_id AS projectId, erv.id AS revisionId, erv.status AS revisionStatus,
+               erv.version AS revisionVersion, erv.collection_snapshot_id AS collectionSnapshotId
+        FROM lab_experiment_record er
+        JOIN lab_experiment_revision erv ON erv.record_id=er.id AND erv.id=#{revisionId}
+        WHERE er.id=#{recordId} AND er.author_id=#{userId}
+    </select>
+
+    <update id="updateExperimentSnapshotBinding">
+        UPDATE lab_experiment_revision
+        SET collection_snapshot_id=#{snapshotId}, version=version+1, update_time=#{now}
+        WHERE record_id=#{recordId} AND id=#{revisionId}
+          AND version=#{revisionVersion} AND status='EDITABLE'
+    </update>
+
+    <update id="touchExperimentRecord">
+        UPDATE lab_experiment_record SET version=version+1, update_time=#{now}
+        WHERE id=#{recordId} AND version=#{recordVersion}
+    </update>
+
     <insert id="claimIdempotency">
         INSERT IGNORE INTO lab_request_idempotency(actor_id, operation, idempotency_key,
             request_digest, status, create_time, update_time)

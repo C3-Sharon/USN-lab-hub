@@ -6,6 +6,10 @@ spring:
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 21MB
+      max-request-size: 21MB
   data:
     redis:
       port: 6379
@@ -25,6 +29,8 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 # 自定义 JWT 配置
 usnhub:
+  collection:
+    storage-root: ${COLLECTION_STORAGE_ROOT:./data/collection-originals}
   jwt:
     # 密钥：必须足够长
     secret-key: UsnLabHub_SecretKey_Professional_Version_2026_Secure!

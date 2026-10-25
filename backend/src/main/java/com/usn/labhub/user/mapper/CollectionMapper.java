@@ -3,6 +3,13 @@ package com.usn.labhub.user.mapper;
 import com.usn.labhub.user.domain.entity.collection.CollectionBatchRow;
 import com.usn.labhub.user.domain.entity.collection.CollectionPlanRow;
 import com.usn.labhub.user.domain.entity.collection.CollectionRecordSummaryRow;
+import com.usn.labhub.user.domain.entity.collection.CollectionRecordRow;
+import com.usn.labhub.user.domain.entity.collection.CollectionSnapshotRow;
+import com.usn.labhub.user.domain.entity.collection.DataImportRevisionRow;
+import com.usn.labhub.user.domain.entity.collection.DataImportRow;
+import com.usn.labhub.user.domain.entity.collection.ManualRecordRevisionRow;
+import com.usn.labhub.user.domain.entity.collection.ManualRecordRow;
+import com.usn.labhub.user.domain.entity.collection.ExperimentSnapshotBindingRow;
 import com.usn.labhub.user.domain.entity.experiment.IdempotencyRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -49,6 +56,70 @@ public interface CollectionMapper {
     int moveBatch(@Param("id") Long id, @Param("fromStatuses") List<String> fromStatuses,
                   @Param("toStatus") String toStatus, @Param("expectedVersion") Integer expectedVersion,
                   @Param("completionReason") String completionReason, @Param("now") LocalDateTime now);
+
+    Long lockBatch(@Param("id") Long id);
+    DataImportRow selectImportByBatch(@Param("batchId") Long batchId);
+    DataImportRow selectImport(@Param("id") Long id);
+    int insertImport(DataImportRow row);
+    int markBatchProcessing(@Param("id") Long id, @Param("expectedVersion") Integer expectedVersion,
+                            @Param("now") LocalDateTime now);
+    DataImportRevisionRow selectImportRevision(@Param("id") Long id);
+    List<DataImportRevisionRow> selectImportRevisions(@Param("importId") Long importId);
+    int insertImportRevision(DataImportRevisionRow row);
+    int setCurrentImportRevision(@Param("id") Long id, @Param("expectedVersion") Integer expectedVersion,
+                                 @Param("revisionId") Long revisionId, @Param("now") LocalDateTime now);
+    int supersedeConfirmedImportRevisions(@Param("importId") Long importId,
+                                          @Param("exceptId") Long exceptId);
+    int confirmImportRevision(@Param("id") Long id, @Param("actorId") Long actorId,
+                              @Param("recordCount") long recordCount, @Param("rejectedCount") long rejectedCount,
+                              @Param("now") LocalDateTime now);
+    int confirmImport(@Param("id") Long id, @Param("expectedVersion") Integer expectedVersion,
+                      @Param("revisionId") Long revisionId, @Param("now") LocalDateTime now);
+    int markBatchReviewRequired(@Param("id") Long id, @Param("expectedVersion") Integer expectedVersion,
+                                @Param("now") LocalDateTime now);
+    int insertCollectionRecord(CollectionRecordRow row);
+
+    ManualRecordRow selectManualRecord(@Param("id") Long id);
+    int insertManualRecord(ManualRecordRow row);
+    int insertManualRevision(ManualRecordRevisionRow row);
+    int setInitialManualRevision(@Param("id") Long id, @Param("revisionId") Long revisionId,
+                                 @Param("now") LocalDateTime now);
+    int setCurrentManualRevision(@Param("id") Long id, @Param("expectedVersion") Integer expectedVersion,
+                                 @Param("revisionId") Long revisionId, @Param("now") LocalDateTime now);
+    List<ManualRecordRevisionRow> selectManualRevisions(@Param("recordId") Long recordId);
+
+    CollectionRecordSummaryRow selectEffectiveRecordSummary(@Param("batchId") Long batchId,
+                                                             @Param("sourceType") String sourceType,
+                                                             @Param("sourceRevisionId") Long sourceRevisionId);
+    List<Map<String, Object>> selectEffectiveChecksumRows(@Param("batchId") Long batchId,
+                                                          @Param("sourceType") String sourceType,
+                                                          @Param("sourceRevisionId") Long sourceRevisionId);
+    List<CollectionRecordRow> selectEffectiveRecords(@Param("batchId") Long batchId,
+                                                     @Param("sourceType") String sourceType,
+                                                     @Param("sourceRevisionId") Long sourceRevisionId,
+                                                     @Param("cursorTime") LocalDateTime cursorTime,
+                                                     @Param("cursorId") Long cursorId,
+                                                     @Param("limit") int limit);
+
+    CollectionSnapshotRow selectSnapshotByBatch(@Param("batchId") Long batchId);
+    CollectionSnapshotRow selectSnapshot(@Param("id") Long id);
+    int insertSnapshot(CollectionSnapshotRow row);
+    int insertSnapshotManualRevisions(@Param("snapshotId") Long snapshotId,
+                                      @Param("batchId") Long batchId);
+    String selectImportMappingDigest(@Param("revisionId") Long revisionId);
+
+    ExperimentSnapshotBindingRow selectExperimentRevisionBinding(@Param("recordId") Long recordId,
+                                                                  @Param("revisionId") Long revisionId,
+                                                                  @Param("userId") Long userId);
+    int updateExperimentSnapshotBinding(@Param("recordId") Long recordId,
+                                        @Param("revisionId") Long revisionId,
+                                        @Param("recordVersion") Integer recordVersion,
+                                        @Param("revisionVersion") Integer revisionVersion,
+                                        @Param("snapshotId") Long snapshotId,
+                                        @Param("now") LocalDateTime now);
+    int touchExperimentRecord(@Param("recordId") Long recordId,
+                              @Param("recordVersion") Integer recordVersion,
+                              @Param("now") LocalDateTime now);
 
     int claimIdempotency(@Param("actorId") Long actorId, @Param("operation") String operation,
                          @Param("key") String key, @Param("digest") String digest,

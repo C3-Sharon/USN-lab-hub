@@ -14,6 +14,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -44,7 +45,9 @@ public class CollectionSupport {
             if (!"COMPLETED".equals(existing.getStatus())) {
                 throw CollectionApiException.invalid();
             }
-            return readMap(existing.getResponseJson());
+            Map<String, Object> replay = new LinkedHashMap<>(readMap(existing.getResponseJson()));
+            replay.put("idempotentReplay", true);
+            return replay;
         }
         Map<String, Object> result = action.get();
         mapper.completeIdempotency(actorId, operation, normalizedKey, writeJson(result), LocalDateTime.now());

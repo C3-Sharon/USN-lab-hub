@@ -3,6 +3,7 @@ package com.usn.labhub.user.collection;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.controller.CollectionBatchController;
 import com.usn.labhub.user.controller.CollectionPlanController;
+import com.usn.labhub.user.controller.CollectionDataController;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -19,7 +21,8 @@ import java.util.Map;
 import java.util.UUID;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = {CollectionPlanController.class, CollectionBatchController.class})
+@RestControllerAdvice(assignableTypes = {CollectionPlanController.class, CollectionBatchController.class,
+        CollectionDataController.class})
 public class CollectionExceptionHandler {
     @ExceptionHandler(CollectionApiException.class)
     public ResponseEntity<Result<Object>> handle(CollectionApiException exception) {
@@ -39,5 +42,10 @@ public class CollectionExceptionHandler {
         Result<Object> result = Result.error(400, "参数错误", "INVALID_PARAMETER");
         result.setData(Map.of("traceId", UUID.randomUUID().toString()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result<Object>> tooLarge(MaxUploadSizeExceededException exception) {
+        return handle(CollectionApiException.fileTooLarge());
     }
 }
