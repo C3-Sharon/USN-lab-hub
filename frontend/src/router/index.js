@@ -19,6 +19,13 @@ import LearningDetail from '@/views/learning/LearningDetail.vue'
 import TemplateList from '@/views/experiment/TemplateList.vue'
 import TemplateDetail from '@/views/experiment/TemplateDetail.vue'
 import TemplateEditor from '@/views/experiment/TemplateEditor.vue'
+import ExperimentRecordList from '@/views/experiment/RecordList.vue'
+import ExperimentRecordEditor from '@/views/experiment/RecordEditor.vue'
+import ExperimentRecordDetail from '@/views/experiment/RecordDetail.vue'
+import CollectionPlanList from '@/views/collection/CollectionPlanList.vue'
+import CollectionPlanDetail from '@/views/collection/CollectionPlanDetail.vue'
+import CollectionBatchDetail from '@/views/collection/CollectionBatchDetail.vue'
+import DataImportDetail from '@/views/collection/DataImportDetail.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -158,6 +165,54 @@ const routes = [
         name: 'ExperimentTemplateDetail',
         component: TemplateDetail,
         meta: { title: '模板详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/records',
+        name: 'ExperimentRecordList',
+        component: ExperimentRecordList,
+        meta: { title: '实验记录', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/records/new',
+        name: 'ExperimentRecordCreate',
+        component: ExperimentRecordEditor,
+        meta: { title: '新建实验记录', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/records/:id/edit/:revisionId',
+        name: 'ExperimentRecordEditor',
+        component: ExperimentRecordEditor,
+        meta: { title: '编辑实验记录', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'experiment/records/:id',
+        name: 'ExperimentRecordDetail',
+        component: ExperimentRecordDetail,
+        meta: { title: '实验记录详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'projects/:id/collection',
+        name: 'ProjectCollection',
+        component: CollectionPlanList,
+        meta: { title: '数据采集', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'collection/plans/:id',
+        name: 'CollectionPlanDetail',
+        component: CollectionPlanDetail,
+        meta: { title: '采集计划详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'collection/batches/:id',
+        name: 'CollectionBatchDetail',
+        component: CollectionBatchDetail,
+        meta: { title: '采集批次详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'collection/imports/:id',
+        name: 'DataImportDetail',
+        component: DataImportDetail,
+        meta: { title: 'CSV 导入', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
       }
     ]
   },

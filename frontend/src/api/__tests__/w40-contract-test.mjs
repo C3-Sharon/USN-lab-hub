@@ -710,8 +710,8 @@ await group('项目详情页 / 看板 / 首页 tasks 区域', async () => {
   const dashboardSrc = readFileSync(new URL('../../views/Dashboard.vue', import.meta.url), 'utf8')
   const workbenchSrc = readFileSync(new URL('../workbench.js', import.meta.url), 'utf8')
 
-  await test('项目详情页含四个 Tab（概览/里程碑/任务看板/成员）', async () => {
-    assert.match(detailSrc, /const TAB_NAMES = \['overview', 'milestones', 'kanban', 'members'\]/)
+  await test('项目详情页含四个 Tab（概览/里程碑/任务看板/成员），W43 允许追加数据采集 Tab', async () => {
+    assert.match(detailSrc, /const TAB_NAMES = \['overview', 'milestones', 'kanban', (?:'collection', )?'members'\]/)
     assert.match(detailSrc, /label="里程碑"/)
     assert.match(detailSrc, /label="任务看板"/)
   })

@@ -1,0 +1,358 @@
+{
+  "base": "http://127.0.0.1:4173",
+  "generatedAt": "2026-10-22T11:40:06.226Z",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "390x844"
+  ],
+  "shots": 69,
+  "horizontalOverflow": 0,
+  "results": [
+    {
+      "viewport": "1440x900",
+      "shot": "record-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-list",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-list-loading",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-list-error",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-detail-published",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-detail-changes",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-detail-revising",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-detail-permission",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-save-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-convert-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "record-snapshot-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-plans",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-plans-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-plan-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-batch-review",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-batch-completed",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-batch-manual",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-manual-history",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-import-mapping",
+      "overflow": false
+    },
+    {
+      "viewport": "1440x900",
+      "shot": "collection-manual-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-list",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-list-loading",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-list-error",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-detail-published",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-detail-changes",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-detail-revising",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-detail-permission",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-create",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-save-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-convert-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "record-snapshot-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-plans",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-plans-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-plan-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-batch-review",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-batch-completed",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-batch-manual",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-manual-history",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-import-mapping",
+      "overflow": false
+    },
+    {
+      "viewport": "1280x800",
+      "shot": "collection-manual-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-nav",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-list",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-list-loading",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-list-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-list-error",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-detail-published",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-detail-changes",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-detail-revising",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-detail-permission",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-editor",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-create",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-save-conflict",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-convert-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "record-snapshot-dialog",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-plans",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-plans-empty",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-plan-detail",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-batch-review",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-batch-completed",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-batch-manual",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-manual-history",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-import-mapping",
+      "overflow": false
+    },
+    {
+      "viewport": "390x844",
+      "shot": "collection-manual-dialog",
+      "overflow": false
+    }
+  ]
+}
