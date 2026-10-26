@@ -80,6 +80,7 @@ public interface CollectionMapper {
     int insertCollectionRecord(CollectionRecordRow row);
 
     ManualRecordRow selectManualRecord(@Param("id") Long id);
+    List<ManualRecordRow> selectManualRecordsByBatch(@Param("batchId") Long batchId);
     int insertManualRecord(ManualRecordRow row);
     int insertManualRevision(ManualRecordRevisionRow row);
     int setInitialManualRevision(@Param("id") Long id, @Param("revisionId") Long revisionId,

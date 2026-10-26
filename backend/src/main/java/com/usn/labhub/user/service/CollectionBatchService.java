@@ -8,6 +8,11 @@ import com.usn.labhub.user.domain.dto.collection.CollectionVersionDTO;
 import com.usn.labhub.user.domain.entity.collection.CollectionBatchRow;
 import com.usn.labhub.user.domain.entity.collection.CollectionPlanRow;
 import com.usn.labhub.user.domain.entity.collection.CollectionRecordSummaryRow;
+import com.usn.labhub.user.domain.entity.collection.CollectionRecordRow;
+import com.usn.labhub.user.domain.entity.collection.CollectionSnapshotRow;
+import com.usn.labhub.user.domain.entity.collection.DataImportRevisionRow;
+import com.usn.labhub.user.domain.entity.collection.DataImportRow;
+import com.usn.labhub.user.domain.entity.collection.ManualRecordRow;
 import com.usn.labhub.user.mapper.CollectionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,7 +63,25 @@ public class CollectionBatchService {
     }
 
     public Map<String, Object> detail(Long id) {
-        return view(requireBatch(id));
+        CollectionBatchRow batch = requireBatch(id);
+        Map<String, Object> result = view(batch);
+        CollectionPlanRow plan = mapper.selectPlan(batch.getPlanId(), support.requiredUserId());
+        result.put("plan", plan == null ? null : Map.of("id", plan.getId(), "name", plan.getName(),
+                "code", plan.getPlanCode(), "ownerId", plan.getOwnerId()));
+
+        DataImportRow dataImport = mapper.selectImportByBatch(id);
+        result.put("imports", dataImport == null ? List.of() : List.of(importView(dataImport)));
+        result.put("manualRecords", mapper.selectManualRecordsByBatch(id).stream().map(this::manualView).toList());
+
+        CollectionSnapshotRow snapshot = mapper.selectSnapshotByBatch(id);
+        result.put("snapshot", snapshot == null ? null : snapshotView(snapshot));
+
+        List<CollectionRecordRow> samples = mapper.selectEffectiveRecords(id, batch.getSourceType(),
+                batch.getSourceRevisionId(), null, null, 10);
+        result.put("recordSamples", samples.stream().map(this::recordView).toList());
+        result.put("errorSamples", samples.stream().filter(row -> "REJECTED".equals(row.getQualityStatus()))
+                .map(this::errorView).toList());
+        return result;
     }
 
     @Transactional
@@ -218,6 +241,83 @@ public class CollectionBatchService {
         result.put("completionReason", row.getCompletionReason());
         result.put("createTime", row.getCreateTime());
         result.put("updateTime", row.getUpdateTime());
+        return result;
+    }
+
+    private Map<String, Object> importView(DataImportRow row) {
+        DataImportRevisionRow revision = row.getCurrentRevisionId() == null ? null
+                : mapper.selectImportRevision(row.getCurrentRevisionId());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", row.getId());
+        result.put("batchId", row.getBatchId());
+        result.put("status", row.getStatus());
+        result.put("version", row.getVersion());
+        result.put("importVersion", revision == null ? 0 : revision.getImportRevisionNo());
+        result.put("recordCount", revision == null ? 0 : value(revision.getRecordCount()));
+        result.put("rejectedCount", revision == null ? 0 : value(revision.getRejectedCount()));
+        Map<String, Object> file = new LinkedHashMap<>();
+        file.put("fileName", row.getOriginalFileName());
+        file.put("size", row.getFileSize());
+        file.put("sha256", row.getFileSha256());
+        file.put("uploadTime", row.getCreateTime());
+        result.put("originalFile", file);
+        return result;
+    }
+
+    private Map<String, Object> manualView(ManualRecordRow row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", row.getId());
+        result.put("batchId", row.getBatchId());
+        result.put("metricCode", row.getMetricCode());
+        result.put("valueType", row.getValueType());
+        result.put("value", row.getValueText());
+        result.put("unit", row.getUnit());
+        result.put("observedAt", row.getObservedAt());
+        result.put("method", row.getMethod());
+        result.put("instrument", row.getInstrument());
+        result.put("note", row.getNote());
+        result.put("version", row.getVersion());
+        result.put("revisionNo", row.getRevisionNo());
+        result.put("previousRevisionId", row.getPreviousRevisionId());
+        result.put("recordedBy", row.getRecordedBy());
+        result.put("recordedByName", row.getRecordedByName());
+        return result;
+    }
+
+    private Map<String, Object> snapshotView(CollectionSnapshotRow row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", row.getId());
+        result.put("snapshotCode", row.getSnapshotCode());
+        result.put("batchId", row.getBatchId());
+        result.put("snapshotType", row.getSnapshotType());
+        result.put("recordCount", row.getRecordCount());
+        result.put("rejectedCount", row.getRejectedCount());
+        result.put("observedFrom", row.getObservedFrom());
+        result.put("observedTo", row.getObservedTo());
+        result.put("batchChecksum", row.getBatchChecksum());
+        result.put("mappingDigest", row.getMappingDigest());
+        result.put("createTime", row.getCreateTime());
+        return result;
+    }
+
+    private Map<String, Object> recordView(CollectionRecordRow row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", row.getId());
+        result.put("metricCode", row.getMetricCode());
+        result.put("value", row.getValueText());
+        result.put("unit", row.getUnit());
+        result.put("observedAt", row.getObservedAt());
+        result.put("qualityStatus", row.getQualityStatus());
+        result.put("rawRowNo", row.getRawRowNo());
+        return result;
+    }
+
+    private Map<String, Object> errorView(CollectionRecordRow row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rawRowNo", row.getRawRowNo());
+        result.put("metricCode", row.getMetricCode());
+        result.put("reason", "PARSE_ERROR");
+        result.put("message", "记录未通过导入校验");
         return result;
     }
 

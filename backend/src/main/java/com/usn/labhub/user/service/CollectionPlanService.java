@@ -226,12 +226,24 @@ public class CollectionPlanService {
         result.put("sourceType", row.getSourceType());
         result.put("metricDefinitions", support.readJson(row.getMetricDefinitionsJson(), new TypeReference<List<Map<String, Object>>>() { }));
         result.put("linkedExperimentRecordId", row.getLinkedExperimentRecordId());
+        result.put("linkedExperimentRecordCode", row.getLinkedExperimentRecordCode());
         result.put("retentionNote", row.getRetentionNote());
         result.put("status", row.getStatus());
         result.put("version", row.getVersion());
         result.put("createdBy", row.getCreatedBy());
         result.put("createTime", row.getCreateTime());
         result.put("updateTime", row.getUpdateTime());
+        result.put("batchCount", row.getBatchCount() == null ? 0 : row.getBatchCount());
+        if (row.getLatestBatchId() == null) {
+            result.put("latestBatch", null);
+        } else {
+            Map<String, Object> latest = new LinkedHashMap<>();
+            latest.put("id", row.getLatestBatchId());
+            latest.put("batchCode", row.getLatestBatchCode());
+            latest.put("status", row.getLatestBatchStatus());
+            latest.put("createTime", row.getLatestBatchCreateTime());
+            result.put("latestBatch", latest);
+        }
         return result;
     }
 

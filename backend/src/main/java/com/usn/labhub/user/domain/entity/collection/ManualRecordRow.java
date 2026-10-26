@@ -11,6 +11,17 @@ public class ManualRecordRow {
     private String metricCode;
     private Long currentRevisionId;
     private Integer version;
+    private Integer revisionNo;
+    private String valueType;
+    private String valueText;
+    private String unit;
+    private LocalDateTime observedAt;
+    private String method;
+    private String instrument;
+    private String note;
+    private Long previousRevisionId;
+    private Long recordedBy;
+    private String recordedByName;
     private Long createdBy;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

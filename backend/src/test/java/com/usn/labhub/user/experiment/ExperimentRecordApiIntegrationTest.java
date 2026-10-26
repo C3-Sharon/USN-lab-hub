@@ -108,6 +108,17 @@ class ExperimentRecordApiIntegrationTest {
         Long revisionId = number(revision.get("id"));
         assertEquals("DRAFT", record.get("status"));
 
+        Map<String, Object> page = data(get("/api/experiment-records?page=1&pageSize=20", member));
+        Map<String, Object> summary = ((List<Map<String, Object>>) page.get("list")).get(0);
+        assertEquals("W43 system template", summary.get("templateName"));
+        assertEquals(1, summary.get("currentRevisionNo"));
+        assertEquals("EDITABLE", summary.get("currentRevisionStatus"));
+
+        Map<String, Object> initialDetail = data(get(path(recordId), member));
+        Map<String, Object> detailRevision = (Map<String, Object>) initialDetail.get("currentRevision");
+        assertNotNull(initialDetail.get("schemaJson"));
+        assertEquals(5.12, ((Number) ((Map<String, Object>) detailRevision.get("contentJson")).get("voltage")).doubleValue());
+
         Map<String, Object> replay = data(post("/api/experiment-records", member, "create-1", createBody));
         assertEquals(recordId, number(replay.get("id")));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM lab_experiment_record", Integer.class));
@@ -143,6 +154,10 @@ class ExperimentRecordApiIntegrationTest {
         Map<String, Object> requested = data(post(path(recordId) + "/feedback", admin, "changes-1",
                 feedback(3, revisionId, "CHANGE_REQUEST", "补充第二次测量")));
         assertEquals("CHANGES_REQUESTED", requested.get("status"));
+        Map<String, Object> firstFeedbackPage = data(get(path(recordId) + "/feedback?page=1&pageSize=20", member));
+        Map<String, Object> feedbackItem = ((List<Map<String, Object>>) firstFeedbackPage.get("list")).get(0);
+        assertEquals(1, feedbackItem.get("revisionNo"));
+        assertEquals("changes-1", feedbackItem.get("requestId"));
         Map<String, Object> next = (Map<String, Object>) requested.get("newRevision");
         Long nextRevisionId = number(next.get("id"));
 

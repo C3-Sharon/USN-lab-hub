@@ -19,6 +19,7 @@ public class ExperimentRecordRow {
     private Long learningUnitId;
     private String learningUnitTitle;
     private Long templateId;
+    private String templateName;
     private Long templateVersionId;
     private String templateVersion;
     private String templateScope;
@@ -26,6 +27,8 @@ public class ExperimentRecordRow {
     private String schemaJson;
     private String status;
     private Long currentRevisionId;
+    private Integer currentRevisionNo;
+    private String currentRevisionStatus;
     private Long publishedRevisionId;
     private Long convertedProjectId;
     private Integer version;

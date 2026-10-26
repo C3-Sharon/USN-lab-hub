@@ -113,6 +113,10 @@ class CollectionDataSnapshotApiIntegrationTest {
         assertNotNull(snapshot.get("mappingDigest"));
         assertEquals(4, ((List<?>) data(get("/api/collection-batches/" + batchId + "/records?limit=100"))
                 .get("list")).size());
+        Map<String, Object> fileBatchDetail = data(get("/api/collection-batches/" + batchId));
+        assertEquals(1, ((List<?>) fileBatchDetail.get("imports")).size());
+        assertEquals(4, ((List<?>) fileBatchDetail.get("recordSamples")).size());
+        assertNotNull(fileBatchDetail.get("snapshot"));
 
         Long revisionId = seedEditableExperimentRevision();
         Map<String, Object> bound = data(put("/api/experiment-records/" + experimentRecordId(revisionId)
@@ -161,6 +165,9 @@ class CollectionDataSnapshotApiIntegrationTest {
                 "snapshot-manual-1", Map.of("batchVersion", 4, "snapshotType", "FULL_BATCH")));
         assertEquals(1, ((Number) snapshot.get("recordCount")).intValue());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM lab_snapshot_manual_revision", Integer.class));
+        Map<String, Object> manualBatchDetail = data(get("/api/collection-batches/" + batchId));
+        assertEquals(1, ((List<?>) manualBatchDetail.get("manualRecords")).size());
+        assertEquals(2, ((Map<?, ?>) ((List<?>) manualBatchDetail.get("manualRecords")).get(0)).get("revisionNo"));
         Long frozenRevision = jdbc.queryForObject("SELECT manual_revision_id FROM lab_snapshot_manual_revision", Long.class);
         assertEquals(number(corrected.get("revisionId")), frozenRevision);
 

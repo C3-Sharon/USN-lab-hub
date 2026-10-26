@@ -7,10 +7,12 @@
         r.project_id AS projectId, p.project_name AS projectName, p.status AS projectStatus,
         pm.project_role AS projectRole,
         r.learning_unit_id AS learningUnitId, lu.title AS learningUnitTitle,
-        r.template_id AS templateId, r.template_version_id AS templateVersionId,
+        r.template_id AS templateId, t.title AS templateName, r.template_version_id AS templateVersionId,
         tv.version AS templateVersion, t.scope AS templateScope, t.project_id AS templateProjectId,
         tv.schema_json AS schemaJson, r.status,
         r.current_revision_id AS currentRevisionId,
+        current_revision.revision_no AS currentRevisionNo,
+        current_revision.status AS currentRevisionStatus,
         r.published_revision_id AS publishedRevisionId,
         r.converted_project_id AS convertedProjectId,
         r.version, r.create_time AS createTime, r.update_time AS updateTime
@@ -23,6 +25,7 @@
         LEFT JOIN lab_learning_unit lu ON lu.id = r.learning_unit_id
         JOIN lab_experiment_template t ON t.id = r.template_id
         JOIN lab_experiment_template_version tv ON tv.id = r.template_version_id
+        LEFT JOIN lab_experiment_revision current_revision ON current_revision.id = r.current_revision_id
     </sql>
 
     <select id="selectTemplateContext" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow">
@@ -251,21 +254,24 @@
     </update>
 
     <sql id="feedbackVisible">
-        AND (#{reviewerView}=TRUE OR reviewer_id=#{userId} OR visibility='PROJECT_MEMBERS')
+        AND (#{reviewerView}=TRUE OR f.reviewer_id=#{userId} OR f.visibility='PROJECT_MEMBERS')
     </sql>
 
     <select id="countFeedback" resultType="long">
-        SELECT COUNT(*) FROM lab_experiment_feedback
-        WHERE record_id=#{recordId} <include refid="feedbackVisible"/>
+        SELECT COUNT(*) FROM lab_experiment_feedback f
+        WHERE f.record_id=#{recordId} <include refid="feedbackVisible"/>
     </select>
 
     <select id="selectFeedback" resultType="com.usn.labhub.user.domain.entity.experiment.ExperimentFeedbackRow">
-        SELECT id, record_id AS recordId, revision_id AS revisionId, feedback_type AS type,
-               content, visibility, reviewer_id AS reviewerId, reviewer_name AS reviewerName,
-               create_time AS createTime
-        FROM lab_experiment_feedback
-        WHERE record_id=#{recordId} <include refid="feedbackVisible"/>
-        ORDER BY create_time DESC, id DESC LIMIT #{pageSize} OFFSET #{offset}
+        SELECT f.id, f.record_id AS recordId, f.revision_id AS revisionId,
+               revision.revision_no AS revisionNo, f.feedback_type AS type,
+               f.content, f.visibility, f.reviewer_id AS reviewerId,
+               f.reviewer_name AS reviewerName, f.request_id AS requestId,
+               f.create_time AS createTime
+        FROM lab_experiment_feedback f
+        JOIN lab_experiment_revision revision ON revision.id = f.revision_id
+        WHERE f.record_id=#{recordId} <include refid="feedbackVisible"/>
+        ORDER BY f.create_time DESC, f.id DESC LIMIT #{pageSize} OFFSET #{offset}
     </select>
 
     <insert id="claimIdempotency">

@@ -8,8 +8,12 @@
         cp.owner_id AS ownerId, owner.username AS ownerName, cp.source_type AS sourceType,
         cp.metric_definitions_json AS metricDefinitionsJson,
         cp.linked_experiment_record_id AS linkedExperimentRecordId,
+        linked_record.record_code AS linkedExperimentRecordCode,
         cp.retention_note AS retentionNote, cp.status, cp.version,
-        cp.created_by AS createdBy, cp.create_time AS createTime, cp.update_time AS updateTime
+        cp.created_by AS createdBy, cp.create_time AS createTime, cp.update_time AS updateTime,
+        (SELECT COUNT(*) FROM lab_collection_batch counted_batch WHERE counted_batch.plan_id=cp.id) AS batchCount,
+        latest_batch.id AS latestBatchId, latest_batch.batch_code AS latestBatchCode,
+        latest_batch.status AS latestBatchStatus, latest_batch.create_time AS latestBatchCreateTime
     </sql>
 
     <sql id="batchColumns">
@@ -59,6 +63,10 @@
         JOIN lab_project p ON p.id=cp.project_id
         LEFT JOIN lab_project_member pm ON pm.project_id=cp.project_id AND pm.user_id=#{userId}
         LEFT JOIN sys_user owner ON owner.id=cp.owner_id
+        LEFT JOIN lab_experiment_record linked_record ON linked_record.id=cp.linked_experiment_record_id
+        LEFT JOIN lab_collection_batch latest_batch ON latest_batch.id=(
+            SELECT MAX(latest_id.id) FROM lab_collection_batch latest_id WHERE latest_id.plan_id=cp.id
+        )
         WHERE cp.id=#{id}
     </select>
 
@@ -75,6 +83,10 @@
         JOIN lab_project p ON p.id=cp.project_id
         LEFT JOIN lab_project_member pm ON pm.project_id=cp.project_id AND pm.user_id=#{userId}
         LEFT JOIN sys_user owner ON owner.id=cp.owner_id
+        LEFT JOIN lab_experiment_record linked_record ON linked_record.id=cp.linked_experiment_record_id
+        LEFT JOIN lab_collection_batch latest_batch ON latest_batch.id=(
+            SELECT MAX(latest_id.id) FROM lab_collection_batch latest_id WHERE latest_id.plan_id=cp.id
+        )
         WHERE cp.project_id=#{projectId}
         <if test="status != null">AND cp.status=#{status}</if>
         <if test="sourceType != null">AND cp.source_type=#{sourceType}</if>
@@ -284,6 +296,22 @@
                mr.create_time AS createTime, mr.update_time AS updateTime
         FROM lab_manual_record mr JOIN lab_collection_batch cb ON cb.id=mr.batch_id
         WHERE mr.id=#{id}
+    </select>
+
+    <select id="selectManualRecordsByBatch" resultType="com.usn.labhub.user.domain.entity.collection.ManualRecordRow">
+        SELECT mr.id, mr.batch_id AS batchId, mr.metric_code AS metricCode,
+               mr.current_revision_id AS currentRevisionId, mr.version,
+               revision.revision_no AS revisionNo, revision.value_type AS valueType,
+               revision.value_text AS valueText, revision.unit, revision.observed_at AS observedAt,
+               revision.method, revision.instrument, revision.note,
+               revision.previous_revision_id AS previousRevisionId,
+               revision.created_by AS recordedBy, recorder.username AS recordedByName,
+               mr.created_by AS createdBy, mr.create_time AS createTime, mr.update_time AS updateTime
+        FROM lab_manual_record mr
+        JOIN lab_manual_record_revision revision ON revision.id=mr.current_revision_id
+        LEFT JOIN sys_user recorder ON recorder.id=revision.created_by
+        WHERE mr.batch_id=#{batchId}
+        ORDER BY revision.observed_at ASC, mr.id ASC
     </select>
 
     <insert id="insertManualRecord" useGeneratedKeys="true" keyProperty="id">

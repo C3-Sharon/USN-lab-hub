@@ -19,10 +19,16 @@ public class CollectionPlanRow {
     private String sourceType;
     private String metricDefinitionsJson;
     private Long linkedExperimentRecordId;
+    private String linkedExperimentRecordCode;
     private String retentionNote;
     private String status;
     private Integer version;
     private Long createdBy;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private Long batchCount;
+    private Long latestBatchId;
+    private String latestBatchCode;
+    private String latestBatchStatus;
+    private LocalDateTime latestBatchCreateTime;
 }

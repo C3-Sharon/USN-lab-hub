@@ -16,12 +16,14 @@ import com.usn.labhub.user.domain.entity.experiment.ExperimentFeedbackRow;
 import com.usn.labhub.user.domain.entity.experiment.ExperimentRecordRow;
 import com.usn.labhub.user.domain.entity.experiment.ExperimentRevisionRow;
 import com.usn.labhub.user.domain.entity.experiment.IdempotencyRow;
+import com.usn.labhub.user.domain.entity.collection.CollectionSnapshotRow;
 import com.usn.labhub.user.domain.entity.project.ProjectRecord;
 import com.usn.labhub.user.domain.vo.project.ProjectDetailVO;
 import com.usn.labhub.user.experiment.ExperimentApiException;
 import com.usn.labhub.user.learning.template.ExperimentTemplateSchemaValidator;
 import com.usn.labhub.user.learning.template.TemplateValidationResult;
 import com.usn.labhub.user.mapper.ExperimentRecordMapper;
+import com.usn.labhub.user.mapper.CollectionMapper;
 import com.usn.labhub.user.mapper.ProjectMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -50,13 +52,15 @@ public class ExperimentRecordService {
     private static final Set<String> PROJECT_REVIEWERS = Set.of("OWNER", "MAINTAINER");
 
     private final ExperimentRecordMapper mapper;
+    private final CollectionMapper collectionMapper;
     private final ObjectMapper objectMapper;
     private final ProjectMapper projectMapper;
     private final ExperimentTemplateSchemaValidator schemaValidator;
 
-    public ExperimentRecordService(ExperimentRecordMapper mapper, ObjectMapper objectMapper,
-                                   ProjectMapper projectMapper) {
+    public ExperimentRecordService(ExperimentRecordMapper mapper, CollectionMapper collectionMapper,
+                                   ObjectMapper objectMapper, ProjectMapper projectMapper) {
         this.mapper = mapper;
+        this.collectionMapper = collectionMapper;
         this.objectMapper = objectMapper;
         this.projectMapper = projectMapper;
         this.schemaValidator = new ExperimentTemplateSchemaValidator(objectMapper);
@@ -89,9 +93,14 @@ public class ExperimentRecordService {
     public Map<String, Object> detail(Long recordId) {
         ExperimentRecordRow record = requireVisibleRecord(recordId);
         Map<String, Object> result = recordDetail(record);
-        result.put("currentRevision", revisionView(requireRevision(record, record.getCurrentRevisionId()), false));
+        ExperimentRevisionRow current = requireRevision(record, record.getCurrentRevisionId());
+        result.put("schemaJson", readJson(record.getSchemaJson()));
+        result.put("currentRevision", revisionView(current, true));
         result.put("publishedRevision", record.getPublishedRevisionId() == null ? null
-                : revisionView(requireRevision(record, record.getPublishedRevisionId()), false));
+                : revisionView(requireRevision(record, record.getPublishedRevisionId()), true));
+        CollectionSnapshotRow snapshot = current.getCollectionSnapshotId() == null ? null
+                : collectionMapper.selectSnapshot(current.getCollectionSnapshotId());
+        result.put("collectionSnapshot", snapshot == null ? null : snapshotView(snapshot));
         return result;
     }
 
@@ -648,8 +657,12 @@ public class ExperimentRecordService {
         result.put("learningUnitId", row.getLearningUnitId());
         result.put("learningUnitTitle", row.getLearningUnitTitle());
         result.put("templateId", row.getTemplateId());
+        result.put("templateName", row.getTemplateName());
         result.put("templateVersionId", row.getTemplateVersionId());
         result.put("templateVersion", row.getTemplateVersion());
+        result.put("currentRevisionId", row.getCurrentRevisionId());
+        result.put("currentRevisionNo", row.getCurrentRevisionNo());
+        result.put("currentRevisionStatus", row.getCurrentRevisionStatus());
         result.put("status", row.getStatus());
         result.put("publishedRevisionId", row.getPublishedRevisionId());
         result.put("version", row.getVersion());
@@ -660,7 +673,6 @@ public class ExperimentRecordService {
 
     private Map<String, Object> recordDetail(ExperimentRecordRow row) {
         Map<String, Object> result = recordSummary(row);
-        result.put("currentRevisionId", row.getCurrentRevisionId());
         result.put("convertedProjectId", row.getConvertedProjectId());
         return result;
     }
@@ -709,11 +721,29 @@ public class ExperimentRecordService {
         result.put("id", row.getId());
         result.put("recordId", row.getRecordId());
         result.put("revisionId", row.getRevisionId());
+        result.put("revisionNo", row.getRevisionNo());
         result.put("type", row.getType());
         result.put("content", row.getContent());
         result.put("visibility", row.getVisibility());
         result.put("reviewerId", row.getReviewerId());
         result.put("reviewerName", row.getReviewerName());
+        result.put("requestId", row.getRequestId());
+        result.put("createTime", row.getCreateTime());
+        return result;
+    }
+
+    private Map<String, Object> snapshotView(CollectionSnapshotRow row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", row.getId());
+        result.put("snapshotCode", row.getSnapshotCode());
+        result.put("batchId", row.getBatchId());
+        result.put("snapshotType", row.getSnapshotType());
+        result.put("recordCount", row.getRecordCount());
+        result.put("rejectedCount", row.getRejectedCount());
+        result.put("observedFrom", row.getObservedFrom());
+        result.put("observedTo", row.getObservedTo());
+        result.put("batchChecksum", row.getBatchChecksum());
+        result.put("mappingDigest", row.getMappingDigest());
         result.put("createTime", row.getCreateTime());
         return result;
     }

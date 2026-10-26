@@ -111,6 +111,11 @@ class CollectionPlanBatchApiIntegrationTest {
         assertEquals(batchId, number(data(post(planBatches(planId), member, "batch-create-1",
                 Map.of("planVersion", 3, "sourceType", "FILE"))).get("id")));
 
+        Map<String, Object> planPage = data(get(projectPlans(), member));
+        Map<String, Object> planSummary = ((List<Map<String, Object>>) planPage.get("list")).get(0);
+        assertEquals(1L, ((Number) planSummary.get("batchCount")).longValue());
+        assertEquals(batchId, number(((Map<String, Object>) planSummary.get("latestBatch")).get("id")));
+
         ResponseEntity<Map> premature = post(batchPath(batchId) + "/complete", member, "complete-early",
                 Map.of("version", 1, "completionReason", "尚无数据"));
         assertEquals(HttpStatus.CONFLICT, premature.getStatusCode());
