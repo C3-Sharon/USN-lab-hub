@@ -15,6 +15,8 @@ public class ProjectRecord {
     private Boolean publicVisible;
     private String category;
     private Long coverMediaId;
+    private Long sourceExperimentRecordId;
+    private Long sourcePublishedRevisionId;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

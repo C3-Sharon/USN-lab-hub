@@ -361,6 +361,7 @@ try {
         -Token $member.token -Body @{
             version = [int]$manualRecord.data.version
             batchVersion = [int]$manualRecord.data.batchVersion
+            valueType = "DECIMAL"
             value = 5.13
             unit = "V"
             observedAt = "2026-10-22T14:30:00+08:00"
@@ -386,6 +387,7 @@ try {
         Invoke-JsonApi -Method PUT -Path "/api/manual-records/$manualRecordId" -Token $member.token -Body @{
             version = [int]$manualUpdated.data.version
             batchVersion = [int]$manualCompleted.data.version
+            valueType = "DECIMAL"
             value = 5.14
             unit = "V"
             observedAt = "2026-10-22T14:30:00+08:00"

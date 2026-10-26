@@ -9,5 +9,7 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ProjectDetailVO extends ProjectSummaryVO {
+    private Long sourceExperimentRecordId;
+    private Long sourcePublishedRevisionId;
     private List<ProjectMemberVO> members = new ArrayList<>();
 }
