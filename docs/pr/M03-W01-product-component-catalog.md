@@ -1,12 +1,12 @@
-# PR：第 8 周元器件目录与通用媒体契约 REVIEW
+# PR：第 8 周元器件目录与通用媒体契约 FROZEN
 
 ## 建议标题
 
-`docs(product): review W44 component catalog and media contract`
+`docs(product): freeze W44 component catalog and media contract`
 
 ## 背景
 
-第 8 周需要先冻结元器件目录、外部规格人工确认、不可变规格快照和通用媒体身份，后端与前端才能从同一边界开工。本 PR 仅提交 REVIEW 版，D1-D9 获得明确确认前不生效、不标记 FROZEN。
+第 8 周需要先冻结元器件目录、外部规格人工确认、不可变规格快照和通用媒体身份，后端与前端才能从同一边界开工。用户已于 2026-10-29 明确确认 D1-D9，本 PR 将契约升级为 v1.0 FROZEN。
 
 最新 `dev@83c1252` 已包含对象存储边界调整。W43 前后端 PR 已合入，但仓库内仍缺少可复现的关闭 mock 前端真实 FILE/MANUAL 页面联调报告，因此本 PR 不修改 W43、CURRENT_STATE、路线状态或追踪矩阵。
 
@@ -14,10 +14,10 @@
 
 - 新增 `docs/weekly/2026-W44.md`：目标、范围、非目标、三人矩阵、同源提示词、验收与合并顺序。
 - 新增 `docs/contracts/COMPONENT_CATALOG_MEDIA_API.md`：字段、状态、权限、错误、幂等、并发、分页、页面状态、媒体边界与兼容策略。
-- 更新 `docs/contracts/CONTRACT_INDEX.md`，以 REVIEW 状态登记新契约。
+- 更新 `docs/contracts/CONTRACT_INDEX.md`，以 FROZEN 状态登记新契约。
 - 新增 `scripts/acceptance/w44-component-catalog-integration.ps1`，作为后续真实 API 联调的可重复验收入口。
 
-## 待确认的高风险决策
+## 已确认的高风险决策
 
 1. D1：分类、制造商、型号、封装、基础单位、关键规格与 `DRAFT/ACTIVE/INACTIVE`。
 2. D2：`manufacturerId + normalizedMpn` 全状态唯一、分类最多三级、只停用/恢复、不物理删除。
@@ -54,7 +54,7 @@
 
 ## 评审与验证
 
-1. 逐项确认 D1-D9，确认后再将契约和周文档状态改为 FROZEN。
+1. 核对 D1-D9 均已勾选，并保留 2026-10-29 用户确认记录。
 2. 检查所有媒体响应都不包含基础设施地址。
 3. 检查 MEMBER 对 DRAFT/INACTIVE 的不可见语义和 404 防枚举规则。
 4. 检查重复 MPN、过期 version 和并发候选确认的 409 语义。
@@ -64,9 +64,9 @@
 ## 合并顺序
 
 ```text
-本 Draft PR REVIEW
-→ 用户确认 D1-D9
-→ 契约 FROZEN、PR Ready
+本 PR REVIEW（已完成）
+→ 用户确认 D1-D9（已完成）
+→ 契约 FROZEN、PR Ready（已完成）
 → 产品 PR 合入 dev
 → 后端/前端从最新 dev 开工
 → 后端 PR
