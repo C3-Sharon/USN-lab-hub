@@ -1,7 +1,7 @@
 # 元器件目录与通用媒体 API 契约 V1
 
 > 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认）
-> 版本：v1.0（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
+> 版本：v1.0.1（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
 > 最后校准周：第 8 周（2026-W44）
 > 影响范围：API、数据库、权限、前端字段、审计、文件存储边界
 > 关联周文档：`docs/weekly/2026-W44.md`
@@ -130,9 +130,9 @@
 
 ### D8 写操作、幂等、乐观锁和错误
 
-**推荐：创建/确认/上传/替换使用 Idempotency-Key；更新和状态动作使用 version 条件更新。**
+**推荐：所有 POST 命令动作使用 Idempotency-Key；更新和状态动作同时使用 version 条件更新。**
 
-- 创建分类、制造商、型号、候选、手工快照、确认候选、上传/替换图片必须带 `Idempotency-Key`。
+- 创建分类、制造商、型号、候选、手工快照、确认/拒绝候选、激活/停用/恢复、上传/替换图片必须带 `Idempotency-Key`。
 - PUT、激活、停用、恢复、设主图、删除媒体必须带当前 `version`。
 - 同 key + 同操作者 + 同端点 + 同请求摘要精确重放；key 复用不同内容返回 409 `IDEMPOTENCY_KEY_REUSED`。
 - 401 沿用 TOKEN_MISSING/INVALID/EXPIRED/ACCOUNT_DISABLED；403 表示已知资源但无操作权限；不可见资源统一 404；状态、重复和版本冲突使用 409。
@@ -533,7 +533,7 @@ Idempotency-Key: 01K...
 {"version":4}
 ```
 
-停用/恢复请求同样为 `{"version":N,"reason":"..."}`，reason 1-500 字符并写审计。
+停用/恢复请求同样为 `{"version":N,"reason":"..."}`，reason 1-500 字符并写审计；激活、停用和恢复均必须携带 `Idempotency-Key`。
 
 ### 7.5 图片响应
 
@@ -657,7 +657,6 @@ GET /api/components?page=1&pageSize=20
 | `COMPONENT_SPEC_REQUIRED` | DRAFT 没有正式快照却尝试激活 |
 | `SPEC_CANDIDATE_ALREADY_DECIDED` | 再次确认/拒绝终态候选 |
 | `MEDIA_LIMIT_EXCEEDED` | READY 图片已达 5 张 |
-| `MEDIA_DUPLICATE` | 相同型号重复内容；正常上传接口应幂等返回已有媒体 |
 
 ### 10.5 500
 
@@ -756,11 +755,12 @@ GET /api/components?page=1&pageSize=20
 
 ## 13. 存储边界
 
-- W44 建立供应商无关的 `MediaStoragePort` 语义：stage、commit、open、logicalDelete；内部实现名不进入契约。
+- W44 建立供应商无关的 `MediaStoragePort` 语义：stage、commit、open、rollbackNewObject；内部实现名不进入契约。
 - 本地实现只允许开发、测试和单实例演示，根目录位于 Web 根目录之外。
 - 数据库保存 mediaId、内部逻辑对象键、媒体版本、SHA-256 和受控元数据；业务 API 不返回内部逻辑对象键。
 - `GET /api/media/{mediaId}/content` 在业务 ACL 后读取内容；禁止页面拼接文件路径或存储地址。
 - 不保存临时签名 URL；不在数据库保存绝对路径、bucket、endpoint、provider 或凭据。
+- 媒体逻辑删除属于媒体业务服务和数据库状态变更，不调用存储端口删除已提交原件；W44 不执行已提交原件的物理清理。
 - 第 18 周切换正式对象存储实现时，mediaId、逻辑对象键、业务 API、owner 关系和权限语义不得改变。
 - MySQL 事务成功但文件提交失败时不得产生 READY 媒体；文件已提交但事务失败时必须补偿本次新对象或记录可恢复任务，不得静默悬挂。
 
@@ -796,7 +796,7 @@ GET /api/components?page=1&pageSize=20
 - [x] D5 外部候选人工确认，来源不可用时 MANUAL 快照
 - [x] D6 正式快照追加写、版本审计和并发确认
 - [x] D7 最多 5 图、JPEG/PNG、5 MiB、替换新 mediaId、逻辑删除和占位
-- [x] D8 version、Idempotency-Key 和 401/403/404/409 语义
+- [x] D8 所有 POST 命令的 Idempotency-Key、version 条件更新和 401/403/404/409 语义
 - [x] D9 分页、筛选、搜索和排序白名单
 - [ ] 后端确认媒体事务补偿、图片安全处理和唯一约束可实现
 - [ ] 前端确认候选对比、占位、冲突和三视口可实现
@@ -809,3 +809,4 @@ GET /api/components?page=1&pageSize=20
 |---|---|---|
 | 2026-10-29 | 初始 v1.0-draft：元器件目录、规格候选/快照、通用 mediaId、图片与占位规则 | REVIEW |
 | 2026-10-29 | 用户确认 D1-D9；版本升为 v1.0，作为后端与前端开工边界 | FROZEN |
+| 2026-10-29 | v1.0.1：统一 POST 命令幂等规则，澄清逻辑删除与存储补偿边界，删除冲突的重复媒体错误语义 | FROZEN |
