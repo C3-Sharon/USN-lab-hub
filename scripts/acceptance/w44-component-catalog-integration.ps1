@@ -3,16 +3,28 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:8080",
-    [string]$AdminMemberId = "admin",
-    [string]$AdminPassword = "admin123",
-    [string]$MemberMemberId = "20260001",
-    [string]$MemberPassword = "20260001"
+    [string]$AdminMemberId = $env:USN_W44_ADMIN_MEMBER_ID,
+    [string]$AdminPassword = $env:USN_W44_ADMIN_PASSWORD,
+    [string]$MemberMemberId = $env:USN_W44_MEMBER_MEMBER_ID,
+    [string]$MemberPassword = $env:USN_W44_MEMBER_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $runSuffix = [DateTimeOffset]::Now.ToString("yyyyMMddHHmmssfff")
 $tempPng = Join-Path ([System.IO.Path]::GetTempPath()) "usn-w44-$runSuffix.png"
+
+$requiredCredentials = @{
+    AdminMemberId = $AdminMemberId
+    AdminPassword = $AdminPassword
+    MemberMemberId = $MemberMemberId
+    MemberPassword = $MemberPassword
+}
+foreach ($entry in $requiredCredentials.GetEnumerator()) {
+    if ([string]::IsNullOrWhiteSpace([string]$entry.Value)) {
+        throw "Missing $($entry.Key). Pass it explicitly or set the corresponding USN_W44_* environment variable."
+    }
+}
 
 function New-IdempotencyKey {
     return [guid]::NewGuid().ToString()
@@ -128,14 +140,28 @@ try {
     $member = Login -MemberId $MemberMemberId -Password $MemberPassword
 
     # 1. Create the minimum catalog hierarchy and a DRAFT component.
+    $categoryKey = New-IdempotencyKey
+    $categoryBody = @{
+        code = "W44_$runSuffix"
+        name = "W44 acceptance category $runSuffix"
+        parentId = $null
+        sortOrder = 10
+    }
     $category = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/component-categories" `
-        -Token $admin.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-            code = "W44_$runSuffix"
-            name = "W44 acceptance category $runSuffix"
-            parentId = $null
-            sortOrder = 10
-        })
+        -Token $admin.token -IdempotencyKey $categoryKey -Body $categoryBody)
     $categoryId = [long]$category.id
+
+    $categoryReplay = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/component-categories" `
+        -Token $admin.token -IdempotencyKey $categoryKey -Body $categoryBody)
+    Assert-Equal ([long]$categoryReplay.id) $categoryId "idempotent category replay"
+
+    $categoryKeyReuseBody = $categoryBody.Clone()
+    $categoryKeyReuseBody.name = "W44 changed request $runSuffix"
+    Assert-ApiError -Status 409 -Reason "IDEMPOTENCY_KEY_REUSED" `
+        -Label "idempotency key reused with different content" -RequireTraceId -Action {
+        Invoke-JsonApi -Method POST -Path "/api/component-categories" -Token $admin.token `
+            -IdempotencyKey $categoryKey -Body $categoryKeyReuseBody
+    }
 
     $manufacturer = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/component-manufacturers" `
         -Token $admin.token -IdempotencyKey (New-IdempotencyKey) -Body @{
@@ -297,6 +323,14 @@ try {
     $mediaId = [long]$uploadData.media.mediaId
     $componentVersion = [int]$uploadData.componentVersion
 
+    $memberMedia = Get-ApiData (Invoke-JsonApi -Method GET -Path "/api/media/$mediaId" -Token $member.token)
+    Assert-Equal ([long]$memberMedia.mediaId) $mediaId "member reads active component media metadata"
+    Assert-NoInfrastructureFields $memberMedia "member media metadata response"
+    $contentResponse = Invoke-WebRequest -Uri "$BaseUrl/api/media/$mediaId/content" -Method GET `
+        -Headers @{ Authorization = "Bearer $($member.token)" }
+    Assert-Equal $contentResponse.StatusCode 200 "member reads active component media content"
+    Assert-True ($contentResponse.RawContentLength -gt 0) "media content contains bytes"
+
     # 9. Logical deletion returns to the exact same deterministic placeholder.
     $deleted = Get-ApiData (Invoke-JsonApi -Method DELETE `
         -Path "/api/components/$componentId/images/$mediaId" -Token $admin.token -Body @{
@@ -307,6 +341,15 @@ try {
     Assert-Equal $deleted.imageState "PLACEHOLDER" "last image deletion restores placeholder"
     Assert-Equal $deleted.placeholderKey $initialPlaceholderKey "placeholder key is stable after deletion"
     Assert-NoInfrastructureFields $deleted "image deletion response"
+
+    Assert-ApiError -Status 404 -Reason "MEDIA_NOT_FOUND" -Label "deleted media metadata hidden" `
+        -RequireTraceId -Action {
+        Invoke-JsonApi -Method GET -Path "/api/media/$mediaId" -Token $member.token
+    }
+    Assert-ApiError -Status 404 -Reason "MEDIA_NOT_FOUND" -Label "deleted media content hidden" `
+        -RequireTraceId -Action {
+        Invoke-JsonApi -Method GET -Path "/api/media/$mediaId/content" -Token $member.token
+    }
 
     # 10. Anonymous access uses the frozen 401 envelope and correlation trace.
     Assert-ApiError -Status 401 -Reason "TOKEN_MISSING" -Label "anonymous catalog access" -RequireTraceId -Action {
