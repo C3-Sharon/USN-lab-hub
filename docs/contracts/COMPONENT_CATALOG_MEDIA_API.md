@@ -1,7 +1,7 @@
 # 元器件目录与通用媒体 API 契约 V1
 
-> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，删除后重传语义于 2026-10-30 校准）
-> 版本：v1.0.2（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
+> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，媒体与目录冲突语义于 2026-10-30 校准）
+> 版本：v1.0.3（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
 > 最后校准周：第 8 周（2026-W44）
 > 影响范围：API、数据库、权限、前端字段、审计、文件存储边界
 > 关联周文档：`docs/weekly/2026-W44.md`
@@ -135,6 +135,7 @@
 
 - 创建分类、制造商、型号、候选、手工快照、确认/拒绝候选、激活/停用/恢复、上传/替换图片必须带 `Idempotency-Key`。
 - PUT、激活、停用、恢复、设主图、删除媒体必须带当前 `version`。
+- 分类、制造商和型号的停用/恢复请求统一使用 `{"version":N,"reason":"..."}`，reason 必填且为 1-500 字符；型号激活只使用 `{"version":N}`。
 - 同 key + 同操作者 + 同端点 + 同请求摘要精确重放；key 复用不同内容返回 409 `IDEMPOTENCY_KEY_REUSED`。
 - 401 沿用 TOKEN_MISSING/INVALID/EXPIRED/ACCOUNT_DISABLED；403 表示已知资源但无操作权限；不可见资源统一 404；状态、重复和版本冲突使用 409。
 
@@ -536,6 +537,8 @@ Idempotency-Key: 01K...
 
 停用/恢复请求同样为 `{"version":N,"reason":"..."}`，reason 1-500 字符并写审计；激活、停用和恢复均必须携带 `Idempotency-Key`。
 
+分类和制造商的停用/恢复使用相同请求体与幂等规则。编辑请求固定为：分类 `name/sortOrder/version`，制造商 `name/website/version`，型号为创建字段加 `version`；分类/制造商 code 与型号 catalogCode 均不可修改。
+
 ### 7.5 图片响应
 
 上传使用 multipart：字段 `file`、`componentVersion`、`sortOrder`，幂等键放 Header。成功返回：
@@ -650,10 +653,13 @@ GET /api/components?page=1&pageSize=20
 | `IDEMPOTENCY_KEY_REUSED` | 同 key 用于不同请求摘要 |
 | `COMPONENT_DUPLICATE_MODEL` | manufacturerId + normalizedMpn 重复 |
 | `CATEGORY_DUPLICATE_CODE` | 分类 code 重复 |
+| `CATEGORY_DUPLICATE_NAME` | 同父分类下规范化名称重复 |
 | `MANUFACTURER_DUPLICATE_CODE` | 制造商 code/name 重复 |
 | `CATEGORY_DEPTH_EXCEEDED` | 分类超过 3 级 |
+| `CATEGORY_PARENT_INACTIVE` | 父分类已停用，禁止创建或恢复子分类 |
 | `CATEGORY_IN_USE` | 存在 ACTIVE 子分类或 ACTIVE/DRAFT 型号 |
 | `MANUFACTURER_IN_USE` | 存在 ACTIVE/DRAFT 型号 |
+| `COMPONENT_REFERENCE_INACTIVE` | 型号引用的分类或制造商未启用 |
 | `COMPONENT_INVALID_TRANSITION` | 非法激活/停用/恢复 |
 | `COMPONENT_SPEC_REQUIRED` | DRAFT 没有正式快照却尝试激活 |
 | `SPEC_CANDIDATE_ALREADY_DECIDED` | 再次确认/拒绝终态候选 |
@@ -802,7 +808,7 @@ GET /api/components?page=1&pageSize=20
 - [x] 后端确认媒体事务补偿、图片安全处理和唯一约束可实现
 - [ ] 前端确认候选对比、占位、冲突和三视口可实现
 
-确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”，并于 2026-10-30 确认删除后重传、事务补偿、并发锁序、权限落点和唯一约束方案。后端与前端必须以当前 FROZEN 版本为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。前端实现可行性勾选保留到前端 PR，不影响产品决策冻结。
+确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”，并于 2026-10-30 确认删除后重传、事务补偿、并发锁序、权限落点、唯一约束及 B2 目录冲突语义。后端与前端必须以当前 FROZEN 版本为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。前端实现可行性勾选保留到前端 PR，不影响产品决策冻结。
 
 ## 16. 变更记录
 
@@ -812,3 +818,4 @@ GET /api/components?page=1&pageSize=20
 | 2026-10-29 | 用户确认 D1-D9；版本升为 v1.0，作为后端与前端开工边界 | FROZEN |
 | 2026-10-29 | v1.0.1：统一 POST 命令幂等规则，澄清逻辑删除与存储补偿边界，删除冲突的重复媒体错误语义 | FROZEN |
 | 2026-10-30 | v1.0.2：明确仅 READY 媒体参与同型号 SHA-256 去重，DELETED 媒体重传创建新 mediaId | FROZEN |
+| 2026-10-30 | v1.0.3：补充分类同级重名、停用父级、停用引用和目录状态请求体语义 | FROZEN |
