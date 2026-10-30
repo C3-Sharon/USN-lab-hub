@@ -22,6 +22,18 @@ public class ComponentCatalogAccessPolicy {
         }
     }
 
+    public void requireSpecManage() {
+        if (!canManage()) {
+            throw ComponentCatalogApiException.specConfirmDenied();
+        }
+    }
+
+    public void requireCandidateRead() {
+        if (!canReadAllStates()) {
+            throw ComponentCatalogApiException.candidateNotFound();
+        }
+    }
+
     public boolean canManage() {
         Set<String> roles = UserContext.getRoles();
         return roles.contains("SYSTEM_ADMIN") || roles.contains("STOCK_KEEPER");

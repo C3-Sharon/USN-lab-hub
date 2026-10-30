@@ -100,6 +100,36 @@ public class ComponentCatalogApiException extends RuntimeException {
                 "激活前必须存在正式规格快照");
     }
 
+    public static ComponentCatalogApiException specInvalid() {
+        return new ComponentCatalogApiException(HttpStatus.BAD_REQUEST, "COMPONENT_SPEC_INVALID",
+                "元器件规格格式非法");
+    }
+
+    public static ComponentCatalogApiException sourceMetadataInvalid() {
+        return new ComponentCatalogApiException(HttpStatus.BAD_REQUEST, "SOURCE_METADATA_INVALID",
+                "规格来源元数据不完整或非法");
+    }
+
+    public static ComponentCatalogApiException specConfirmDenied() {
+        return new ComponentCatalogApiException(HttpStatus.FORBIDDEN, "SPEC_CONFIRM_DENIED",
+                "无规格确认权限");
+    }
+
+    public static ComponentCatalogApiException candidateNotFound() {
+        return new ComponentCatalogApiException(HttpStatus.NOT_FOUND, "COMPONENT_SPEC_CANDIDATE_NOT_FOUND",
+                "规格候选不存在或不可见");
+    }
+
+    public static ComponentCatalogApiException snapshotNotFound() {
+        return new ComponentCatalogApiException(HttpStatus.NOT_FOUND, "COMPONENT_SPEC_SNAPSHOT_NOT_FOUND",
+                "规格快照不存在或不可见");
+    }
+
+    public static ComponentCatalogApiException candidateAlreadyDecided() {
+        return new ComponentCatalogApiException(HttpStatus.CONFLICT, "SPEC_CANDIDATE_ALREADY_DECIDED",
+                "规格候选已处理");
+    }
+
     public static ComponentCatalogApiException versionConflict(Integer version) {
         return new ComponentCatalogApiException(HttpStatus.CONFLICT, "VERSION_CONFLICT",
                 "数据已被更新，请刷新后重试", Map.of("currentVersion", version));

@@ -3,6 +3,8 @@ package com.usn.labhub.user.mapper;
 import com.usn.labhub.user.domain.entity.component.ComponentCategoryRecord;
 import com.usn.labhub.user.domain.entity.component.ComponentManufacturerRecord;
 import com.usn.labhub.user.domain.entity.component.ComponentRecord;
+import com.usn.labhub.user.domain.entity.component.ComponentSpecCandidateRecord;
+import com.usn.labhub.user.domain.entity.component.ComponentSpecSnapshotRecord;
 import com.usn.labhub.user.domain.entity.experiment.IdempotencyRow;
 import com.usn.labhub.user.domain.vo.component.CategoryPathItemVO;
 import com.usn.labhub.user.domain.vo.component.CategoryVO;
@@ -89,6 +91,37 @@ public interface ComponentCatalogMapper {
                               @Param("currentStatus") String currentStatus,
                               @Param("targetStatus") String targetStatus,
                               @Param("updatedBy") Long updatedBy, @Param("now") LocalDateTime now);
+    int incrementComponentVersion(@Param("id") Long id, @Param("version") Integer version,
+                                  @Param("updatedBy") Long updatedBy, @Param("now") LocalDateTime now);
+    int updateComponentSnapshotPointer(@Param("id") Long id, @Param("version") Integer version,
+                                       @Param("currentSpecVersion") Integer currentSpecVersion,
+                                       @Param("snapshotId") Long snapshotId,
+                                       @Param("nextSpecVersion") Integer nextSpecVersion,
+                                       @Param("updatedBy") Long updatedBy,
+                                       @Param("now") LocalDateTime now);
+
+    int insertSpecCandidate(ComponentSpecCandidateRecord row);
+    ComponentSpecCandidateRecord selectSpecCandidate(@Param("id") Long id);
+    ComponentSpecCandidateRecord selectSpecCandidateForUpdate(@Param("id") Long id);
+    long countSpecCandidates(@Param("componentId") Long componentId, @Param("status") String status);
+    List<ComponentSpecCandidateRecord> selectSpecCandidates(@Param("componentId") Long componentId,
+                                                            @Param("status") String status,
+                                                            @Param("offset") int offset,
+                                                            @Param("pageSize") int pageSize);
+    int decideSpecCandidate(@Param("id") Long id, @Param("version") Integer version,
+                            @Param("targetStatus") String targetStatus,
+                            @Param("decidedBy") Long decidedBy,
+                            @Param("decidedAt") LocalDateTime decidedAt,
+                            @Param("decisionNote") String decisionNote);
+
+    int insertSpecSnapshot(ComponentSpecSnapshotRecord row);
+    ComponentSpecSnapshotRecord selectSpecSnapshot(@Param("id") Long id);
+    long countSpecSnapshots(@Param("componentId") Long componentId,
+                            @Param("visibleSnapshotId") Long visibleSnapshotId);
+    List<ComponentSpecSnapshotRecord> selectSpecSnapshots(@Param("componentId") Long componentId,
+                                                          @Param("visibleSnapshotId") Long visibleSnapshotId,
+                                                          @Param("offset") int offset,
+                                                          @Param("pageSize") int pageSize);
 
     int claimIdempotency(@Param("actorId") Long actorId, @Param("operation") String operation,
                          @Param("key") String key, @Param("digest") String digest,
