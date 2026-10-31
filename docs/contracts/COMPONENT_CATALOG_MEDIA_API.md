@@ -1,7 +1,7 @@
 # 元器件目录与通用媒体 API 契约 V1
 
 > 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，媒体请求结构于 2026-10-31 补充冻结）
-> 版本：v1.0.5（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
+> 版本：v1.0.6（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
 > 最后校准周：第 8 周（2026-W44）
 > 影响范围：API、数据库、权限、前端字段、审计、文件存储边界
 > 关联周文档：`docs/weekly/2026-W44.md`
@@ -578,6 +578,8 @@ Idempotency-Key: 01K...
 
 替换使用 multipart，字段固定为 `file`、`componentVersion`、`mediaVersion`，并携带 `Idempotency-Key`。新媒体继承旧媒体的 `role` 和 `sortOrder`；替换成功创建新 mediaId，将旧媒体逻辑删除，不允许通过替换隐式改主图或排序。
 
+替换文件与旧媒体自身 SHA-256 相同时视为无变化：返回旧 mediaId，不增加 component/media version，不删除旧媒体，本次新文件必须补偿。替换文件命中同型号另一张 READY 媒体的 SHA-256 时返回 409 `MEDIA_DUPLICATE_READY`，不删除旧媒体、不修改主图或排序，本次新文件必须补偿。普通上传命中 READY SHA 仍返回已有 mediaId；仅命中 DELETED 媒体仍创建新 mediaId。
+
 设为主图使用 JSON 请求体：
 
 ```json
@@ -690,6 +692,7 @@ GET /api/components?page=1&pageSize=20
 | `COMPONENT_SPEC_REQUIRED` | DRAFT 没有正式快照却尝试激活 |
 | `SPEC_CANDIDATE_ALREADY_DECIDED` | 再次确认/拒绝终态候选 |
 | `MEDIA_LIMIT_EXCEEDED` | READY 图片已达 5 张 |
+| `MEDIA_DUPLICATE_READY` | 替换文件与同型号另一张 READY 图片重复 |
 
 ### 10.5 500
 
@@ -847,3 +850,4 @@ GET /api/components?page=1&pageSize=20
 | 2026-10-30 | v1.0.3：补充分类同级重名、停用父级、停用引用和目录状态请求体语义 | FROZEN |
 | 2026-10-30 | v1.0.4：冻结 packageBucket 与 MPN 首字符的确定性占位算法及兜底值 | FROZEN |
 | 2026-10-31 | v1.0.5：补充冻结替换 multipart、设主图版本体和完整快照式排序请求，明确版本自增与响应结构 | FROZEN |
+| 2026-10-31 | v1.0.6：冻结替换同 SHA 的无变化与另一 READY 重复冲突语义，禁止隐式删除或重排 | FROZEN |
