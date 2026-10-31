@@ -5,6 +5,10 @@ import com.usn.labhub.user.component.ComponentCatalogApiException;
 import com.usn.labhub.user.component.ComponentCatalogSupport;
 import com.usn.labhub.user.domain.entity.component.ComponentRecord;
 import com.usn.labhub.user.domain.entity.component.MediaObjectRecord;
+import com.usn.labhub.user.domain.dto.component.MediaDeleteDTO;
+import com.usn.labhub.user.domain.dto.component.MediaOrderDTO;
+import com.usn.labhub.user.domain.dto.component.MediaOrderItemDTO;
+import com.usn.labhub.user.domain.dto.component.MediaVersionDTO;
 import com.usn.labhub.user.domain.vo.component.MediaObjectVO;
 import com.usn.labhub.user.mapper.ComponentCatalogMapper;
 import com.usn.labhub.user.mapper.ComponentMediaMapper;
@@ -20,8 +24,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class ComponentMediaService {
@@ -103,6 +111,107 @@ public class ComponentMediaService {
         } catch (RuntimeException exception) {
             storage.rollbackNewObject(prepared.committed());
             throw exception;
+        }
+    }
+
+    public Map<String, Object> setPrimary(Long componentId, Long mediaId, MediaVersionDTO request) {
+        accessPolicy.requireMediaManage();
+        if (componentId == null || mediaId == null || request == null) throw ComponentCatalogApiException.invalid();
+        return transactions.execute(status -> {
+            ComponentRecord component = requireWritableComponentForUpdate(componentId, request.componentVersion());
+            MediaObjectRecord target = mediaMapper.selectReadyMediaForUpdate(mediaId);
+            requireOwnedVersion(target, componentId, request.mediaVersion());
+            if ("PRIMARY".equals(target.getRole()) && mediaId.equals(component.getPrimaryMediaId())) {
+                return imageState(component);
+            }
+            MediaObjectRecord current = mediaMapper.selectPrimaryForUpdate(componentId);
+            if (current != null && mediaMapper.updateMediaRole(
+                    current.getId(), current.getVersion(), "GALLERY", null) != 1) {
+                throw ComponentCatalogApiException.versionConflict(current.getVersion());
+            }
+            if (mediaMapper.updateMediaRole(target.getId(), target.getVersion(), "PRIMARY", 1) != 1) {
+                throw ComponentCatalogApiException.versionConflict(target.getVersion());
+            }
+            updateComponentMediaState(component, target.getId());
+            support.audit(UUID.randomUUID().toString(), "SET_COMPONENT_PRIMARY_MEDIA", "COMPONENT",
+                    componentId, null, null, null, Map.of("mediaId", mediaId));
+            component.setVersion(component.getVersion() + 1);
+            component.setPrimaryMediaId(target.getId());
+            return imageState(component);
+        });
+    }
+
+    public Map<String, Object> reorder(Long componentId, MediaOrderDTO request) {
+        accessPolicy.requireMediaManage();
+        if (componentId == null || request == null) throw ComponentCatalogApiException.invalid();
+        return transactions.execute(status -> {
+            ComponentRecord component = requireWritableComponentForUpdate(componentId, request.componentVersion());
+            List<MediaObjectRecord> ready = mediaMapper.selectReadyRecordsForUpdate(componentId);
+            Map<Long, MediaOrderItemDTO> requested = new HashMap<>();
+            for (MediaOrderItemDTO item : request.items()) {
+                if (requested.put(item.mediaId(), item) != null) throw ComponentCatalogApiException.invalid();
+            }
+            Set<Long> readyIds = new HashSet<>();
+            for (MediaObjectRecord media : ready) readyIds.add(media.getId());
+            if (requested.size() != ready.size() || !requested.keySet().equals(readyIds)) {
+                throw ComponentCatalogApiException.invalid();
+            }
+            for (MediaObjectRecord media : ready) {
+                MediaOrderItemDTO item = requested.get(media.getId());
+                if (!item.mediaVersion().equals(media.getVersion())) {
+                    throw ComponentCatalogApiException.versionConflict(media.getVersion());
+                }
+            }
+            for (MediaObjectRecord media : ready) {
+                MediaOrderItemDTO item = requested.get(media.getId());
+                if (!item.sortOrder().equals(media.getSortOrder())
+                        && mediaMapper.updateMediaSortOrder(media.getId(), media.getVersion(), item.sortOrder()) != 1) {
+                    throw ComponentCatalogApiException.versionConflict(media.getVersion());
+                }
+            }
+            updateComponentMediaState(component, component.getPrimaryMediaId());
+            support.audit(UUID.randomUUID().toString(), "REORDER_COMPONENT_MEDIA", "COMPONENT",
+                    componentId, null, null, null, support.asMap(request));
+            component.setVersion(component.getVersion() + 1);
+            return imageState(component);
+        });
+    }
+
+    public Map<String, Object> delete(Long componentId, Long mediaId, MediaDeleteDTO request) {
+        accessPolicy.requireMediaManage();
+        if (componentId == null || mediaId == null || request == null) throw ComponentCatalogApiException.invalid();
+        return transactions.execute(status -> {
+            ComponentRecord component = requireWritableComponentForUpdate(componentId, request.componentVersion());
+            MediaObjectRecord target = mediaMapper.selectReadyMediaForUpdate(mediaId);
+            requireOwnedVersion(target, componentId, request.mediaVersion());
+            Long actorId = support.requiredUserId();
+            if (mediaMapper.markDeleted(mediaId, target.getVersion(), actorId, LocalDateTime.now()) != 1) {
+                throw ComponentCatalogApiException.versionConflict(target.getVersion());
+            }
+            Long primaryMediaId = component.getPrimaryMediaId();
+            if (mediaId.equals(primaryMediaId)) {
+                MediaObjectRecord next = mediaMapper.selectFirstReadyForUpdate(componentId);
+                primaryMediaId = next == null ? null : next.getId();
+                if (next != null && mediaMapper.updateMediaRole(
+                        next.getId(), next.getVersion(), "PRIMARY", 1) != 1) {
+                    throw ComponentCatalogApiException.versionConflict(next.getVersion());
+                }
+            }
+            updateComponentMediaState(component, primaryMediaId);
+            support.audit(UUID.randomUUID().toString(), "DELETE_COMPONENT_MEDIA", "MEDIA", mediaId,
+                    "READY", "DELETED", request.reason().trim(), Map.of("componentId", componentId));
+            component.setVersion(component.getVersion() + 1);
+            component.setPrimaryMediaId(primaryMediaId);
+            return imageState(component);
+        });
+    }
+
+    private void requireOwnedVersion(MediaObjectRecord media, Long componentId, Integer expectedVersion) {
+        if (media == null || !componentId.equals(media.getOwnerId())) {
+            throw ComponentCatalogApiException.mediaNotFound();
+        }
+        if (!expectedVersion.equals(media.getVersion())) {
+            throw ComponentCatalogApiException.versionConflict(media.getVersion());
         }
     }
 

@@ -26,4 +26,11 @@ public interface ComponentMediaMapper {
                                   @Param("primaryMediaId") Long primaryMediaId,
                                   @Param("updatedBy") Long updatedBy,
                                   @Param("updatedAt") java.time.LocalDateTime updatedAt);
+    List<MediaObjectRecord> selectReadyRecordsForUpdate(@Param("componentId") Long componentId);
+    MediaObjectRecord selectPrimaryForUpdate(@Param("componentId") Long componentId);
+    MediaObjectRecord selectFirstReadyForUpdate(@Param("componentId") Long componentId);
+    int updateMediaRole(@Param("mediaId") Long mediaId, @Param("version") Integer version,
+                        @Param("role") String role, @Param("primarySlot") Integer primarySlot);
+    int updateMediaSortOrder(@Param("mediaId") Long mediaId, @Param("version") Integer version,
+                             @Param("sortOrder") Integer sortOrder);
 }

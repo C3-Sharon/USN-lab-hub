@@ -180,6 +180,87 @@ class ComponentMediaMutationApiIntegrationTest {
         assertFileCounts(5);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void switchesPrimaryAndAppliesCompleteOrderingSnapshot() throws Exception {
+        String admin = token(login("admin", "admin123"));
+        Long first = number(((Map<String, Object>) data(upload(admin, "order-1", imageBytes(201),
+                "1.png", 1, 10)).get("media")).get("mediaId"));
+        Long second = number(((Map<String, Object>) data(upload(admin, "order-2", imageBytes(202),
+                "2.png", 2, 20)).get("media")).get("mediaId"));
+        Long third = number(((Map<String, Object>) data(upload(admin, "order-3", imageBytes(203),
+                "3.png", 3, 30)).get("media")).get("mediaId"));
+
+        Map<String, Object> primary = data(putJson("/api/components/" + componentId + "/images/"
+                + second + "/primary", admin, Map.of("componentVersion", 4, "mediaVersion", 1)));
+        assertEquals(second, number(primary.get("primaryMediaId")));
+        assertEquals(5, integer(primary.get("componentVersion")));
+        List<Map<String, Object>> primaryImages = (List<Map<String, Object>>) primary.get("images");
+        Map<Long, Map<String, Object>> byId = index(primaryImages);
+        assertEquals("GALLERY", byId.get(first).get("role"));
+        assertEquals(2, integer(byId.get(first).get("version")));
+        assertEquals("PRIMARY", byId.get(second).get("role"));
+        assertEquals(2, integer(byId.get(second).get("version")));
+
+        Map<String, Object> orderBody = Map.of(
+                "componentVersion", 5,
+                "items", List.of(
+                        Map.of("mediaId", first, "mediaVersion", 2, "sortOrder", 30),
+                        Map.of("mediaId", second, "mediaVersion", 2, "sortOrder", 10),
+                        Map.of("mediaId", third, "mediaVersion", 1, "sortOrder", 20)));
+        Map<String, Object> ordered = data(putJson(
+                "/api/components/" + componentId + "/images/order", admin, orderBody));
+        assertEquals(6, integer(ordered.get("componentVersion")));
+        List<Map<String, Object>> orderedImages = (List<Map<String, Object>>) ordered.get("images");
+        assertEquals(List.of(second, third, first), orderedImages.stream()
+                .map(item -> number(item.get("mediaId"))).toList());
+        assertEquals(List.of(3, 2, 3), orderedImages.stream()
+                .map(item -> integer(item.get("version"))).toList());
+
+        ResponseEntity<Map> incomplete = putJson("/api/components/" + componentId + "/images/order", admin,
+                Map.of("componentVersion", 6, "items", List.of(
+                        Map.of("mediaId", second, "mediaVersion", 3, "sortOrder", 1))));
+        assertEquals(HttpStatus.BAD_REQUEST, incomplete.getStatusCode());
+        assertEquals("INVALID_PARAMETER", incomplete.getBody().get("reason"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void deletesLogicallyAndPromotesNextReadyImage() throws Exception {
+        String admin = token(login("admin", "admin123"));
+        Long first = number(((Map<String, Object>) data(upload(admin, "delete-1", imageBytes(211),
+                "1.png", 1, 20)).get("media")).get("mediaId"));
+        Long second = number(((Map<String, Object>) data(upload(admin, "delete-2", imageBytes(212),
+                "2.png", 2, 10)).get("media")).get("mediaId"));
+
+        Map<String, Object> firstDelete = data(deleteJson("/api/components/" + componentId + "/images/"
+                + first, admin, Map.of("componentVersion", 3, "mediaVersion", 1, "reason", "更换主图")));
+        assertEquals(4, integer(firstDelete.get("componentVersion")));
+        assertEquals(second, number(firstDelete.get("primaryMediaId")));
+        List<Map<String, Object>> remaining = (List<Map<String, Object>>) firstDelete.get("images");
+        assertEquals(1, remaining.size());
+        assertEquals("PRIMARY", remaining.get(0).get("role"));
+        assertEquals(2, integer(remaining.get(0).get("version")));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_media_object WHERE id=? AND status='DELETED'", Integer.class, first));
+        assertFileCounts(2);
+
+        Map<String, Object> secondDelete = data(deleteJson("/api/components/" + componentId + "/images/"
+                + second, admin, Map.of("componentVersion", 4, "mediaVersion", 2, "reason", "清空图库")));
+        assertEquals(5, integer(secondDelete.get("componentVersion")));
+        assertEquals("PLACEHOLDER", secondDelete.get("imageState"));
+        assertEquals(null, secondDelete.get("primaryMediaId"));
+        assertEquals(List.of(), secondDelete.get("images"));
+        assertEquals(0, readyCount());
+        assertFileCounts(2);
+
+        String member = token(login("20260001", "20260001"));
+        ResponseEntity<Map> denied = deleteJson("/api/components/" + componentId + "/images/" + first,
+                member, Map.of("componentVersion", 5, "mediaVersion", 2, "reason", "越权"));
+        assertEquals(HttpStatus.FORBIDDEN, denied.getStatusCode());
+        assertEquals("MEDIA_OPERATION_DENIED", denied.getBody().get("reason"));
+    }
+
     private Long seedComponent() {
         jdbc.update("""
                 INSERT INTO lab_component_category(code,name,normalized_name,parent_scope_id,level,path,
@@ -230,6 +311,27 @@ class ComponentMediaMutationApiIntegrationTest {
         headers.set("Idempotency-Key", key);
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         return rest.exchange(path, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+    }
+
+    private ResponseEntity<Map> putJson(String path, String token, Map<String, Object> body) {
+        return rest.exchange(path, HttpMethod.PUT, jsonEntity(token, body), Map.class);
+    }
+
+    private ResponseEntity<Map> deleteJson(String path, String token, Map<String, Object> body) {
+        return rest.exchange(path, HttpMethod.DELETE, jsonEntity(token, body), Map.class);
+    }
+
+    private HttpEntity<Map<String, Object>> jsonEntity(String token, Map<String, Object> body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new HttpEntity<>(body, headers);
+    }
+
+    private Map<Long, Map<String, Object>> index(List<Map<String, Object>> images) {
+        Map<Long, Map<String, Object>> indexed = new java.util.HashMap<>();
+        for (Map<String, Object> image : images) indexed.put(number(image.get("mediaId")), image);
+        return indexed;
     }
 
     private byte[] imageBytes(int seed) throws Exception {

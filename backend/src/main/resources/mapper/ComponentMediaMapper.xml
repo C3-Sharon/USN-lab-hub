@@ -87,4 +87,43 @@
             updated_by=#{updatedBy}, update_time=#{updatedAt}
         WHERE id=#{componentId} AND version=#{componentVersion} AND status != 'INACTIVE'
     </update>
+
+    <select id="selectReadyRecordsForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId} AND status='READY'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <select id="selectPrimaryForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId}
+          AND status='READY' AND role='PRIMARY'
+        LIMIT 1 FOR UPDATE
+    </select>
+
+    <select id="selectFirstReadyForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId} AND status='READY'
+        ORDER BY sort_order ASC, id ASC
+        LIMIT 1 FOR UPDATE
+    </select>
+
+    <update id="updateMediaRole">
+        UPDATE lab_media_object
+        SET role=#{role}, ready_primary_slot=#{primarySlot}, version=version+1
+        WHERE id=#{mediaId} AND version=#{version} AND status='READY'
+    </update>
+
+    <update id="updateMediaSortOrder">
+        UPDATE lab_media_object
+        SET sort_order=#{sortOrder}, version=version+1
+        WHERE id=#{mediaId} AND version=#{version} AND status='READY'
+    </update>
 </mapper>
