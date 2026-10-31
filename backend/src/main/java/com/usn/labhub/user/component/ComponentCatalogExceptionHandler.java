@@ -3,6 +3,7 @@ package com.usn.labhub.user.component;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.controller.ComponentCatalogController;
 import com.usn.labhub.user.controller.ComponentSpecificationController;
+import com.usn.labhub.user.controller.ComponentMediaController;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -20,7 +21,7 @@ import java.util.UUID;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {ComponentCatalogController.class,
-        ComponentSpecificationController.class})
+        ComponentSpecificationController.class, ComponentMediaController.class})
 public class ComponentCatalogExceptionHandler {
     @ExceptionHandler(ComponentCatalogApiException.class)
     public ResponseEntity<Result<Object>> handle(ComponentCatalogApiException exception) {

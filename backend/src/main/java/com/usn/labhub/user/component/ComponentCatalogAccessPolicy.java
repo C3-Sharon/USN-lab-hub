@@ -28,6 +28,12 @@ public class ComponentCatalogAccessPolicy {
         }
     }
 
+    public void requireMediaManage() {
+        if (!canManage()) {
+            throw ComponentCatalogApiException.mediaOperationDenied();
+        }
+    }
+
     public void requireCandidateRead() {
         if (!canReadAllStates()) {
             throw ComponentCatalogApiException.candidateNotFound();

@@ -1,6 +1,7 @@
 package com.usn.labhub.user.media;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +32,7 @@ public class LocalMediaStorageAdapter implements MediaStoragePort {
     private final MediaImageProcessor imageProcessor;
     private final MediaFileMover fileMover;
 
+    @Autowired
     public LocalMediaStorageAdapter(
             MediaStorageProperties properties,
             MediaImageProcessor imageProcessor,

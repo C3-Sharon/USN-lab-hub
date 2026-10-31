@@ -139,4 +139,19 @@ public class ComponentCatalogApiException extends RuntimeException {
         return new ComponentCatalogApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
                 "幂等键已用于不同请求");
     }
+
+    public static ComponentCatalogApiException mediaOperationDenied() {
+        return new ComponentCatalogApiException(HttpStatus.FORBIDDEN, "MEDIA_OPERATION_DENIED",
+                "无媒体维护权限");
+    }
+
+    public static ComponentCatalogApiException mediaNotFound() {
+        return new ComponentCatalogApiException(HttpStatus.NOT_FOUND, "MEDIA_NOT_FOUND",
+                "媒体不存在或不可见");
+    }
+
+    public static ComponentCatalogApiException mediaStorageFailed() {
+        return new ComponentCatalogApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MEDIA_STORAGE_FAILED",
+                "媒体存储操作失败");
+    }
 }

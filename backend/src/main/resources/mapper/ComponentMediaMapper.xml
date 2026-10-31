@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ComponentMediaMapper">
+
+    <sql id="mediaRecordColumns">
+        id, owner_type AS ownerType, owner_id AS ownerId, role, status,
+        original_file_name AS originalFileName, content_type AS contentType,
+        size_bytes AS sizeBytes, width, height, sha256,
+        original_object_key AS originalObjectKey, display_object_key AS displayObjectKey,
+        sort_order AS sortOrder, version, uploaded_by AS uploadedBy,
+        uploaded_at AS uploadedAt, deleted_by AS deletedBy, deleted_at AS deletedAt
+    </sql>
+
+    <sql id="mediaViewColumns">
+        id AS mediaId, owner_type AS ownerType, owner_id AS ownerId, role, status,
+        original_file_name AS originalFileName, content_type AS contentType,
+        size_bytes AS size, width, height, sha256,
+        CONCAT('/api/media/', id, '/content') AS contentPath,
+        sort_order AS sortOrder, version, uploaded_by AS uploadedBy,
+        uploaded_at AS uploadedAt, deleted_by AS deletedBy, deleted_at AS deletedAt
+    </sql>
+
+    <select id="selectReadyByComponent" resultType="com.usn.labhub.user.domain.vo.component.MediaObjectVO">
+        SELECT <include refid="mediaViewColumns"/>
+        FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId} AND status='READY'
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="selectReadyMedia" resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE id=#{mediaId} AND owner_type='COMPONENT' AND status='READY'
+    </select>
+
+    <select id="selectReadyMediaView" resultType="com.usn.labhub.user.domain.vo.component.MediaObjectVO">
+        SELECT <include refid="mediaViewColumns"/>
+        FROM lab_media_object
+        WHERE id=#{mediaId} AND owner_type='COMPONENT' AND status='READY'
+    </select>
+</mapper>
