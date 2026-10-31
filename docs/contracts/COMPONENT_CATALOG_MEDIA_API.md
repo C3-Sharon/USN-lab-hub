@@ -1,7 +1,7 @@
 # 元器件目录与通用媒体 API 契约 V1
 
-> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，媒体与目录冲突语义于 2026-10-30 校准）
-> 版本：v1.0.4（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
+> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，媒体请求结构于 2026-10-31 补充冻结）
+> 版本：v1.0.5（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
 > 最后校准周：第 8 周（2026-W44）
 > 影响范围：API、数据库、权限、前端字段、审计、文件存储边界
 > 关联周文档：`docs/weekly/2026-W44.md`
@@ -576,6 +576,30 @@ Idempotency-Key: 01K...
 
 替换和删除成功必须返回新的 `componentVersion/imageState/primaryMediaId/images`。响应中出现禁止的基础设施字段属于契约失败。
 
+替换使用 multipart，字段固定为 `file`、`componentVersion`、`mediaVersion`，并携带 `Idempotency-Key`。新媒体继承旧媒体的 `role` 和 `sortOrder`；替换成功创建新 mediaId，将旧媒体逻辑删除，不允许通过替换隐式改主图或排序。
+
+设为主图使用 JSON 请求体：
+
+```json
+{"componentVersion":6,"mediaVersion":1}
+```
+
+目标必须是该型号的 READY 图片。成功后旧主图降为 GALLERY、目标升为 PRIMARY，并返回新的 `componentVersion/imageState/primaryMediaId/images`；组件版本负责保护整组主图切换，`mediaVersion` 负责保护目标媒体。
+
+批量排序使用完整快照式 JSON 请求体：
+
+```json
+{
+  "componentVersion":6,
+  "items":[
+    {"mediaId":801,"mediaVersion":1,"sortOrder":10},
+    {"mediaId":802,"mediaVersion":2,"sortOrder":20}
+  ]
+}
+```
+
+`items` 必须恰好包含该型号当前全部 READY 图片，每个 mediaId 只出现一次，`sortOrder` 为 0-9999；缺失、额外、重复或引用非 READY/非本型号媒体均返回 400 `INVALID_PARAMETER`。排序成功返回新的 `componentVersion/imageState/primaryMediaId/images`，所有实际更新的媒体 version 自增；同值按 mediaId 升序稳定展示。
+
 删除图片使用 JSON 请求体 `{"componentVersion":N,"mediaVersion":N,"reason":"..."}`；`reason` 为 1-500 字符。删除只做逻辑删除和审计留痕，不在 W44 请求链路中物理删除原件。
 
 ## 8. 列表查询
@@ -810,7 +834,7 @@ GET /api/components?page=1&pageSize=20
 - [x] 后端确认媒体事务补偿、图片安全处理和唯一约束可实现
 - [ ] 前端确认候选对比、占位、冲突和三视口可实现
 
-确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”，并于 2026-10-30 确认删除后重传、事务补偿、并发锁序、权限落点、唯一约束、B2 目录冲突语义及确定性占位算法。后端与前端必须以当前 FROZEN 版本为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。前端实现可行性勾选保留到前端 PR，不影响产品决策冻结。
+确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”，于 2026-10-30 确认删除后重传、事务补偿、并发锁序、权限落点、唯一约束、B2 目录冲突语义及确定性占位算法，并于 2026-10-31 确认替换、设主图和完整排序请求结构。后端与前端必须以当前 FROZEN 版本为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。前端实现可行性勾选保留到前端 PR，不影响产品决策冻结。
 
 ## 16. 变更记录
 
@@ -822,3 +846,4 @@ GET /api/components?page=1&pageSize=20
 | 2026-10-30 | v1.0.2：明确仅 READY 媒体参与同型号 SHA-256 去重，DELETED 媒体重传创建新 mediaId | FROZEN |
 | 2026-10-30 | v1.0.3：补充分类同级重名、停用父级、停用引用和目录状态请求体语义 | FROZEN |
 | 2026-10-30 | v1.0.4：冻结 packageBucket 与 MPN 首字符的确定性占位算法及兜底值 | FROZEN |
+| 2026-10-31 | v1.0.5：补充冻结替换 multipart、设主图版本体和完整快照式排序请求，明确版本自增与响应结构 | FROZEN |
