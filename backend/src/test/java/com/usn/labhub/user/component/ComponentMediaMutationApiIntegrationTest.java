@@ -41,17 +41,18 @@ import static org.mockito.Mockito.when;
         classes = UsnHubApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "spring.datasource.url=jdbc:h2:mem:w44-component-media-mutation;MODE=MySQL;DB_CLOSE_DELAY=-1",
-                "spring.datasource.driver-class-name=org.h2.Driver",
-                "spring.datasource.username=sa",
-                "spring.datasource.password=",
+                "spring.datasource.url=${USNHUB_TEST_DB_URL:jdbc:h2:mem:w44-component-media-mutation;MODE=MySQL;DB_CLOSE_DELAY=-1}",
+                "spring.datasource.driver-class-name=${USNHUB_TEST_DB_DRIVER:org.h2.Driver}",
+                "spring.datasource.username=${USNHUB_TEST_DB_USERNAME:sa}",
+                "spring.datasource.password=${USNHUB_TEST_DB_PASSWORD:}",
                 "spring.flyway.enabled=true",
                 "usnhub.iot.mqtt.enabled=false",
                 "usnhub.iot.operations.timeout-enabled=false"
         }
 )
 class ComponentMediaMutationApiIntegrationTest {
-    private static final Path MEDIA_ROOT = Path.of("target", "test-media-b52").toAbsolutePath();
+    private static final Path MEDIA_ROOT = Path.of(System.getenv().getOrDefault(
+            "USNHUB_TEST_MEDIA_ROOT", Path.of("target", "test-media-b52").toString())).toAbsolutePath();
 
     @DynamicPropertySource
     static void mediaProperties(DynamicPropertyRegistry registry) {

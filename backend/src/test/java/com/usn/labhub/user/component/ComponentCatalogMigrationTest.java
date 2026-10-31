@@ -132,6 +132,12 @@ class ComponentCatalogMigrationTest {
         String username = System.getenv("USNHUB_TEST_MYSQL_USERNAME");
         String password = System.getenv("USNHUB_TEST_MYSQL_PASSWORD");
         DriverManagerDataSource dataSource = new DriverManagerDataSource(url, username, password);
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target("11")
+                .load()
+                .migrate();
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         String existingPm001 = jdbc.queryForObject("""
                 SELECT CONCAT(device_code, ':', project_id, ':', status)
