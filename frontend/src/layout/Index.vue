@@ -112,7 +112,7 @@
 <script setup>
 import { computed, markRaw, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection, Tickets } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection, Tickets, Box, Share, OfficeBuilding } from '@element-plus/icons-vue'
 import { userStore, hasAnyRole } from '@/store/user'
 import { ROLE } from '@/utils/permission'
 
@@ -146,6 +146,9 @@ const pageSubtitle = computed(() => {
   if (route.path.startsWith('/experiment/templates')) return '实验模板与不可变版本管理'
   if (route.path.startsWith('/experiment/records')) return '实验记录、修订评审与导师反馈'
   if (route.path.startsWith('/collection')) return '采集计划、批次、CSV 导入与快照'
+  if (route.path.startsWith('/components') || route.path.startsWith('/component-')) {
+    return '元器件型号、规格快照、图片占位、分类与制造商'
+  }
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -163,7 +166,10 @@ const ICON = markRaw({
   device: Cpu,
   bell: Bell,
   command: SetUp,
-  document: Document
+  document: Document,
+  component: Box,
+  category: Share,
+  manufacturer: OfficeBuilding
 })
 
 const menuItems = computed(() => {
@@ -189,6 +195,18 @@ const menuItems = computed(() => {
       title: '项目工作台',
       icon: ICON.folder,
       roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER]
+    },
+    {
+      // 父级 index 不能与子菜单 index 重复，否则 el-menu 的 active 状态会冲突
+      index: '/component-catalog',
+      title: '元器件目录',
+      icon: ICON.component,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
+      children: [
+        { index: '/components', title: '元器件型号', icon: ICON.component, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/component-categories', title: '分类树', icon: ICON.category, roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] },
+        { index: '/component-manufacturers', title: '制造商', icon: ICON.manufacturer, roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
+      ]
     },
     {
       index: '/study',

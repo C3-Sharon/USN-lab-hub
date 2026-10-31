@@ -290,6 +290,105 @@ export function errorTraceId(err) {
   return data?.traceId || ''
 }
 
+// ========== 元器件目录与媒体域错误码（COMPONENT_CATALOG_MEDIA_API.md §10） ==========
+
+const COMPONENT_NOT_FOUND_REASONS = [
+  'COMPONENT_CATEGORY_NOT_FOUND',
+  'COMPONENT_MANUFACTURER_NOT_FOUND',
+  'COMPONENT_NOT_FOUND',
+  'COMPONENT_SPEC_CANDIDATE_NOT_FOUND',
+  'COMPONENT_SPEC_SNAPSHOT_NOT_FOUND',
+  'MEDIA_NOT_FOUND'
+]
+
+/** 分类/制造商/型号/候选/快照/媒体不存在或不可见（404，隐藏存在性） */
+export function isComponentNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || COMPONENT_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 无目录/规格确认/媒体写权限（403） */
+export function isComponentDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403
+    || ['COMPONENT_OPERATION_DENIED', 'SPEC_CONFIRM_DENIED', 'MEDIA_OPERATION_DENIED', 'ACCESS_DENIED'].includes(reason)
+}
+
+/** 同制造商下 MPN 重复（409），data.existingComponentId 指向已有型号 */
+export function isComponentDuplicateModel(err) {
+  return isReason(err, 'COMPONENT_DUPLICATE_MODEL')
+}
+
+/** data.existingComponentId，普通成员不会收到该字段 */
+export function duplicateComponentId(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'COMPONENT_DUPLICATE_MODEL') return null
+  return data?.existingComponentId ?? null
+}
+
+/** 分类编码重复 */
+export function isCategoryDuplicateCode(err) {
+  return isReason(err, 'CATEGORY_DUPLICATE_CODE')
+}
+
+/** 分类层级超过三级 */
+export function isCategoryDepthExceeded(err) {
+  return isReason(err, 'CATEGORY_DEPTH_EXCEEDED')
+}
+
+/** 分类/制造商被引用，不能停用或父级未启用 */
+export function isCatalogInUse(err) {
+  const { reason } = normalizeApiError(err)
+  return ['CATEGORY_IN_USE', 'MANUFACTURER_IN_USE'].includes(reason)
+}
+
+/** 制造商编码或名称重复 */
+export function isManufacturerDuplicateCode(err) {
+  return isReason(err, 'MANUFACTURER_DUPLICATE_CODE')
+}
+
+/** 非法元器件状态转换 */
+export function isComponentInvalidTransition(err) {
+  return isReason(err, 'COMPONENT_INVALID_TRANSITION')
+}
+
+/** DRAFT 无正式快照却尝试激活 */
+export function isComponentSpecRequired(err) {
+  return isReason(err, 'COMPONENT_SPEC_REQUIRED')
+}
+
+/** 候选已确认/拒绝/被替代，不能再次处理 */
+export function isCandidateAlreadyDecided(err) {
+  return isReason(err, 'SPEC_CANDIDATE_ALREADY_DECIDED')
+}
+
+/** 正式规格非法（400） */
+export function isComponentSpecInvalid(err) {
+  return isReason(err, 'COMPONENT_SPEC_INVALID')
+}
+
+/** 来源元数据非法（400） */
+export function isSourceMetadataInvalid(err) {
+  return isReason(err, 'SOURCE_METADATA_INVALID')
+}
+
+/** 图片类型/大小/解码限制（400） */
+export function isMediaUnsupported(err) {
+  const { reason } = normalizeApiError(err)
+  return ['MEDIA_TYPE_UNSUPPORTED', 'MEDIA_TOO_LARGE', 'MEDIA_DECODE_FAILED'].includes(reason)
+}
+
+/** 每个型号最多 5 张 READY 图片（409） */
+export function isMediaLimitExceeded(err) {
+  return isReason(err, 'MEDIA_LIMIT_EXCEEDED')
+}
+
+/** 媒体存储/处理失败（500） */
+export function isMediaProcessingFailed(err) {
+  const { reason } = normalizeApiError(err)
+  return ['MEDIA_STORAGE_FAILED', 'MEDIA_PROCESSING_FAILED'].includes(reason)
+}
+
 /** 提取 EXPERIMENT_CONTENT_INVALID 的字段级错误列表 */
 export function experimentContentErrors(err) {
   const { reason, data } = normalizeApiError(err)
