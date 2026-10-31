@@ -87,7 +87,7 @@ class MediaImageProcessorTest {
         Files.write(oversized, imageBytes("png", 4097, 1));
         MediaStorageException dimensions = assertThrows(MediaStorageException.class,
                 () -> processor.process(oversized, new MediaUploadDescriptor("wide.png", "image/png")));
-        assertEquals(MediaStorageException.Reason.TYPE_UNSUPPORTED, dimensions.getReason());
+        assertEquals(MediaStorageException.Reason.TOO_LARGE, dimensions.getReason());
     }
 
     @Test

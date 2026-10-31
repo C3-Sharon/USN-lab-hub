@@ -123,7 +123,7 @@ public class MediaImageProcessor {
 
     private void validateDimensions(int width, int height) {
         if (width < 1 || height < 1 || width > MAX_DIMENSION || height > MAX_DIMENSION) {
-            throw MediaStorageException.typeUnsupported();
+            throw MediaStorageException.tooLarge();
         }
     }
 

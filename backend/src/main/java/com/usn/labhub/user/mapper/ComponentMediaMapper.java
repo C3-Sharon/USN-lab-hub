@@ -12,4 +12,18 @@ public interface ComponentMediaMapper {
     List<MediaObjectVO> selectReadyByComponent(@Param("componentId") Long componentId);
     MediaObjectRecord selectReadyMedia(@Param("mediaId") Long mediaId);
     MediaObjectVO selectReadyMediaView(@Param("mediaId") Long mediaId);
+    MediaObjectRecord selectReadyMediaForUpdate(@Param("mediaId") Long mediaId);
+    MediaObjectRecord selectReadyBySha(@Param("componentId") Long componentId,
+                                       @Param("sha256") String sha256,
+                                       @Param("excludeMediaId") Long excludeMediaId);
+    long countReadyByComponent(@Param("componentId") Long componentId);
+    int insertMedia(MediaObjectRecord row);
+    int markDeleted(@Param("mediaId") Long mediaId, @Param("version") Integer version,
+                    @Param("deletedBy") Long deletedBy,
+                    @Param("deletedAt") java.time.LocalDateTime deletedAt);
+    int updateComponentMediaState(@Param("componentId") Long componentId,
+                                  @Param("componentVersion") Integer componentVersion,
+                                  @Param("primaryMediaId") Long primaryMediaId,
+                                  @Param("updatedBy") Long updatedBy,
+                                  @Param("updatedAt") java.time.LocalDateTime updatedAt);
 }

@@ -20,6 +20,8 @@ public class MediaObjectRecord {
     private String originalObjectKey;
     private String displayObjectKey;
     private Integer sortOrder;
+    private Integer readyDedupSlot;
+    private Integer readyPrimarySlot;
     private Integer version;
     private Long uploadedBy;
     private LocalDateTime uploadedAt;

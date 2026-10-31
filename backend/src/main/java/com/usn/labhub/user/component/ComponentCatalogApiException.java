@@ -154,4 +154,34 @@ public class ComponentCatalogApiException extends RuntimeException {
         return new ComponentCatalogApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MEDIA_STORAGE_FAILED",
                 "媒体存储操作失败");
     }
+
+    public static ComponentCatalogApiException mediaTypeUnsupported() {
+        return new ComponentCatalogApiException(HttpStatus.BAD_REQUEST, "MEDIA_TYPE_UNSUPPORTED",
+                "仅支持安全的 JPEG/PNG 图片");
+    }
+
+    public static ComponentCatalogApiException mediaTooLarge() {
+        return new ComponentCatalogApiException(HttpStatus.BAD_REQUEST, "MEDIA_TOO_LARGE",
+                "图片大小或尺寸超过限制");
+    }
+
+    public static ComponentCatalogApiException mediaDecodeFailed() {
+        return new ComponentCatalogApiException(HttpStatus.BAD_REQUEST, "MEDIA_DECODE_FAILED",
+                "图片无法安全解码");
+    }
+
+    public static ComponentCatalogApiException mediaProcessingFailed() {
+        return new ComponentCatalogApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MEDIA_PROCESSING_FAILED",
+                "图片安全处理失败");
+    }
+
+    public static ComponentCatalogApiException mediaLimitExceeded() {
+        return new ComponentCatalogApiException(HttpStatus.CONFLICT, "MEDIA_LIMIT_EXCEEDED",
+                "该型号最多保留五张图片");
+    }
+
+    public static ComponentCatalogApiException mediaDuplicateReady() {
+        return new ComponentCatalogApiException(HttpStatus.CONFLICT, "MEDIA_DUPLICATE_READY",
+                "替换图片与另一张现有图片重复");
+    }
 }

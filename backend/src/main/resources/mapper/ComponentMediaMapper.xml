@@ -8,7 +8,8 @@
         original_file_name AS originalFileName, content_type AS contentType,
         size_bytes AS sizeBytes, width, height, sha256,
         original_object_key AS originalObjectKey, display_object_key AS displayObjectKey,
-        sort_order AS sortOrder, version, uploaded_by AS uploadedBy,
+        sort_order AS sortOrder, ready_dedup_slot AS readyDedupSlot,
+        ready_primary_slot AS readyPrimarySlot, version, uploaded_by AS uploadedBy,
         uploaded_at AS uploadedAt, deleted_by AS deletedBy, deleted_at AS deletedAt
     </sql>
 
@@ -39,4 +40,51 @@
         FROM lab_media_object
         WHERE id=#{mediaId} AND owner_type='COMPONENT' AND status='READY'
     </select>
+
+    <select id="selectReadyMediaForUpdate" resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE id=#{mediaId} AND owner_type='COMPONENT' AND status='READY'
+        FOR UPDATE
+    </select>
+
+    <select id="selectReadyBySha" resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaRecordColumns"/>
+        FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId}
+          AND status='READY' AND sha256=#{sha256}
+        <if test="excludeMediaId != null">AND id != #{excludeMediaId}</if>
+        LIMIT 1
+    </select>
+
+    <select id="countReadyByComponent" resultType="long">
+        SELECT COUNT(*) FROM lab_media_object
+        WHERE owner_type='COMPONENT' AND owner_id=#{componentId} AND status='READY'
+    </select>
+
+    <insert id="insertMedia" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_media_object(
+            owner_type,owner_id,role,status,original_file_name,content_type,size_bytes,width,height,
+            sha256,original_object_key,display_object_key,sort_order,ready_dedup_slot,
+            ready_primary_slot,version,uploaded_by,uploaded_at
+        ) VALUES (
+            #{ownerType},#{ownerId},#{role},#{status},#{originalFileName},#{contentType},#{sizeBytes},
+            #{width},#{height},#{sha256},#{originalObjectKey},#{displayObjectKey},#{sortOrder},
+            #{readyDedupSlot},#{readyPrimarySlot},#{version},#{uploadedBy},#{uploadedAt}
+        )
+    </insert>
+
+    <update id="markDeleted">
+        UPDATE lab_media_object
+        SET status='DELETED', ready_dedup_slot=NULL, ready_primary_slot=NULL,
+            version=version+1, deleted_by=#{deletedBy}, deleted_at=#{deletedAt}
+        WHERE id=#{mediaId} AND version=#{version} AND status='READY'
+    </update>
+
+    <update id="updateComponentMediaState">
+        UPDATE lab_component
+        SET primary_media_id=#{primaryMediaId}, version=version+1,
+            updated_by=#{updatedBy}, update_time=#{updatedAt}
+        WHERE id=#{componentId} AND version=#{componentVersion} AND status != 'INACTIVE'
+    </update>
 </mapper>

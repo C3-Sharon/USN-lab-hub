@@ -11,7 +11,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -37,7 +39,8 @@ public class ComponentCatalogExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class, MissingRequestHeaderException.class})
+            HttpMessageNotReadableException.class, MissingRequestHeaderException.class,
+            MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
     public ResponseEntity<Result<Object>> invalid(Exception exception) {
         Result<Object> result = Result.error(400, "参数错误", "INVALID_PARAMETER");
         result.setData(Map.of("traceId", UUID.randomUUID().toString()));
