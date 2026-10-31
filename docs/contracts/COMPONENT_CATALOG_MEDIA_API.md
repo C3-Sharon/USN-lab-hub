@@ -1,7 +1,7 @@
 # 元器件目录与通用媒体 API 契约 V1
 
-> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认）
-> 版本：v1.0.1（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
+> 状态：FROZEN（D1-D9 已于 2026-10-29 全部确认，媒体请求结构于 2026-10-31 补充冻结）
+> 版本：v1.0.6（第 8 周：元器件目录、外部规格快照、可选图片与通用媒体身份）
 > 最后校准周：第 8 周（2026-W44）
 > 影响范围：API、数据库、权限、前端字段、审计、文件存储边界
 > 关联周文档：`docs/weekly/2026-W44.md`
@@ -123,7 +123,8 @@
 - 每文件不超过 5 MiB，宽高均为 1-4096；拒绝 SVG、GIF、脚本、伪装文件和路径穿越。
 - 原始字节与去除 EXIF/定位信息后的安全展示版本均通过内部逻辑对象键保存；业务 API 只提供 mediaId 和受控元数据。
 - 上传首图自动成为 PRIMARY；替换创建新 mediaId 并将旧媒体标为 DELETED；删除主图后按 sortOrder 最小的 READY 图片补为主图，无剩余图片则回到占位。
-- 同一型号相同 SHA-256 重复上传返回已有 mediaId；不同业务对象即使字节相同也使用独立 mediaId，避免权限串联。
+- 同一型号仅在存在相同 SHA-256 的 READY 媒体时返回已有 mediaId；仅存在 DELETED 媒体时，重新上传必须创建新的 mediaId，旧媒体记录和已提交原件继续保留。
+- 不同业务对象即使字节相同也使用独立 mediaId，避免权限串联。
 - W44 不物理清理 DELETED 文件；第 18 周统一冻结保留和清理策略。
 
 理由：图片不阻塞建档，替换和删除可审计，存储实现可替换且不泄露基础设施。
@@ -134,6 +135,7 @@
 
 - 创建分类、制造商、型号、候选、手工快照、确认/拒绝候选、激活/停用/恢复、上传/替换图片必须带 `Idempotency-Key`。
 - PUT、激活、停用、恢复、设主图、删除媒体必须带当前 `version`。
+- 分类、制造商和型号的停用/恢复请求统一使用 `{"version":N,"reason":"..."}`，reason 必填且为 1-500 字符；型号激活只使用 `{"version":N}`。
 - 同 key + 同操作者 + 同端点 + 同请求摘要精确重放；key 复用不同内容返回 409 `IDEMPOTENCY_KEY_REUSED`。
 - 401 沿用 TOKEN_MISSING/INVALID/EXPIRED/ACCOUNT_DISABLED；403 表示已知资源但无操作权限；不可见资源统一 404；状态、重复和版本冲突使用 409。
 
@@ -322,6 +324,8 @@ PENDING ──newer confirmed candidate──> SUPERSEDED（显式操作，不�
 ```
 
 `placeholderKey = component:{topCategoryCode}:{packageBucket}:{firstAlphaNumeric(normalizedMpn)}`。前端按该 key 使用仓库内 CSS/SVG 图形和固定色板；相同输入始终得到相同结果。图片加载失败也回退同一占位，不改变布局尺寸。
+
+`packageBucket` 对 packageType 执行 NFKC、trim、转大写后，取开头连续的 ASCII 字母或数字，遇到其他字符停止；没有有效开头时使用 `OTHER`。例如 `SOT-23-5 → SOT`、`DIP-8 → DIP`、`0603 → 0603`。`firstAlphaNumeric` 取 normalizedMpn 中第一个 `A-Z/0-9`，不存在时使用 `X`。
 
 ## 5. 权限矩阵
 
@@ -535,6 +539,8 @@ Idempotency-Key: 01K...
 
 停用/恢复请求同样为 `{"version":N,"reason":"..."}`，reason 1-500 字符并写审计；激活、停用和恢复均必须携带 `Idempotency-Key`。
 
+分类和制造商的停用/恢复使用相同请求体与幂等规则。编辑请求固定为：分类 `name/sortOrder/version`，制造商 `name/website/version`，型号为创建字段加 `version`；分类/制造商 code 与型号 catalogCode 均不可修改。
+
 ### 7.5 图片响应
 
 上传使用 multipart：字段 `file`、`componentVersion`、`sortOrder`，幂等键放 Header。成功返回：
@@ -569,6 +575,32 @@ Idempotency-Key: 01K...
 ```
 
 替换和删除成功必须返回新的 `componentVersion/imageState/primaryMediaId/images`。响应中出现禁止的基础设施字段属于契约失败。
+
+替换使用 multipart，字段固定为 `file`、`componentVersion`、`mediaVersion`，并携带 `Idempotency-Key`。新媒体继承旧媒体的 `role` 和 `sortOrder`；替换成功创建新 mediaId，将旧媒体逻辑删除，不允许通过替换隐式改主图或排序。
+
+替换文件与旧媒体自身 SHA-256 相同时视为无变化：返回旧 mediaId，不增加 component/media version，不删除旧媒体，本次新文件必须补偿。替换文件命中同型号另一张 READY 媒体的 SHA-256 时返回 409 `MEDIA_DUPLICATE_READY`，不删除旧媒体、不修改主图或排序，本次新文件必须补偿。普通上传命中 READY SHA 仍返回已有 mediaId；仅命中 DELETED 媒体仍创建新 mediaId。
+
+设为主图使用 JSON 请求体：
+
+```json
+{"componentVersion":6,"mediaVersion":1}
+```
+
+目标必须是该型号的 READY 图片。成功后旧主图降为 GALLERY、目标升为 PRIMARY，并返回新的 `componentVersion/imageState/primaryMediaId/images`；组件版本负责保护整组主图切换，`mediaVersion` 负责保护目标媒体。
+
+批量排序使用完整快照式 JSON 请求体：
+
+```json
+{
+  "componentVersion":6,
+  "items":[
+    {"mediaId":801,"mediaVersion":1,"sortOrder":10},
+    {"mediaId":802,"mediaVersion":2,"sortOrder":20}
+  ]
+}
+```
+
+`items` 必须恰好包含该型号当前全部 READY 图片，每个 mediaId 只出现一次，`sortOrder` 为 0-9999；缺失、额外、重复或引用非 READY/非本型号媒体均返回 400 `INVALID_PARAMETER`。排序成功返回新的 `componentVersion/imageState/primaryMediaId/images`，所有实际更新的媒体 version 自增；同值按 mediaId 升序稳定展示。
 
 删除图片使用 JSON 请求体 `{"componentVersion":N,"mediaVersion":N,"reason":"..."}`；`reason` 为 1-500 字符。删除只做逻辑删除和审计留痕，不在 W44 请求链路中物理删除原件。
 
@@ -649,14 +681,18 @@ GET /api/components?page=1&pageSize=20
 | `IDEMPOTENCY_KEY_REUSED` | 同 key 用于不同请求摘要 |
 | `COMPONENT_DUPLICATE_MODEL` | manufacturerId + normalizedMpn 重复 |
 | `CATEGORY_DUPLICATE_CODE` | 分类 code 重复 |
+| `CATEGORY_DUPLICATE_NAME` | 同父分类下规范化名称重复 |
 | `MANUFACTURER_DUPLICATE_CODE` | 制造商 code/name 重复 |
 | `CATEGORY_DEPTH_EXCEEDED` | 分类超过 3 级 |
+| `CATEGORY_PARENT_INACTIVE` | 父分类已停用，禁止创建或恢复子分类 |
 | `CATEGORY_IN_USE` | 存在 ACTIVE 子分类或 ACTIVE/DRAFT 型号 |
 | `MANUFACTURER_IN_USE` | 存在 ACTIVE/DRAFT 型号 |
+| `COMPONENT_REFERENCE_INACTIVE` | 型号引用的分类或制造商未启用 |
 | `COMPONENT_INVALID_TRANSITION` | 非法激活/停用/恢复 |
 | `COMPONENT_SPEC_REQUIRED` | DRAFT 没有正式快照却尝试激活 |
 | `SPEC_CANDIDATE_ALREADY_DECIDED` | 再次确认/拒绝终态候选 |
 | `MEDIA_LIMIT_EXCEEDED` | READY 图片已达 5 张 |
+| `MEDIA_DUPLICATE_READY` | 替换文件与同型号另一张 READY 图片重复 |
 
 ### 10.5 500
 
@@ -795,13 +831,13 @@ GET /api/components?page=1&pageSize=20
 - [x] D4 外部候选保留 URL、来源类型、获取时间、原始值和标准化建议
 - [x] D5 外部候选人工确认，来源不可用时 MANUAL 快照
 - [x] D6 正式快照追加写、版本审计和并发确认
-- [x] D7 最多 5 图、JPEG/PNG、5 MiB、替换新 mediaId、逻辑删除和占位
+- [x] D7 最多 5 图、JPEG/PNG、5 MiB、替换新 mediaId、逻辑删除、READY 去重和占位
 - [x] D8 所有 POST 命令的 Idempotency-Key、version 条件更新和 401/403/404/409 语义
 - [x] D9 分页、筛选、搜索和排序白名单
-- [ ] 后端确认媒体事务补偿、图片安全处理和唯一约束可实现
+- [x] 后端确认媒体事务补偿、图片安全处理和唯一约束可实现
 - [ ] 前端确认候选对比、占位、冲突和三视口可实现
 
-确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”。从本契约 FROZEN 提交合入 `dev` 起，后端与前端必须以 v1.0 为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。后端和前端的实现可行性勾选保留到各自 PR，不影响产品决策冻结。
+确认记录：用户于 2026-10-29 明确回复“D1-D9 全部确认”，于 2026-10-30 确认删除后重传、事务补偿、并发锁序、权限落点、唯一约束、B2 目录冲突语义及确定性占位算法，并于 2026-10-31 确认替换、设主图和完整排序请求结构。后端与前端必须以当前 FROZEN 版本为唯一同源边界；任何字段、状态、权限、错误或媒体语义变化都需新的产品契约变更。前端实现可行性勾选保留到前端 PR，不影响产品决策冻结。
 
 ## 16. 变更记录
 
@@ -810,3 +846,8 @@ GET /api/components?page=1&pageSize=20
 | 2026-10-29 | 初始 v1.0-draft：元器件目录、规格候选/快照、通用 mediaId、图片与占位规则 | REVIEW |
 | 2026-10-29 | 用户确认 D1-D9；版本升为 v1.0，作为后端与前端开工边界 | FROZEN |
 | 2026-10-29 | v1.0.1：统一 POST 命令幂等规则，澄清逻辑删除与存储补偿边界，删除冲突的重复媒体错误语义 | FROZEN |
+| 2026-10-30 | v1.0.2：明确仅 READY 媒体参与同型号 SHA-256 去重，DELETED 媒体重传创建新 mediaId | FROZEN |
+| 2026-10-30 | v1.0.3：补充分类同级重名、停用父级、停用引用和目录状态请求体语义 | FROZEN |
+| 2026-10-30 | v1.0.4：冻结 packageBucket 与 MPN 首字符的确定性占位算法及兜底值 | FROZEN |
+| 2026-10-31 | v1.0.5：补充冻结替换 multipart、设主图版本体和完整快照式排序请求，明确版本自增与响应结构 | FROZEN |
+| 2026-10-31 | v1.0.6：冻结替换同 SHA 的无变化与另一 READY 重复冲突语义，禁止隐式删除或重排 | FROZEN |

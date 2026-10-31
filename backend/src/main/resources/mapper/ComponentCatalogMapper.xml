@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ComponentCatalogMapper">
+
+    <sql id="categoryRecordColumns">
+        id, code, name, normalized_name AS normalizedName, parent_id AS parentId,
+        parent_scope_id AS parentScopeId, level, path, status, sort_order AS sortOrder,
+        version, created_by AS createdBy, create_time AS createTime,
+        updated_by AS updatedBy, update_time AS updateTime
+    </sql>
+
+    <insert id="insertCategory" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_component_category(
+            code, name, normalized_name, parent_id, parent_scope_id, level, path,
+            status, sort_order, version, created_by, create_time, updated_by, update_time
+        ) VALUES (
+            #{code}, #{name}, #{normalizedName}, #{parentId}, #{parentScopeId}, #{level}, #{path},
+            #{status}, #{sortOrder}, #{version}, #{createdBy}, #{createTime}, #{updatedBy}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateCategoryPath">
+        UPDATE lab_component_category SET path=#{path} WHERE id=#{id}
+    </update>
+
+    <select id="selectCategory" resultType="com.usn.labhub.user.domain.entity.component.ComponentCategoryRecord">
+        SELECT <include refid="categoryRecordColumns"/> FROM lab_component_category WHERE id=#{id}
+    </select>
+
+    <select id="selectCategoryForUpdate" resultType="com.usn.labhub.user.domain.entity.component.ComponentCategoryRecord">
+        SELECT <include refid="categoryRecordColumns"/> FROM lab_component_category WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectCategoryByCode" resultType="com.usn.labhub.user.domain.entity.component.ComponentCategoryRecord">
+        SELECT <include refid="categoryRecordColumns"/> FROM lab_component_category WHERE code=#{code}
+    </select>
+
+    <select id="countCategoryName" resultType="long">
+        SELECT COUNT(*) FROM lab_component_category
+        WHERE parent_scope_id=#{parentScopeId} AND normalized_name=#{normalizedName}
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+    </select>
+
+    <select id="selectCategories" resultType="com.usn.labhub.user.domain.vo.component.CategoryVO">
+        SELECT id, code, name, parent_id AS parentId, level, path, status,
+               sort_order AS sortOrder, version, create_time AS createTime, update_time AS updateTime
+        FROM lab_component_category
+        <if test="!allStates">WHERE status='ACTIVE'</if>
+        ORDER BY level ASC, sort_order ASC, id ASC
+    </select>
+
+    <update id="updateCategory">
+        UPDATE lab_component_category
+        SET name=#{name}, normalized_name=#{normalizedName}, sort_order=#{sortOrder},
+            updated_by=#{updatedBy}, update_time=#{updateTime}, version=version+1
+        WHERE id=#{id} AND version=#{version}
+    </update>
+
+    <update id="updateCategoryStatus">
+        UPDATE lab_component_category
+        SET status=#{targetStatus}, version=version+1, updated_by=#{updatedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{currentStatus}
+    </update>
+
+    <select id="countActiveChildren" resultType="long">
+        SELECT COUNT(*) FROM lab_component_category WHERE parent_id=#{categoryId} AND status='ACTIVE'
+    </select>
+
+    <select id="countBlockingComponentsByCategory" resultType="long">
+        SELECT COUNT(*) FROM lab_component
+        WHERE category_id=#{categoryId} AND status IN ('DRAFT', 'ACTIVE')
+    </select>
+
+    <sql id="manufacturerRecordColumns">
+        id, code, name, normalized_name AS normalizedName, website, status, version,
+        created_by AS createdBy, create_time AS createTime,
+        updated_by AS updatedBy, update_time AS updateTime
+    </sql>
+
+    <insert id="insertManufacturer" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_component_manufacturer(
+            code, name, normalized_name, website, status, version,
+            created_by, create_time, updated_by, update_time
+        ) VALUES (
+            #{code}, #{name}, #{normalizedName}, #{website}, #{status}, #{version},
+            #{createdBy}, #{createTime}, #{updatedBy}, #{updateTime}
+        )
+    </insert>
+
+    <select id="selectManufacturer" resultType="com.usn.labhub.user.domain.entity.component.ComponentManufacturerRecord">
+        SELECT <include refid="manufacturerRecordColumns"/> FROM lab_component_manufacturer WHERE id=#{id}
+    </select>
+
+    <select id="selectManufacturerForUpdate" resultType="com.usn.labhub.user.domain.entity.component.ComponentManufacturerRecord">
+        SELECT <include refid="manufacturerRecordColumns"/> FROM lab_component_manufacturer WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectManufacturerByCode" resultType="com.usn.labhub.user.domain.entity.component.ComponentManufacturerRecord">
+        SELECT <include refid="manufacturerRecordColumns"/> FROM lab_component_manufacturer WHERE code=#{code}
+    </select>
+
+    <select id="countManufacturerName" resultType="long">
+        SELECT COUNT(*) FROM lab_component_manufacturer WHERE normalized_name=#{normalizedName}
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+    </select>
+
+    <sql id="manufacturerFilters">
+        <choose>
+            <when test="allStates"><if test="status != null">AND status=#{status}</if></when>
+            <otherwise>AND status='ACTIVE'</otherwise>
+        </choose>
+        <if test="keyword != null">
+            AND (UPPER(code) LIKE CONCAT('%', UPPER(#{keyword}), '%')
+                 OR UPPER(name) LIKE CONCAT('%', UPPER(#{keyword}), '%'))
+        </if>
+    </sql>
+
+    <select id="countManufacturers" resultType="long">
+        SELECT COUNT(*) FROM lab_component_manufacturer WHERE 1=1
+        <include refid="manufacturerFilters"/>
+    </select>
+
+    <select id="selectManufacturers" resultType="com.usn.labhub.user.domain.vo.component.ManufacturerVO">
+        SELECT id, code, name, website, status, version,
+               create_time AS createTime, update_time AS updateTime
+        FROM lab_component_manufacturer WHERE 1=1
+        <include refid="manufacturerFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectManufacturerView" resultType="com.usn.labhub.user.domain.vo.component.ManufacturerVO">
+        SELECT id, code, name, website, status, version,
+               create_time AS createTime, update_time AS updateTime
+        FROM lab_component_manufacturer
+        WHERE id=#{id} <if test="!allStates">AND status='ACTIVE'</if>
+    </select>
+
+    <update id="updateManufacturer">
+        UPDATE lab_component_manufacturer
+        SET name=#{name}, normalized_name=#{normalizedName}, website=#{website},
+            updated_by=#{updatedBy}, update_time=#{updateTime}, version=version+1
+        WHERE id=#{id} AND version=#{version}
+    </update>
+
+    <update id="updateManufacturerStatus">
+        UPDATE lab_component_manufacturer
+        SET status=#{targetStatus}, version=version+1, updated_by=#{updatedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{currentStatus}
+    </update>
+
+    <select id="countBlockingComponentsByManufacturer" resultType="long">
+        SELECT COUNT(*) FROM lab_component
+        WHERE manufacturer_id=#{manufacturerId} AND status IN ('DRAFT', 'ACTIVE')
+    </select>
+
+    <sql id="componentRecordColumns">
+        id, catalog_code AS catalogCode, name, manufacturer_id AS manufacturerId,
+        mpn, normalized_mpn AS normalizedMpn, category_id AS categoryId,
+        package_type AS packageType, base_unit AS baseUnit, description, status,
+        current_spec_snapshot_id AS currentSpecSnapshotId, spec_version AS specVersion,
+        primary_media_id AS primaryMediaId, version, created_by AS createdBy,
+        create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+    </sql>
+
+    <insert id="insertComponent" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_component(
+            catalog_code, name, manufacturer_id, mpn, normalized_mpn, category_id,
+            package_type, base_unit, description, status, current_spec_snapshot_id,
+            spec_version, primary_media_id, version, created_by, create_time, updated_by, update_time
+        ) VALUES (
+            #{catalogCode}, #{name}, #{manufacturerId}, #{mpn}, #{normalizedMpn}, #{categoryId},
+            #{packageType}, #{baseUnit}, #{description}, #{status}, #{currentSpecSnapshotId},
+            #{specVersion}, #{primaryMediaId}, #{version}, #{createdBy}, #{createTime}, #{updatedBy}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateCatalogCode">
+        UPDATE lab_component SET catalog_code=#{catalogCode} WHERE id=#{id} AND catalog_code IS NULL
+    </update>
+
+    <select id="selectComponent" resultType="com.usn.labhub.user.domain.entity.component.ComponentRecord">
+        SELECT <include refid="componentRecordColumns"/> FROM lab_component WHERE id=#{id}
+    </select>
+
+    <select id="selectComponentForUpdate" resultType="com.usn.labhub.user.domain.entity.component.ComponentRecord">
+        SELECT <include refid="componentRecordColumns"/> FROM lab_component WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectDuplicateComponent" resultType="com.usn.labhub.user.domain.entity.component.ComponentRecord">
+        SELECT <include refid="componentRecordColumns"/> FROM lab_component
+        WHERE manufacturer_id=#{manufacturerId} AND normalized_mpn=#{normalizedMpn}
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+        LIMIT 1
+    </select>
+
+    <sql id="componentViewColumns">
+        c.id, c.catalog_code AS catalogCode, c.name,
+        c.manufacturer_id AS manufacturerId, m.name AS manufacturerName,
+        c.mpn, c.normalized_mpn AS normalizedMpn,
+        c.category_id AS categoryId, cat.name AS categoryName,
+        (SELECT root.code FROM lab_component_category root
+         WHERE cat.path LIKE CONCAT(root.path, '%') ORDER BY root.level ASC LIMIT 1) AS topCategoryCode,
+        c.package_type AS packageType, c.base_unit AS baseUnit, c.description, c.status,
+        c.current_spec_snapshot_id AS currentSpecSnapshotId, c.spec_version AS specVersion,
+        c.primary_media_id AS primaryMediaId, c.version,
+        c.create_time AS createTime, c.update_time AS updateTime
+    </sql>
+
+    <sql id="componentFilters">
+        <choose>
+            <when test="allStates"><if test="status != null">AND c.status=#{status}</if></when>
+            <otherwise>AND c.status='ACTIVE'</otherwise>
+        </choose>
+        <if test="categoryId != null">
+            <choose>
+                <when test="includeDescendants and categoryPath != null">
+                    AND cat.path LIKE CONCAT(#{categoryPath}, '%')
+                </when>
+                <otherwise>AND c.category_id=#{categoryId}</otherwise>
+            </choose>
+        </if>
+        <if test="manufacturerId != null">AND c.manufacturer_id=#{manufacturerId}</if>
+        <if test="packageType != null">AND c.package_type=#{packageType}</if>
+        <if test="baseUnit != null">AND c.base_unit=#{baseUnit}</if>
+        <if test="keyword != null">
+            AND (UPPER(c.mpn) LIKE CONCAT('%', UPPER(#{keyword}), '%')
+                 OR UPPER(c.name) LIKE CONCAT('%', UPPER(#{keyword}), '%')
+                 OR UPPER(m.name) LIKE CONCAT('%', UPPER(#{keyword}), '%'))
+        </if>
+    </sql>
+
+    <select id="countComponents" resultType="long">
+        SELECT COUNT(*) FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        INNER JOIN lab_component_category cat ON cat.id=c.category_id
+        WHERE 1=1 <include refid="componentFilters"/>
+    </select>
+
+    <select id="selectComponents" resultType="com.usn.labhub.user.domain.vo.component.ComponentVO">
+        SELECT <include refid="componentViewColumns"/>
+        FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        INNER JOIN lab_component_category cat ON cat.id=c.category_id
+        WHERE 1=1 <include refid="componentFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, c.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="selectComponentView" resultType="com.usn.labhub.user.domain.vo.component.ComponentVO">
+        SELECT <include refid="componentViewColumns"/>
+        FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        INNER JOIN lab_component_category cat ON cat.id=c.category_id
+        WHERE c.id=#{id} <if test="!allStates">AND c.status='ACTIVE'</if>
+    </select>
+
+    <select id="selectCategoryPath" resultType="com.usn.labhub.user.domain.vo.component.CategoryPathItemVO">
+        SELECT ancestor.id, ancestor.code, ancestor.name
+        FROM lab_component_category current_category
+        INNER JOIN lab_component_category ancestor
+            ON current_category.path LIKE CONCAT(ancestor.path, '%')
+        WHERE current_category.id=#{categoryId}
+        ORDER BY ancestor.level ASC, ancestor.id ASC
+    </select>
+
+    <update id="updateComponent">
+        UPDATE lab_component
+        SET name=#{name}, manufacturer_id=#{manufacturerId}, mpn=#{mpn},
+            normalized_mpn=#{normalizedMpn}, category_id=#{categoryId},
+            package_type=#{packageType}, base_unit=#{baseUnit}, description=#{description},
+            updated_by=#{updatedBy}, update_time=#{updateTime}, version=version+1
+        WHERE id=#{id} AND version=#{version} AND status != 'INACTIVE'
+    </update>
+
+    <update id="updateComponentStatus">
+        UPDATE lab_component
+        SET status=#{targetStatus}, version=version+1, updated_by=#{updatedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{currentStatus}
+    </update>
+
+    <update id="incrementComponentVersion">
+        UPDATE lab_component
+        SET version=version+1, updated_by=#{updatedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status != 'INACTIVE'
+    </update>
+
+    <update id="updateComponentSnapshotPointer">
+        UPDATE lab_component
+        SET current_spec_snapshot_id=#{snapshotId}, spec_version=#{nextSpecVersion},
+            version=version+1, updated_by=#{updatedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND spec_version=#{currentSpecVersion}
+          AND status != 'INACTIVE'
+    </update>
+
+    <sql id="specCandidateColumns">
+        id, component_id AS componentId, status, source_type AS sourceType,
+        source_url AS sourceUrl, source_title AS sourceTitle, captured_at AS capturedAt,
+        raw_specs_json AS rawSpecsJson, normalized_proposal_json AS normalizedProposalJson,
+        submitted_by AS submittedBy, submitted_at AS submittedAt,
+        decided_by AS decidedBy, decided_at AS decidedAt, decision_note AS decisionNote, version
+    </sql>
+
+    <insert id="insertSpecCandidate" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_component_spec_candidate(
+            component_id, status, source_type, source_url, source_title, captured_at,
+            raw_specs_json, normalized_proposal_json, submitted_by, submitted_at, version
+        ) VALUES (
+            #{componentId}, #{status}, #{sourceType}, #{sourceUrl}, #{sourceTitle}, #{capturedAt},
+            #{rawSpecsJson}, #{normalizedProposalJson}, #{submittedBy}, #{submittedAt}, #{version}
+        )
+    </insert>
+
+    <select id="selectSpecCandidate" resultType="com.usn.labhub.user.domain.entity.component.ComponentSpecCandidateRecord">
+        SELECT <include refid="specCandidateColumns"/>
+        FROM lab_component_spec_candidate WHERE id=#{id}
+    </select>
+
+    <select id="selectSpecCandidateForUpdate" resultType="com.usn.labhub.user.domain.entity.component.ComponentSpecCandidateRecord">
+        SELECT <include refid="specCandidateColumns"/>
+        FROM lab_component_spec_candidate WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="countSpecCandidates" resultType="long">
+        SELECT COUNT(*) FROM lab_component_spec_candidate
+        WHERE component_id=#{componentId}
+        <if test="status != null">AND status=#{status}</if>
+    </select>
+
+    <select id="selectSpecCandidates" resultType="com.usn.labhub.user.domain.entity.component.ComponentSpecCandidateRecord">
+        SELECT <include refid="specCandidateColumns"/>
+        FROM lab_component_spec_candidate
+        WHERE component_id=#{componentId}
+        <if test="status != null">AND status=#{status}</if>
+        ORDER BY submitted_at DESC, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <update id="decideSpecCandidate">
+        UPDATE lab_component_spec_candidate
+        SET status=#{targetStatus}, decided_by=#{decidedBy}, decided_at=#{decidedAt},
+            decision_note=#{decisionNote}, version=version+1
+        WHERE id=#{id} AND version=#{version} AND status='PENDING'
+    </update>
+
+    <sql id="specSnapshotColumns">
+        id, component_id AS componentId, snapshot_version AS snapshotVersion,
+        source_type AS sourceType, source_url AS sourceUrl, source_title AS sourceTitle,
+        captured_at AS capturedAt, candidate_id AS candidateId, source_note AS sourceNote,
+        raw_specs_json AS rawSpecsJson, specifications_json AS specificationsJson,
+        change_summary AS changeSummary, checksum, confirmed_by AS confirmedBy,
+        confirmed_at AS confirmedAt
+    </sql>
+
+    <insert id="insertSpecSnapshot" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_component_spec_snapshot(
+            component_id, snapshot_version, source_type, source_url, source_title,
+            captured_at, candidate_id, source_note, raw_specs_json, specifications_json,
+            change_summary, checksum, confirmed_by, confirmed_at
+        ) VALUES (
+            #{componentId}, #{snapshotVersion}, #{sourceType}, #{sourceUrl}, #{sourceTitle},
+            #{capturedAt}, #{candidateId}, #{sourceNote}, #{rawSpecsJson}, #{specificationsJson},
+            #{changeSummary}, #{checksum}, #{confirmedBy}, #{confirmedAt}
+        )
+    </insert>
+
+    <select id="selectSpecSnapshot" resultType="com.usn.labhub.user.domain.entity.component.ComponentSpecSnapshotRecord">
+        SELECT <include refid="specSnapshotColumns"/>
+        FROM lab_component_spec_snapshot WHERE id=#{id}
+    </select>
+
+    <select id="countSpecSnapshots" resultType="long">
+        SELECT COUNT(*) FROM lab_component_spec_snapshot
+        WHERE component_id=#{componentId}
+        <if test="visibleSnapshotId != null">AND id=#{visibleSnapshotId}</if>
+    </select>
+
+    <select id="selectSpecSnapshots" resultType="com.usn.labhub.user.domain.entity.component.ComponentSpecSnapshotRecord">
+        SELECT <include refid="specSnapshotColumns"/>
+        FROM lab_component_spec_snapshot
+        WHERE component_id=#{componentId}
+        <if test="visibleSnapshotId != null">AND id=#{visibleSnapshotId}</if>
+        ORDER BY snapshot_version DESC, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <insert id="claimIdempotency">
+        INSERT IGNORE INTO lab_request_idempotency(
+            actor_id, operation, idempotency_key, request_digest, status, create_time, update_time
+        ) VALUES(#{actorId}, #{operation}, #{key}, #{digest}, 'PROCESSING', #{now}, #{now})
+    </insert>
+
+    <select id="selectIdempotency" resultType="com.usn.labhub.user.domain.entity.experiment.IdempotencyRow">
+        SELECT request_digest AS requestDigest, status, response_json AS responseJson
+        FROM lab_request_idempotency
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </select>
+
+    <update id="completeIdempotency">
+        UPDATE lab_request_idempotency
+        SET status='COMPLETED', response_code=200, response_json=#{responseJson}, update_time=#{now}
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </update>
+
+    <insert id="insertAudit">
+        INSERT INTO lab_component_catalog_audit_log(
+            request_id, actor_id, action, target_type, target_id,
+            previous_status, new_status, reason, details_json, create_time
+        ) VALUES(#{requestId}, #{actorId}, #{action}, #{targetType}, #{targetId},
+                 #{previousStatus}, #{newStatus}, #{reason}, #{detailsJson}, #{now})
+    </insert>
+</mapper>
