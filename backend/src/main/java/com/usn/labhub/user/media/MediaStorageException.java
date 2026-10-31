@@ -34,6 +34,14 @@ public class MediaStorageException extends RuntimeException {
         return new MediaStorageException(Reason.PROCESSING_FAILED, "Media processing failed", null);
     }
 
+    static MediaStorageException processingFailed(Throwable cause) {
+        return new MediaStorageException(Reason.PROCESSING_FAILED, "Media processing failed", cause);
+    }
+
+    static MediaStorageException decodeFailed(Throwable cause) {
+        return new MediaStorageException(Reason.DECODE_FAILED, "Media image decoding failed", cause);
+    }
+
     static MediaStorageException storageFailed(Throwable cause) {
         return new MediaStorageException(Reason.STORAGE_FAILED, "Media storage operation failed", cause);
     }

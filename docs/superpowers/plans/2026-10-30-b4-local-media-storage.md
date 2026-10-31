@@ -115,15 +115,15 @@ record ProcessedImage(
 
 Validation order is fixed: staged size already verified, then safe basename/extension, declared MIME, magic bytes, dimensions from an `ImageReader`, full decode, and re-encode.
 
-- [ ] Add deterministic in-memory JPEG and PNG fixtures generated from a small known `BufferedImage`; do not commit binary sample files.
-- [ ] Add failing tests for valid JPEG/PNG, `.jpeg` normalization, extension/MIME mismatch, magic mismatch, GIF/SVG/WebP/script input, damaged/truncated data, empty data, and dimensions outside `1..4096`.
-- [ ] Add a metadata-removal test by writing a fixed source image with a harmless comment metadata node where supported, processing it, and asserting the decoded display image is valid while the comment is absent. If the JDK writer does not support the fixture metadata, assert instead that the display bytes were produced from a newly created image and differ from a source carrying fixed trailing metadata bytes.
-- [ ] Validate the original filename as a basename only: reject blank, more than 255 characters, separators, `..`, invalid path syntax, and unsupported extensions.
-- [ ] Detect JPEG by `FF D8 FF` and PNG by the eight-byte PNG signature; require exact agreement with normalized extension and declared MIME.
-- [ ] Read dimensions before full raster allocation, reject invalid bounds, then fully decode. Copy pixels into a fresh image (`TYPE_INT_RGB` for JPEG, alpha-capable type for PNG).
-- [ ] Re-encode with a selected `ImageWriter`; fail closed if no reader/writer exists or decode/encode returns no image.
-- [ ] Keep all exceptions in a small internal reason enum such as `TOO_LARGE`, `TYPE_UNSUPPORTED`, `DECODE_FAILED`, `PROCESSING_FAILED`, `STORAGE_FAILED`, and `INVALID_OBJECT_KEY`.
-- [ ] Run:
+- [x] Add deterministic in-memory JPEG and PNG fixtures generated from a small known `BufferedImage`; do not commit binary sample files.
+- [x] Add failing tests for valid JPEG/PNG, `.jpeg` normalization, extension/MIME mismatch, magic mismatch, GIF/SVG/WebP/script input, damaged/truncated data, empty data, and dimensions outside `1..4096`.
+- [x] Add a metadata-removal test by writing a fixed source image with a harmless comment metadata node where supported, processing it, and asserting the decoded display image is valid while the comment is absent. If the JDK writer does not support the fixture metadata, assert instead that the display bytes were produced from a newly created image and differ from a source carrying fixed trailing metadata bytes.
+- [x] Validate the original filename as a basename only: reject blank, more than 255 characters, separators, `..`, invalid path syntax, and unsupported extensions.
+- [x] Detect JPEG by `FF D8 FF` and PNG by the eight-byte PNG signature; require exact agreement with normalized extension and declared MIME.
+- [x] Read dimensions before full raster allocation, reject invalid bounds, then fully decode. Copy pixels into a fresh image (`TYPE_INT_RGB` for JPEG, alpha-capable type for PNG).
+- [x] Re-encode with a selected `ImageWriter`; fail closed if no reader/writer exists or decode/encode returns no image.
+- [x] Keep all exceptions in a small internal reason enum such as `TOO_LARGE`, `TYPE_UNSUPPORTED`, `DECODE_FAILED`, `PROCESSING_FAILED`, `STORAGE_FAILED`, and `INVALID_OBJECT_KEY`.
+- [x] Run:
 
 ```powershell
 cd backend
@@ -132,7 +132,7 @@ cd backend
 
 Expected: every supported/unsupported image class has one direct deterministic test and no source path or filename appears in returned metadata.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```text
 feat: validate and re-encode media images
