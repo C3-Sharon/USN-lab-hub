@@ -159,16 +159,16 @@ interface MediaFileMover {
 
 `NioMediaFileMover` uses `Files.move(source, target, StandardCopyOption.ATOMIC_MOVE)`. Do not silently downgrade to a non-atomic move. An unsupported atomic move is a storage failure.
 
-- [ ] Add failing tests for a successful original/display commit and byte-for-byte original round trip through `open`.
-- [ ] Add a fixed mover failure on the first move and assert both final directories and staging are clean.
-- [ ] Add a fixed mover failure on the second move and assert the first committed file is deleted and staging is clean.
-- [ ] Add a rollback test proving only the two files from the returned local commit handle are removed.
-- [ ] Add tests proving a fabricated/foreign `CommittedMedia` cannot trigger deletion and repeated rollback is harmless.
-- [ ] Add a startup cleanup test: stale regular files under `staging` are removed, while `original` and `display` are untouched. Treat cleanup failure as startup failure rather than silently running with an uncertain staging state.
-- [ ] Generate one UUID per physical object key, use normalized lowercase extensions, and create target directories before moving.
-- [ ] Write the display output to a staging file first. Move original, then display. On the second failure, delete the newly moved original and all staging files created by this operation.
-- [ ] Return a package-private local commit handle containing controlled logical keys and immutable metadata. `rollbackNewObject` must type-check it and resolve both keys through the same controlled resolver.
-- [ ] Perform B4-only verification once:
+- [x] Add failing tests for a successful original/display commit and byte-for-byte original round trip through `open`.
+- [x] Add a fixed mover failure on the first move and assert both final directories and staging are clean.
+- [x] Add a fixed mover failure on the second move and assert the first committed file is deleted and staging is clean.
+- [x] Add a rollback test proving only the two files from the returned local commit handle are removed.
+- [x] Add tests proving a fabricated/foreign `CommittedMedia` cannot trigger deletion and repeated rollback is harmless.
+- [x] Add a startup cleanup test: stale regular files under `staging` are removed, while `original` and `display` are untouched. Treat cleanup failure as startup failure rather than silently running with an uncertain staging state.
+- [x] Generate one UUID per physical object key, use normalized lowercase extensions, and create target directories before moving.
+- [x] Write the display output to a staging file first. Move original, then display. On the second failure, delete the newly moved original and all staging files created by this operation.
+- [x] Return a package-private local commit handle containing controlled logical keys and immutable metadata. `rollbackNewObject` must type-check it and resolve both keys through the same controlled resolver.
+- [x] Perform B4-only verification once:
 
 ```powershell
 cd backend
@@ -178,10 +178,10 @@ cd backend
 
 Expected: focused tests pass and main compilation succeeds. Do not run the full backend suite in B4; it is reserved for B6 after B5 changes.
 
-- [ ] Manually inspect the configured test directory and confirm no upload, staging file, absolute path, or generated binary was added to Git.
-- [ ] Update `docs/backend/execution/2026-W44.md`: mark B4 `VERIFIED`, record exact test counts/results, list the actual storage and compensation behavior, update the current checkpoint to the B5 pause gate, and leave B5/B6 as not completed.
-- [ ] Review `git diff --check`, changed files, configuration defaults, and dependency diff. Confirm `backend/pom.xml` is unchanged.
-- [ ] Commit and push:
+- [x] Manually inspect the configured test directory and confirm no upload, staging file, absolute path, or generated binary was added to Git.
+- [x] Update `docs/backend/execution/2026-W44.md`: mark B4 `VERIFIED`, record exact test counts/results, list the actual storage and compensation behavior, update the current checkpoint to the B5 pause gate, and leave B5/B6 as not completed.
+- [x] Review `git diff --check`, changed files, configuration defaults, and dependency diff. Confirm `backend/pom.xml` is unchanged.
+- [x] Commit and push:
 
 ```text
 feat: complete local media storage compensation
@@ -189,10 +189,10 @@ feat: complete local media storage compensation
 
 ### B4 Exit Gate
 
-- [ ] Legal JPEG/PNG files can be staged, validated, committed, opened, and rolled back using logical keys only.
-- [ ] Original bytes and SHA-256 remain unchanged; display bytes are newly encoded without copied source metadata.
-- [ ] Every invalid class is rejected before final commit and leaves no staging/final residue.
-- [ ] A second-move failure removes the first new object; rollback cannot target arbitrary or pre-existing files.
-- [ ] No API, database, permission, MQTT, cache, asynchronous, or dependency change was introduced.
-- [ ] Stop and report the B4 evidence. Do not enter B5 until the user confirms the file/database compensation boundary again.
+- [x] Legal JPEG/PNG files can be staged, validated, committed, opened, and rolled back using logical keys only.
+- [x] Original bytes and SHA-256 remain unchanged; display bytes are newly encoded without copied source metadata.
+- [x] Every invalid class is rejected before final commit and leaves no staging/final residue.
+- [x] A second-move failure removes the first new object; rollback cannot target arbitrary or pre-existing files.
+- [x] No API, database, permission, MQTT, cache, asynchronous, or dependency change was introduced.
+- [x] Stop and report the B4 evidence. Do not enter B5 until the user confirms the file/database compensation boundary again.
 

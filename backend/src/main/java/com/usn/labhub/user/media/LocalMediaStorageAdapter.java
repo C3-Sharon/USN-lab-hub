@@ -8,11 +8,13 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.LinkOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Component
@@ -26,17 +28,29 @@ public class LocalMediaStorageAdapter implements MediaStoragePort {
 
     private final Path root;
     private final Path stagingDirectory;
+    private final MediaImageProcessor imageProcessor;
+    private final MediaFileMover fileMover;
 
-    public LocalMediaStorageAdapter(MediaStorageProperties properties) {
+    public LocalMediaStorageAdapter(
+            MediaStorageProperties properties,
+            MediaImageProcessor imageProcessor,
+            MediaFileMover fileMover) {
         try {
             this.root = Path.of(properties.getStorageRoot()).toAbsolutePath().normalize();
             this.stagingDirectory = root.resolve("staging");
+            this.imageProcessor = imageProcessor;
+            this.fileMover = fileMover;
             Files.createDirectories(stagingDirectory);
             Files.createDirectories(root.resolve("original"));
             Files.createDirectories(root.resolve("display"));
+            clearStagingOnStartup();
         } catch (InvalidPathException | IOException exception) {
             throw MediaStorageException.storageFailed(exception);
         }
+    }
+
+    LocalMediaStorageAdapter(MediaStorageProperties properties) {
+        this(properties, new MediaImageProcessor(), new NioMediaFileMover());
     }
 
     @Override
@@ -64,11 +78,32 @@ public class LocalMediaStorageAdapter implements MediaStoragePort {
 
     @Override
     public CommittedMedia commit(StagedMedia staged, MediaUploadDescriptor descriptor) {
-        if (!(staged instanceof LocalStagedMedia local) || !local.path().startsWith(stagingDirectory)) {
-            throw MediaStorageException.storageFailed(null);
+        LocalStagedMedia local = requireLocalStagedMedia(staged);
+        Path displayStaging = null;
+        Path originalTarget = null;
+        boolean originalMoved = false;
+        try {
+            ProcessedImage processed = imageProcessor.process(local.path(), descriptor);
+            displayStaging = Files.createTempFile(stagingDirectory, "display-", ".tmp");
+            Files.write(displayStaging, processed.displayBytes());
+
+            String originalKey = objectKey("original", processed.extension());
+            String displayKey = objectKey("display", processed.extension());
+            originalTarget = resolveObjectKey(originalKey);
+            Path displayTarget = resolveObjectKey(displayKey);
+
+            fileMover.moveAtomically(local.path(), originalTarget);
+            originalMoved = true;
+            fileMover.moveAtomically(displayStaging, displayTarget);
+            return new LocalCommittedMedia(root, originalKey, displayKey, local.sizeBytes(), local.sha256(),
+                    processed.contentType(), processed.width(), processed.height());
+        } catch (MediaStorageException exception) {
+            cleanupFailedCommit(local.path(), displayStaging, originalMoved ? originalTarget : null);
+            throw exception;
+        } catch (IOException exception) {
+            cleanupFailedCommit(local.path(), displayStaging, originalMoved ? originalTarget : null);
+            throw MediaStorageException.storageFailed(exception);
         }
-        // Task 2 adds the validated image processing and commit pipeline.
-        throw MediaStorageException.processingFailed();
     }
 
     @Override
@@ -83,7 +118,41 @@ public class LocalMediaStorageAdapter implements MediaStoragePort {
 
     @Override
     public void rollbackNewObject(CommittedMedia committed) {
-        throw MediaStorageException.invalidObjectKey();
+        if (!(committed instanceof LocalCommittedMedia local) || !root.equals(local.ownerRoot())) {
+            throw MediaStorageException.invalidObjectKey();
+        }
+        deleteQuietly(resolveObjectKey(local.originalObjectKey()));
+        deleteQuietly(resolveObjectKey(local.displayObjectKey()));
+    }
+
+    private LocalStagedMedia requireLocalStagedMedia(StagedMedia staged) {
+        if (!(staged instanceof LocalStagedMedia local)
+                || !stagingDirectory.equals(local.path().getParent())
+                || !Files.isRegularFile(local.path(), LinkOption.NOFOLLOW_LINKS)) {
+            throw MediaStorageException.storageFailed(null);
+        }
+        return local;
+    }
+
+    private String objectKey(String prefix, String extension) {
+        return prefix + "/" + UUID.randomUUID() + "." + extension;
+    }
+
+    private void cleanupFailedCommit(Path originalStaging, Path displayStaging, Path movedOriginal) {
+        deleteQuietly(originalStaging);
+        deleteQuietly(displayStaging);
+        deleteQuietly(movedOriginal);
+    }
+
+    private void clearStagingOnStartup() throws IOException {
+        try (var entries = Files.list(stagingDirectory)) {
+            for (Path entry : entries.toList()) {
+                if (!Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Unexpected non-file entry in media staging directory");
+                }
+                Files.delete(entry);
+            }
+        }
     }
 
     private long copyWithLimit(InputStream source, Path target, MessageDigest digest) throws IOException {
@@ -136,5 +205,16 @@ public class LocalMediaStorageAdapter implements MediaStoragePort {
     }
 
     private record LocalStagedMedia(Path path, long sizeBytes, String sha256) implements StagedMedia {
+    }
+
+    private record LocalCommittedMedia(
+            Path ownerRoot,
+            String originalObjectKey,
+            String displayObjectKey,
+            long sizeBytes,
+            String sha256,
+            String contentType,
+            int width,
+            int height) implements CommittedMedia {
     }
 }
