@@ -21,7 +21,7 @@
 | 学习实验域 API V1 | `docs/contracts/LEARNING_EXPERIMENT_API.md` | FROZEN | 学习路线、阶段、单元、成员学习记录、进度计算、首页 learning 区域 |
 | 实验模板与版本 API V1 | `docs/contracts/EXPERIMENT_TEMPLATE_API.md` | FROZEN | 系统/项目模板、版本状态机、JSON Schema 子集、学习单元版本关联、第7周预留 |
 | 实验记录、采集批次与导师反馈 API V1 | `docs/contracts/EXPERIMENT_RECORD_ACQUISITION_API.md` | FROZEN | 内容修订、导师反馈、FILE/MANUAL 批次、文件映射、人工记录、冻结快照和转项目草案；D1-D6 于 W43 确认 |
-| 元器件目录与通用媒体 API V1.0.1 | `docs/contracts/COMPONENT_CATALOG_MEDIA_API.md` | FROZEN | 第 8 周元器件分类、制造商、型号、不可变规格快照、外部候选人工确认、可选图片、确定性占位与供应商中立媒体边界；D1-D9 于 2026-10-29 确认，幂等与存储补偿边界于同日校准 |
+| 元器件目录与通用媒体 API V1.0.4 | `docs/contracts/COMPONENT_CATALOG_MEDIA_API.md` | FROZEN | 第 8 周元器件分类、制造商、型号、不可变规格快照、外部候选人工确认、可选图片、确定性占位与供应商中立媒体边界；D1-D9 于 2026-10-29 确认，媒体去重、目录冲突与占位算法于 2026-10-30 校准 |
 | 首轮 IoT API | `docs/agent-guides/04_API_CONTRACT.md` | ACTIVE_LEGACY | PM-001 latest/history/告警/指令等基线 |
 | 首轮 MQTT | `docs/agent-guides/05_MQTT_CONTRACT.md` | ACTIVE_LEGACY | PM-001 telemetry/command/ack |
 | 首轮测试验收 | `docs/agent-guides/07_TESTING_AND_ACCEPTANCE.md` | REFERENCE | 已完成 IoT 阶段测试参考 |
