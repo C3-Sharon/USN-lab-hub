@@ -29,6 +29,8 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 # 自定义 JWT 配置
 usnhub:
+  media:
+    storage-root: ${USNHUB_MEDIA_ROOT:${user.home}/.usn-lab-hub/media}
   collection:
     storage-root: ${COLLECTION_STORAGE_ROOT:./data/collection-originals}
   jwt:
