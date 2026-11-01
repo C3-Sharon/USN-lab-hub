@@ -197,7 +197,7 @@ async function handleFilePicked(event) {
       ? await replaceComponentImage(
           props.componentId,
           target.mediaId,
-          { file, componentVersion: localVersion.value, sortOrder: target.sortOrder },
+          { file, componentVersion: localVersion.value, mediaVersion: target.version },
           createIdempotencyKey('w44-media')
         )
       : await uploadComponentImage(
@@ -258,7 +258,7 @@ async function move(media, direction) {
   try {
     const payload = await reorderComponentImages(props.componentId, {
       componentVersion: localVersion.value,
-      items: ordered.map((item, i) => ({ mediaId: item.mediaId, version: item.version, sortOrder: (i + 1) * 10 }))
+      items: ordered.map((item, i) => ({ mediaId: item.mediaId, mediaVersion: item.version, sortOrder: (i + 1) * 10 }))
     })
     ElMessage.success('图片顺序已更新')
     emit('updated', payload)

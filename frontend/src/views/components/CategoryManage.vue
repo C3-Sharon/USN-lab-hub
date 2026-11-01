@@ -351,19 +351,28 @@ async function submit() {
 }
 
 async function deactivate(category) {
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `停用分类「${category.name}」后将不能再被新型号引用。存在启用的子分类或启用/草稿型号时会被拒绝。`,
+    const result = await ElMessageBox.prompt(
+      `停用分类「${category.name}」后将不能再被新型号引用。请填写停用原因（1-500 字符）。`,
       '停用分类',
-      { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' }
+      {
+        confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning',
+        inputPlaceholder: '例如：分类已合并至新的目录节点',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          return text.length >= 1 && text.length <= 500 ? true : '停用原因需为 1-500 字符'
+        }
+      }
     )
+    reason = String(result.value || '').trim()
   } catch {
     return
   }
   try {
     await deactivateCategory(
       category.id,
-      { version: category.version },
+      { version: category.version, reason },
       createIdempotencyKey('w44-category')
     )
     ElMessage.success(`分类 ${category.code} 已停用`)
@@ -376,19 +385,28 @@ async function deactivate(category) {
 }
 
 async function restore(category) {
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `恢复分类「${category.name}」前，其父分类必须为启用状态，且编码/名称仍需满足唯一性约束。`,
+    const result = await ElMessageBox.prompt(
+      `恢复分类「${category.name}」前，其父分类必须为启用状态。请填写恢复原因（1-500 字符）。`,
       '恢复分类',
-      { confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning' }
+      {
+        confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning',
+        inputPlaceholder: '例如：分类重新启用并恢复维护',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          return text.length >= 1 && text.length <= 500 ? true : '恢复原因需为 1-500 字符'
+        }
+      }
     )
+    reason = String(result.value || '').trim()
   } catch {
     return
   }
   try {
     await restoreCategory(
       category.id,
-      { version: category.version },
+      { version: category.version, reason },
       createIdempotencyKey('w44-category')
     )
     ElMessage.success(`分类 ${category.code} 已恢复`)

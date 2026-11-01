@@ -1,7 +1,7 @@
 /**
  * W44 契约测试：元器件目录与通用媒体基础
  *
- * 契约来源：docs/contracts/COMPONENT_CATALOG_MEDIA_API.md v1.0.1（FROZEN）
+ * 契约来源：docs/contracts/COMPONENT_CATALOG_MEDIA_API.md v1.0.6（FROZEN）
  *           docs/weekly/2026-W44.md §4 / §9 / §10 / §12
  *
  * 覆盖：
@@ -540,7 +540,7 @@ await group('图片、媒体边界与确定性占位（§4.4 / §7.5 / §12.3）
     }, 'w44-media-big'), 'MEDIA_TOO_LARGE', 400)
   })
 
-  await test('上传第二张、设主图、排序均返回新的 componentVersion/images', async () => {
+  await test('上传第二张、替换、设主图、排序均使用双版本并返回最新图片集', async () => {
     const component = await api.getComponent(302)
     const second = await api.uploadComponentImage(302, {
       file: fileJpg,
@@ -548,11 +548,19 @@ await group('图片、媒体边界与确定性占位（§4.4 / §7.5 / §12.3）
       sortOrder: 20
     }, 'w44-media-upload-2')
     assert.equal(second.media.role, 'GALLERY')
-    const secondMediaId = second.media.mediaId
-
-    const primary = await api.setPrimaryComponentImage(302, secondMediaId, {
+    const replaced = await api.replaceComponentImage(302, second.media.mediaId, {
+      file: { ...fileJpg, name: 'w44-replacement.jpg' },
       componentVersion: second.componentVersion,
       mediaVersion: second.media.version
+    }, 'w44-media-replacement')
+    assert.notEqual(replaced.media.mediaId, second.media.mediaId)
+    assert.equal(replaced.media.sortOrder, second.media.sortOrder)
+    assert.equal(replaced.media.role, second.media.role)
+    const secondMediaId = replaced.media.mediaId
+
+    const primary = await api.setPrimaryComponentImage(302, secondMediaId, {
+      componentVersion: replaced.componentVersion,
+      mediaVersion: replaced.media.version
     })
     assert.equal(primary.primaryMediaId, secondMediaId)
     assert.equal(primary.images.find((item) => item.mediaId === secondMediaId).role, 'PRIMARY')
@@ -561,7 +569,7 @@ await group('图片、媒体边界与确定性占位（§4.4 / §7.5 / §12.3）
       componentVersion: primary.componentVersion,
       items: primary.images.map((item, index) => ({
         mediaId: item.mediaId,
-        version: item.version,
+        mediaVersion: item.version,
         sortOrder: index === 0 ? 20 : 10
       }))
     })

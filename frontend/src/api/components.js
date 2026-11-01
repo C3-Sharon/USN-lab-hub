@@ -8,7 +8,7 @@ import { isMockScenario, mockDelay, mockReject, mockTraceId } from '@/utils/mock
 /**
  * 元器件目录与通用媒体 API（第 8 周 M03-W01）
  *
- * 契约来源：docs/contracts/COMPONENT_CATALOG_MEDIA_API.md v1.0.1（FROZEN）
+ * 契约来源：docs/contracts/COMPONENT_CATALOG_MEDIA_API.md v1.0.6（FROZEN）
  *
  * 真实端点（契约 §6）：
  *   POST/GET /api/component-categories
@@ -1905,15 +1905,15 @@ export function uploadComponentImage(componentId, { file, componentVersion, sort
   })
 }
 
-export function replaceComponentImage(componentId, mediaId, { file, componentVersion, sortOrder = 10 }, idempotencyKey) {
+export function replaceComponentImage(componentId, mediaId, { file, componentVersion, mediaVersion }, idempotencyKey) {
   if (!getMockEnabled()) {
     const form = new FormData()
     form.append('file', file)
     form.append('componentVersion', String(componentVersion))
-    form.append('sortOrder', String(sortOrder))
+    form.append('mediaVersion', String(mediaVersion))
     return request.post(`/api/components/${componentId}/images/${mediaId}/replacement`, form, { headers: idempotencyHeaders(idempotencyKey) })
   }
-  return withIdempotency(idempotencyKey, { componentId, mediaId, componentVersion, name: file?.name, size: file?.size, type: file?.type }, async () => {
+  return withIdempotency(idempotencyKey, { componentId, mediaId, componentVersion, mediaVersion, name: file?.name, size: file?.size, type: file?.type }, async () => {
     const managerError = requireManager('MEDIA_OPERATION_DENIED')
     if (managerError) return managerError
     const component = findComponent(componentId)
@@ -1925,6 +1925,8 @@ export function replaceComponentImage(componentId, mediaId, { file, componentVer
     if (component.status === 'INACTIVE') return reject(409, '停用型号不能替换图片', 'COMPONENT_INVALID_TRANSITION')
     const versionError = requireVersion(component, componentVersion, { componentId })
     if (versionError) return versionError
+    const mediaVersionError = requireVersion(old, mediaVersion, { mediaId })
+    if (mediaVersionError) return mediaVersionError
     const fileError = validateImageFile(file)
     if (fileError) return fileError
     const wasPrimary = component.primaryMediaId === old.mediaId
@@ -1932,7 +1934,7 @@ export function replaceComponentImage(componentId, mediaId, { file, componentVer
     old.deletedBy = currentUserId()
     old.deletedAt = nowIso()
     old.version += 1
-    const media = addMockMedia(component, file, Number(sortOrder) || old.sortOrder, wasPrimary ? 'PRIMARY' : 'GALLERY')
+    const media = addMockMedia(component, file, old.sortOrder, wasPrimary ? 'PRIMARY' : 'GALLERY')
     if (wasPrimary) component.primaryMediaId = media.mediaId
     component.version += 1
     component.updatedBy = currentUserId()
@@ -1983,13 +1985,16 @@ export function reorderComponentImages(componentId, payload) {
   const versionError = requireVersion(component, payload?.componentVersion, { componentId })
   if (versionError) return versionError
   const items = Array.isArray(payload?.items) ? payload.items : []
-  if (!items.length || items.length > 5) return reject(400, '排序项需为 1-5 项', 'INVALID_PARAMETER')
+  const visible = visibleMediaList(component.id)
+  if (!items.length || items.length > 5 || items.length !== visible.length || new Set(items.map((item) => Number(item.mediaId))).size !== items.length) {
+    return reject(400, '排序项必须完整且不重复', 'INVALID_PARAMETER')
+  }
   for (const item of items) {
     const media = findMedia(item.mediaId)
     if (!media || media.ownerId !== component.id || media.status !== 'READY') {
       return reject(404, '媒体不存在或不可见', 'MEDIA_NOT_FOUND')
     }
-    if (Number(item.version) !== Number(media.version)) {
+    if (Number(item.mediaVersion) !== Number(media.version)) {
       return reject(409, '数据已被更新，请刷新后重试', 'VERSION_CONFLICT', { currentVersion: media.version, mediaId: media.mediaId })
     }
   }

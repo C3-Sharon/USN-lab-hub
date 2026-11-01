@@ -399,19 +399,28 @@ async function submit() {
 }
 
 async function deactivate(item) {
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `停用制造商「${item.name}」前，需确保其下没有启用或草稿型号；已有型号会保留并继续绑定原 ID。`,
+    const result = await ElMessageBox.prompt(
+      `停用制造商「${item.name}」前，需确保其下没有启用或草稿型号。请填写停用原因（1-500 字符）。`,
       '停用制造商',
-      { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' }
+      {
+        confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning',
+        inputPlaceholder: '例如：制造商资料停止维护',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          return text.length >= 1 && text.length <= 500 ? true : '停用原因需为 1-500 字符'
+        }
+      }
     )
+    reason = String(result.value || '').trim()
   } catch {
     return
   }
   try {
     await deactivateManufacturer(
       item.id,
-      { version: item.version },
+      { version: item.version, reason },
       createIdempotencyKey('w44-manufacturer')
     )
     ElMessage.success(`制造商 ${item.code} 已停用`)
@@ -424,19 +433,28 @@ async function deactivate(item) {
 }
 
 async function restore(item) {
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `恢复制造商「${item.name}」后，新型号可重新引用。名称仍需满足大小写不敏感唯一。`,
+    const result = await ElMessageBox.prompt(
+      `恢复制造商「${item.name}」后，新型号可重新引用。请填写恢复原因（1-500 字符）。`,
       '恢复制造商',
-      { confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning' }
+      {
+        confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning',
+        inputPlaceholder: '例如：制造商资料恢复维护',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          return text.length >= 1 && text.length <= 500 ? true : '恢复原因需为 1-500 字符'
+        }
+      }
     )
+    reason = String(result.value || '').trim()
   } catch {
     return
   }
   try {
     await restoreManufacturer(
       item.id,
-      { version: item.version },
+      { version: item.version, reason },
       createIdempotencyKey('w44-manufacturer')
     )
     ElMessage.success(`制造商 ${item.code} 已恢复`)
