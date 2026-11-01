@@ -61,10 +61,10 @@ request.interceptors.response.use(
       return Promise.reject(payload)
     }
     if (payload.code === 403 || reason === 'ACCESS_DENIED' || reason === 'RESOURCE_NOT_FOUND') {
-      ElMessage.error(payload.msg || '当前账号无权访问该资源')
+      if (!response.config?.silentError) ElMessage.error(payload.msg || '当前账号无权访问该资源')
       return Promise.reject(payload)
     }
-    if (SILENT_REASONS.has(reason)) {
+    if (SILENT_REASONS.has(reason) || response.config?.silentError) {
       return Promise.reject(payload)
     }
     ElMessage.error(payload.msg || '请求处理失败')
@@ -77,8 +77,8 @@ request.interceptors.response.use(
       const reason = payload.reason || 'TOKEN_INVALID'
       clearAuthAndRedirect(reason, reason === 'ACCOUNT_DISABLED' ? '账号已被禁用，请联系管理员' : '登录状态已失效，请重新登录')
     } else if (status === 403) {
-      ElMessage.error(payload.msg || '当前账号无权访问该资源')
-    } else if (SILENT_REASONS.has(payload.reason)) {
+      if (!error.config?.silentError) ElMessage.error(payload.msg || '当前账号无权访问该资源')
+    } else if (SILENT_REASONS.has(payload.reason) || error.config?.silentError) {
       // 由页面处理，不弹通用 toast
     } else {
       ElMessage.error(error.response?.data?.msg || error.message || '网络请求失败')

@@ -6,7 +6,17 @@
  * 供三视口证据与人工验收使用；真实接口（VITE_USE_MOCK=false）完全忽略该参数。
  */
 
-const STATES = Object.freeze(['loading', 'empty', 'error', 'permission', 'conflict', 'immutable'])
+const STATES = Object.freeze([
+  'loading',
+  'empty',
+  'error',
+  'permission',
+  'conflict',
+  'immutable',
+  'success',
+  'inactive',
+  'placeholder'
+])
 
 export function currentMockScenario() {
   if (typeof window === 'undefined') return ''
@@ -37,5 +47,8 @@ export const MOCK_STATE_META = Object.freeze({
   error: { label: '加载失败', desc: 'reason 文案、traceId 与重试' },
   permission: { label: '无权限', desc: '隐藏写操作并显示只读原因' },
   conflict: { label: '版本冲突', desc: '409 VERSION_CONFLICT 提示刷新对比' },
-  immutable: { label: '不可变', desc: '发布修订/完成批次/快照只读' }
+  immutable: { label: '不可变', desc: '发布修订/完成批次/快照只读' },
+  success: { label: '操作成功', desc: '展示新 version/specVersion/mediaId 与操作时间' },
+  inactive: { label: '已停用', desc: '灰色只读提示，仅提供恢复' },
+  placeholder: { label: '无图占位', desc: '确定性 placeholderKey，固定比例不布局跳动' }
 })

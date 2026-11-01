@@ -26,6 +26,12 @@ import CollectionPlanList from '@/views/collection/CollectionPlanList.vue'
 import CollectionPlanDetail from '@/views/collection/CollectionPlanDetail.vue'
 import CollectionBatchDetail from '@/views/collection/CollectionBatchDetail.vue'
 import DataImportDetail from '@/views/collection/DataImportDetail.vue'
+import ComponentList from '@/views/components/ComponentList.vue'
+import ComponentDetail from '@/views/components/ComponentDetail.vue'
+import ComponentEditor from '@/views/components/ComponentEditor.vue'
+import SpecCandidates from '@/views/components/SpecCandidates.vue'
+import CategoryManage from '@/views/components/CategoryManage.vue'
+import ManufacturerManage from '@/views/components/ManufacturerManage.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -213,6 +219,48 @@ const routes = [
         name: 'DataImportDetail',
         component: DataImportDetail,
         meta: { title: 'CSV 导入', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'components',
+        name: 'ComponentList',
+        component: ComponentList,
+        meta: { title: '元器件目录', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'components/new',
+        name: 'ComponentCreate',
+        component: ComponentEditor,
+        meta: { title: '新建元器件型号', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER] }
+      },
+      {
+        path: 'components/:id/edit',
+        name: 'ComponentEdit',
+        component: ComponentEditor,
+        meta: { title: '编辑元器件型号', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER] }
+      },
+      {
+        path: 'components/:id/spec-candidates',
+        name: 'ComponentSpecCandidates',
+        component: SpecCandidates,
+        meta: { title: '规格候选与确认', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
+      },
+      {
+        path: 'components/:id',
+        name: 'ComponentDetail',
+        component: ComponentDetail,
+        meta: { title: '元器件详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'component-categories',
+        name: 'ComponentCategories',
+        component: CategoryManage,
+        meta: { title: '元器件分类树', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
+      },
+      {
+        path: 'component-manufacturers',
+        name: 'ComponentManufacturers',
+        component: ManufacturerManage,
+        meta: { title: '制造商管理', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
       }
     ]
   },
