@@ -14,6 +14,8 @@ const STATES = Object.freeze([
   'conflict',
   'immutable',
   'success',
+  'partial-received',
+  'transaction-failed',
   'inactive',
   'placeholder'
 ])
@@ -49,6 +51,8 @@ export const MOCK_STATE_META = Object.freeze({
   conflict: { label: '版本冲突', desc: '409 VERSION_CONFLICT 提示刷新对比' },
   immutable: { label: '不可变', desc: '发布修订/完成批次/快照只读' },
   success: { label: '操作成功', desc: '展示新 version/specVersion/mediaId 与操作时间' },
+  'partial-received': { label: '部分到货', desc: '仅显示 PARTIALLY_RECEIVED，保留剩余数量与进度' },
+  'transaction-failed': { label: '入库事务失败', desc: '确认到货返回 500，批次/流水/数量均不改变' },
   inactive: { label: '已停用', desc: '灰色只读提示，仅提供恢复' },
   placeholder: { label: '无图占位', desc: '确定性 placeholderKey，固定比例不布局跳动' }
 })
