@@ -12,13 +12,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
  */
 
 export function normalizeApiError(err) {
-  if (!err) return { code: null, reason: null, msg: '', data: null }
+  if (!err) return { code: null, reason: null, msg: '', data: null, traceId: '' }
   const payload = err.response?.data || err
   return {
     code: payload?.code ?? err.response?.status ?? null,
     reason: payload?.reason ?? null,
     msg: payload?.msg || err.message || '请求失败',
-    data: payload?.data ?? null
+    data: payload?.data ?? null,
+    traceId: payload?.data?.traceId || ''
   }
 }
 
@@ -394,4 +395,107 @@ export function experimentContentErrors(err) {
   const { reason, data } = normalizeApiError(err)
   if (reason !== 'EXPERIMENT_CONTENT_INVALID' || !data || !Array.isArray(data.errors)) return []
   return data.errors
+}
+
+// ========== 采购与分批到货域错误码（PROCUREMENT_INVENTORY_API.md §11 / §12） ==========
+
+const PROCUREMENT_DENIED_REASONS = [
+  'PROCUREMENT_OPERATION_DENIED',
+  'PROCUREMENT_APPROVAL_DENIED',
+  'PROCUREMENT_POLICY_DENIED',
+  'ACCESS_DENIED'
+]
+
+/** 采购单不存在或不可见（404，隐藏存在性） */
+export function isProcurementOrderNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || reason === 'PROCUREMENT_ORDER_NOT_FOUND'
+}
+
+/** 附件/媒体不存在或不可见（404；不得展示数量、文件名、mediaId 或派生意图） */
+export function isProcurementAttachmentHidden(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || reason === 'MEDIA_NOT_FOUND'
+}
+
+/** 无采购/审批/策略/附件权限（403） */
+export function isProcurementDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || PROCUREMENT_DENIED_REASONS.includes(reason)
+}
+
+/** 采购单、到货或附件版本冲突（409） */
+export function isProcurementVersionConflict(err) {
+  return isVersionConflict(err)
+}
+
+/** 非法状态转换（409） */
+export function isProcurementInvalidTransition(err) {
+  return isReason(err, 'INVALID_TRANSITION')
+}
+
+/** 审批人等于申请人或买手、买手等于人工审批人（409） */
+export function isProcurementDutyConflict(err) {
+  return isReason(err, 'PROCUREMENT_DUTY_CONFLICT')
+}
+
+/** 平台订单号已被另一个采购单登记（409） */
+export function isPlatformOrderDuplicated(err) {
+  return isReason(err, 'PLATFORM_ORDER_NO_DUPLICATED')
+}
+
+/** 实付低于应付但未填差异原因（400） */
+export function isPaymentDifferenceNoteRequired(err) {
+  return isReason(err, 'PAYMENT_DIFFERENCE_NOTE_REQUIRED')
+}
+
+/** 到货数量超过剩余（409）；data 含 orderLineId/remainingQuantity/requestedQuantity */
+export function isReceiptOverQuantity(err) {
+  return isReason(err, 'RECEIPT_OVER_QUANTITY')
+}
+
+/** 提取超量冲突的行级数量，便于 Detail 表格定位但不伪造剩余值 */
+export function receiptOverQuantityDetail(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'RECEIPT_OVER_QUANTITY' || !data) return null
+  return {
+    orderLineId: data.orderLineId ?? null,
+    remainingQuantity: data.remainingQuantity ?? null,
+    requestedQuantity: data.requestedQuantity ?? null
+  }
+}
+
+/** 同一采购单已存在 DRAFT 到货记录（409）；data.receiptId 指向草稿 */
+export function isReceiptDraftExists(err) {
+  return isReason(err, 'RECEIPT_DRAFT_EXISTS')
+}
+
+export function receiptDraftId(err) {
+  const { reason, data } = normalizeApiError(err)
+  return reason === 'RECEIPT_DRAFT_EXISTS' ? (data?.receiptId ?? null) : null
+}
+
+/** 到货记录已确认/已取消（409） */
+export function isReceiptAlreadyConfirmed(err) {
+  return isReason(err, 'RECEIPT_ALREADY_CONFIRMED')
+}
+
+/** 入库事务失败（500）；批次、流水、余额和采购数量均不得改变 */
+export function isProcurementTransactionFailed(err) {
+  return isReason(err, 'PROCUREMENT_TRANSACTION_FAILED')
+}
+
+/** 附件数量/类型/大小限制（409/400） */
+export function isProcurementAttachmentLimit(err) {
+  return isReason(err, 'PROCUREMENT_ATTACHMENT_LIMIT_EXCEEDED')
+}
+
+/** 同一 Idempotency-Key 复用于不同请求（409） */
+export function isProcurementIdempotencyReused(err) {
+  return isReason(err, 'IDEMPOTENCY_KEY_REUSED')
+}
+
+/** 项目内审批人/买手缺失（409） */
+export function isProcurementApprovalRequired(err) {
+  return isReason(err, 'PROCUREMENT_APPROVAL_REQUIRED')
 }

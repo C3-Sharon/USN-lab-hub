@@ -112,7 +112,7 @@
 <script setup>
 import { computed, markRaw, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection, Tickets, Box, Share, OfficeBuilding } from '@element-plus/icons-vue'
+import { DataBoard, DocumentChecked, SwitchButton, UserFilled, Cpu, Monitor, Bell, SetUp, FolderOpened, Document, Menu, Reading, Collection, Tickets, Box, Share, OfficeBuilding, ShoppingCart } from '@element-plus/icons-vue'
 import { userStore, hasAnyRole } from '@/store/user'
 import { ROLE } from '@/utils/permission'
 
@@ -149,6 +149,7 @@ const pageSubtitle = computed(() => {
   if (route.path.startsWith('/components') || route.path.startsWith('/component-')) {
     return '元器件型号、规格快照、图片占位、分类与制造商'
   }
+  if (route.path.startsWith('/procurement')) return '采购单、分批到货、库存批次与审批策略'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -169,7 +170,8 @@ const ICON = markRaw({
   document: Document,
   component: Box,
   category: Share,
-  manufacturer: OfficeBuilding
+  manufacturer: OfficeBuilding,
+  procurement: ShoppingCart
 })
 
 const menuItems = computed(() => {
@@ -206,6 +208,16 @@ const menuItems = computed(() => {
         { index: '/components', title: '元器件型号', icon: ICON.component, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
         { index: '/component-categories', title: '分类树', icon: ICON.category, roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] },
         { index: '/component-manufacturers', title: '制造商', icon: ICON.manufacturer, roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
+      ]
+    },
+    {
+      index: '/procurement',
+      title: '采购库存',
+      icon: ICON.procurement,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
+      children: [
+        { index: '/procurements', title: '采购单', icon: ICON.procurement, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/procurement/settings', title: '审批策略', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN] }
       ]
     },
     {
