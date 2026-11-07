@@ -11,6 +11,8 @@ param(
     [string]$ApproverPassword = $env:USN_W45_APPROVER_PASSWORD,
     [string]$StockKeeperMemberId = $env:USN_W45_STOCK_KEEPER_MEMBER_ID,
     [string]$StockKeeperPassword = $env:USN_W45_STOCK_KEEPER_PASSWORD,
+    [string]$UnrelatedMemberId = $env:USN_W45_UNRELATED_MEMBER_ID,
+    [string]$UnrelatedMemberPassword = $env:USN_W45_UNRELATED_MEMBER_PASSWORD,
     [Parameter(Mandatory = $true)]
     [long]$ComponentId,
     [Parameter(Mandatory = $true)]
@@ -23,6 +25,8 @@ $ErrorActionPreference = "Stop"
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $runSuffix = [DateTimeOffset]::Now.ToString("yyyyMMddHHmmssfff")
 $tempPng = Join-Path ([System.IO.Path]::GetTempPath()) "usn-w45-$runSuffix.png"
+$permissionBoundaryComplete = $true
+$faultInjectionExecuted = $false
 
 function New-IdempotencyKey {
     return [guid]::NewGuid().ToString()
@@ -131,6 +135,18 @@ function Login {
     return $data
 }
 
+function Get-InventoryFactCounts {
+    param([long]$TargetComponentId, [string]$Token, [string]$Label)
+    $batches = Get-ApiData (Invoke-JsonApi -Method GET `
+        -Path "/api/inventory/components/$TargetComponentId/batches?page=1&pageSize=1" -Token $Token) "$Label batches"
+    $movements = Get-ApiData (Invoke-JsonApi -Method GET `
+        -Path "/api/inventory/movements?page=1&pageSize=1&componentId=$TargetComponentId" -Token $Token) "$Label movements"
+    return @{
+        batchTotal = [long]$batches.total
+        movementTotal = [long]$movements.total
+    }
+}
+
 try {
     [System.IO.File]::WriteAllBytes(
         $tempPng,
@@ -144,6 +160,7 @@ try {
     }
     else {
         $approver = $admin
+        $permissionBoundaryComplete = $false
         Write-Warning "No TEACHER/SYSTEM_ADMIN approver credentials supplied; using the admin account. Full role gate requires USN_W45_APPROVER_* credentials."
     }
     if ($StockKeeperMemberId -and $StockKeeperPassword) {
@@ -151,7 +168,23 @@ try {
     }
     else {
         $stockKeeper = $admin
+        $permissionBoundaryComplete = $false
         Write-Warning "No STOCK_KEEPER credentials supplied; using the admin account. Full role gate requires USN_W45_STOCK_KEEPER_* credentials."
+    }
+    if ($UnrelatedMemberId -and $UnrelatedMemberPassword) {
+        $unrelatedMember = Login -MemberId $UnrelatedMemberId -Password $UnrelatedMemberPassword
+    }
+    else {
+        $unrelatedMember = $null
+        $permissionBoundaryComplete = $false
+        Write-Warning "No unrelated MEMBER credentials supplied. Full role gate requires USN_W45_UNRELATED_MEMBER_* credentials."
+    }
+
+    $roleIds = @($RequesterMemberId, $ApproverMemberId, $StockKeeperMemberId, $UnrelatedMemberId) |
+        Where-Object { $_ } | Select-Object -Unique
+    if ($roleIds.Count -ne 4) {
+        $permissionBoundaryComplete = $false
+        Write-Warning "Requester, approver, stock keeper and unrelated member must be four distinct accounts for the full permission gate."
     }
 
     # 1. Small multi-line order: exact create replay and key-reuse conflict.
@@ -251,7 +284,7 @@ try {
     $line1Id = [long]$high.lines[0].id
     $line2Id = [long]$high.lines[1].id
 
-    # 5. First partial receipt. MEMBER is denied; admin confirmation creates inventory once.
+    # 5. First partial receipt. An unrelated MEMBER is denied; STOCK_KEEPER confirmation creates inventory once.
     $firstReceipt = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
         -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
             orderVersion = [int]$ordered.version
@@ -268,11 +301,14 @@ try {
         receiptVersion = [int]$firstReceipt.version
         orderVersion = [int]$firstReceipt.orderVersion
     }
+    $deniedToken = if ($null -ne $unrelatedMember) { $unrelatedMember.token } else { $requester.token }
     Assert-ApiError -Status 403 -Reason "PROCUREMENT_RECEIPT_DENIED" -Label "member receipt confirmation" -RequireTraceId -Action {
         Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($firstReceipt.id)/confirm" `
-            -Token $requester.token -IdempotencyKey (New-IdempotencyKey) -Body $firstConfirmBody
+            -Token $deniedToken -IdempotencyKey (New-IdempotencyKey) -Body $firstConfirmBody
     } | Out-Null
 
+    $component1FactsBefore = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "component 1 before confirm"
+    $component2FactsBefore = Get-InventoryFactCounts -TargetComponentId $SecondComponentId -Token $stockKeeper.token -Label "component 2 before confirm"
     $firstConfirmKey = New-IdempotencyKey
     $firstConfirmed = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($firstReceipt.id)/confirm" `
         -Token $stockKeeper.token -IdempotencyKey $firstConfirmKey -Body $firstConfirmBody) "first receipt confirm"
@@ -280,12 +316,24 @@ try {
     Assert-Equal $firstConfirmed.orderStatus "PARTIALLY_RECEIVED" "partial order status"
     Assert-Equal $firstConfirmed.batches.Count 2 "first receipt batch count"
     Assert-Equal $firstConfirmed.movements.Count 2 "first receipt movement count"
+    $component1FactsAfter = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "component 1 after confirm"
+    $component2FactsAfter = Get-InventoryFactCounts -TargetComponentId $SecondComponentId -Token $stockKeeper.token -Label "component 2 after confirm"
+    Assert-Equal $component1FactsAfter.batchTotal ($component1FactsBefore.batchTotal + 1) "component 1 batch count after confirm"
+    Assert-Equal $component1FactsAfter.movementTotal ($component1FactsBefore.movementTotal + 1) "component 1 movement count after confirm"
+    Assert-Equal $component2FactsAfter.batchTotal ($component2FactsBefore.batchTotal + 1) "component 2 batch count after confirm"
+    Assert-Equal $component2FactsAfter.movementTotal ($component2FactsBefore.movementTotal + 1) "component 2 movement count after confirm"
 
     $firstReplay = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($firstReceipt.id)/confirm" `
         -Token $stockKeeper.token -IdempotencyKey $firstConfirmKey -Body $firstConfirmBody) "first receipt replay"
     Assert-Equal $firstReplay.batches[0].batchId $firstConfirmed.batches[0].batchId "receipt replay batch id"
     Assert-Equal $firstReplay.movements[0].movementId $firstConfirmed.movements[0].movementId "receipt replay movement id"
     Assert-Equal $firstReplay.movements[0].balanceAfter $firstConfirmed.movements[0].balanceAfter "receipt replay balance"
+    $component1FactsAfterReplay = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "component 1 after replay"
+    $component2FactsAfterReplay = Get-InventoryFactCounts -TargetComponentId $SecondComponentId -Token $stockKeeper.token -Label "component 2 after replay"
+    Assert-Equal $component1FactsAfterReplay.batchTotal $component1FactsAfter.batchTotal "component 1 replay batch total unchanged"
+    Assert-Equal $component1FactsAfterReplay.movementTotal $component1FactsAfter.movementTotal "component 1 replay movement total unchanged"
+    Assert-Equal $component2FactsAfterReplay.batchTotal $component2FactsAfter.batchTotal "component 2 replay batch total unchanged"
+    Assert-Equal $component2FactsAfterReplay.movementTotal $component2FactsAfter.movementTotal "component 2 replay movement total unchanged"
     Assert-ApiError -Status 409 -Reason "RECEIPT_ALREADY_CONFIRMED" -Label "new-key duplicate confirmation" -RequireTraceId -Action {
         Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($firstReceipt.id)/confirm" `
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body $firstConfirmBody
@@ -329,8 +377,12 @@ try {
                 note = "W45 test-profile fault injection"
                 lines = @(@{ orderLineId = $line1Id; quantity = 1.000; supplierLotNo = "FAULT"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
             }) "fault receipt create"
+        $faultInjectionExecuted = $true
+        $orderBeforeFault = Get-ApiData (Invoke-JsonApi -Method GET `
+            -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order before fault"
         $balanceBeforeFault = Get-ApiData (Invoke-JsonApi -Method GET `
             -Path "/api/inventory/components/$ComponentId" -Token $stockKeeper.token) "balance before fault"
+        $factsBeforeFault = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "facts before fault"
         Assert-ApiError -Status 500 -Reason "PROCUREMENT_TRANSACTION_FAILED" -Label "test-profile transaction fault" -RequireTraceId -Action {
             Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($faultReceipt.id)/confirm" `
                 -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) `
@@ -343,10 +395,18 @@ try {
             -Path "/api/procurement-receipts/$($faultReceipt.id)" -Token $stockKeeper.token) "fault receipt after rollback"
         $balanceAfterFault = Get-ApiData (Invoke-JsonApi -Method GET `
             -Path "/api/inventory/components/$ComponentId" -Token $stockKeeper.token) "balance after fault"
+        $orderAfterFault = Get-ApiData (Invoke-JsonApi -Method GET `
+            -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order after fault"
+        $factsAfterFault = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "facts after fault"
         Assert-Equal $faultAfter.status "DRAFT" "failed transaction leaves receipt draft"
         Assert-Equal $faultAfter.batches.Count 0 "failed transaction leaves no batches"
         Assert-Equal $faultAfter.movements.Count 0 "failed transaction leaves no movements"
         Assert-Equal $balanceAfterFault.onHandQuantity $balanceBeforeFault.onHandQuantity "failed transaction leaves inventory unchanged"
+        Assert-Equal $factsAfterFault.batchTotal $factsBeforeFault.batchTotal "failed transaction leaves batch row count unchanged"
+        Assert-Equal $factsAfterFault.movementTotal $factsBeforeFault.movementTotal "failed transaction leaves movement row count unchanged"
+        Assert-Equal $orderAfterFault.status $orderBeforeFault.status "failed transaction leaves order status unchanged"
+        Assert-Equal $orderAfterFault.lines[0].receivedQuantity $orderBeforeFault.lines[0].receivedQuantity "failed transaction leaves first line progress unchanged"
+        Assert-Equal $orderAfterFault.lines[1].receivedQuantity $orderBeforeFault.lines[1].receivedQuantity "failed transaction leaves second line progress unchanged"
         Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($faultReceipt.id)/cancel" `
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
                 version = [int]$faultAfter.version
@@ -377,6 +437,24 @@ try {
     Assert-True ($attachmentMediaId -gt 0) "attachment returns mediaId"
     $orderAfterAttachment = Get-ApiData (Invoke-JsonApi -Method GET `
         -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order after attachment"
+    Assert-True ([int]$orderAfterAttachment.version -gt [int]$orderAfterOver.version) "attachment increments owner version"
+    Assert-ApiError -Status 409 -Reason "VERSION_CONFLICT" -Label "stale owner version after attachment" -RequireTraceId -Action {
+        Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
+            -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+                orderVersion = [int]$orderAfterOver.version
+                receivedAt = [DateTimeOffset]::Now.ToString("o")
+                note = "stale owner version must fail"
+                lines = @(@{ orderLineId = $line1Id; quantity = 1.000; supplierLotNo = "STALE"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
+            }
+    } | Out-Null
+    if ($null -ne $unrelatedMember) {
+        Assert-ApiError -Status 404 -Reason "PROCUREMENT_ORDER_NOT_FOUND" -Label "unrelated member cannot see order" -RequireTraceId -Action {
+            Invoke-JsonApi -Method GET -Path "/api/procurement-orders/$highId" -Token $unrelatedMember.token
+        } | Out-Null
+        Assert-ApiError -Status 404 -Reason "PROCUREMENT_ORDER_NOT_FOUND" -Label "unrelated member cannot enumerate attachments" -RequireTraceId -Action {
+            Invoke-JsonApi -Method GET -Path "/api/procurement-orders/$highId/attachments" -Token $unrelatedMember.token
+        } | Out-Null
+    }
 
     # 9. Receive every remaining quantity, then explicitly complete the order.
     $finalReceipt = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
@@ -404,7 +482,12 @@ try {
         Invoke-JsonApi -Method GET -Path "/api/procurement-orders/$highId"
     } | Out-Null
 
-    Write-Host "W45 REAL INTEGRATION PASSED: order=$highId firstReceipt=$($firstReceipt.id) finalReceipt=$($finalReceipt.id) media=$attachmentMediaId"
+    if ($permissionBoundaryComplete -and $faultInjectionExecuted) {
+        Write-Host "W45 REAL INTEGRATION PASSED: order=$highId firstReceipt=$($firstReceipt.id) finalReceipt=$($finalReceipt.id) media=$attachmentMediaId"
+    }
+    else {
+        Write-Warning "W45 SCENARIOS COMPLETED WITH INCOMPLETE GATE: 权限边界未完整验证 or transaction fault injection not executed. Do not declare W45 fully passed."
+    }
 }
 finally {
     if (Test-Path -LiteralPath $tempPng) {

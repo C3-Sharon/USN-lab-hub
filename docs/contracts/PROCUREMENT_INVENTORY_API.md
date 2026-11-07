@@ -319,7 +319,7 @@ CONFIRMED 到货记录及明细不可编辑或删除。
 | `version` | int | 自动 | 条件更新/行锁保护 |
 | `updateTime` | datetime | 自动 | 最近库存事实时间 |
 
-库存余额是可由批次和流水重建的投影，不替代不可变流水事实。
+库存余额是可由批次和流水重建的投影，不替代不可变流水事实。每个 `componentId` 最多且必须只对应一条余额记录，数据库必须以主键或唯一索引强制该约束，不能只依赖应用层查询。
 
 ### 3.10 发票及采购附件 `ProcurementAttachmentLink`
 
@@ -398,18 +398,31 @@ CONFIRMED/CANCELED 为终态。到货确认失败时必须保持 DRAFT，便于�
 
 `POST /api/procurement-receipts/{receiptId}/confirm` 必须在一个数据库事务中：
 
-1. 检查并命中幂等记录；精确重放直接返回首次结果。
-2. 锁定采购单，再按 orderLineId 升序锁定涉及的采购明细。
-3. 锁定到货记录及 receiptLineId 升序的到货明细。
-4. 按 componentId 升序锁定或创建库存余额行。
-5. 重新计算每条 remainingQuantity；任一超量或状态非法则整体失败。
-6. 将到货记录置为 CONFIRMED，不再可修改。
-7. 每条到货明细创建唯一库存批次。
-8. 更新库存余额并创建唯一增加流水，记录 before/after。
-9. 累加采购明细 receivedQuantity/version，重新计算采购单状态/version。
-10. 写审计和幂等响应后提交。
+固定锁序统一为：
 
-任何一步失败必须回滚本次到货状态、全部批次、全部流水、全部余额和采购数量。附件文件不参加该数据库事务，且不是确认到货前置条件。
+1. 检查或占用幂等命令记录；精确重放直接返回首次结果。
+2. 锁采购单。
+3. 按 `orderLineId ASC` 锁涉及的采购明细。
+4. 锁到货记录。
+5. 按 `receiptLineId ASC` 锁到货明细。
+6. 按 `componentId ASC` 安全创建或锁库存余额。
+7. 完成全部校验与事实写入。
+
+任何确认到货入口、重试入口或内部服务都必须遵守相同顺序，不得在另一入口反向取得以上锁。后端可决定具体 SQL，但必须在 B1 方案中展示首次余额创建、唯一冲突重试和锁定语句，并由负责人确认后实施。
+
+首次入库时若余额不存在，必须使用幂等插入、安全 upsert 或等价的唯一约束冲突处理；随后仍按 `componentId ASC` 锁定确定的余额行。两个事务并发首次入库同一元器件时，不得生成重复余额、重复批次或重复流水；批次与流水的来源唯一约束必须与余额唯一约束共同兜底。
+
+完成锁定后必须重新计算每条 `remainingQuantity`；任一超量或状态非法则整体失败。以下事实必须在同一个数据库事务中完成：
+
+- 到货记录转为 `CONFIRMED`；
+- 为每条到货明细创建唯一库存批次；
+- 创建唯一 `PROCUREMENT_RECEIPT_IN` 流水并记录 balanceBefore/balanceAfter；
+- 更新库存余额；
+- 更新采购明细的 receivedQuantity/version；
+- 更新采购单状态和 version；
+- 写入审计和可精确重放的幂等响应。
+
+任一步失败必须回滚到货状态、全部批次、全部流水、全部余额、采购明细到货数量、采购单状态/版本、审计和未完成的幂等结果。附件文件不参加该数据库事务，也不是确认到货的前置条件。
 
 固定唯一约束至少包括：
 
@@ -417,6 +430,7 @@ CONFIRMED/CANCELED 为终态。到货确认失败时必须保持 DRAFT，便于�
 - `(platformType, normalizedPlatformOrderNo)`（非空时）。
 - `(orderId, lineNo)`、`(orderId, componentId)`。
 - `(receiptId, orderLineId)`。
+- `componentInventoryBalance.componentId`（主键或唯一索引，一元器件一余额行）。
 - `inventoryBatch.sourceReceiptLineId`。
 - `(movementType, sourceType, sourceId)`。
 - `(actorId, endpoint, Idempotency-Key)` 幂等命令键。
@@ -480,6 +494,16 @@ CONFIRMED/CANCELED 为终态。到货确认失败时必须保持 DRAFT，便于�
 所有 POST 命令与 multipart 上传必须携带 `Idempotency-Key`。PUT 和状态动作携带当前业务 version；状态 POST 同时使用幂等键和 version。
 
 采购单附件上传 multipart 字段固定为 `file/purpose/orderVersion/invoiceNo/note`；到货附件为 `file/purpose/receiptVersion/note`。替换字段为 `file/attachmentVersion/mediaVersion/ownerVersion` 并继承 purpose；删除 JSON 为 `attachmentVersion/mediaVersion/ownerVersion/reason`。服务端锁定 owner 后检查数量上限并递增 ownerVersion；精确重放返回首次 mediaId，不重复占用附件名额。
+
+附件并发与 ACL 规则：
+
+- 上传、替换或逻辑删除成功后，必须递增对应采购单 `orderVersion` 或到货记录 `receiptVersion`（统称 ownerVersion），并在响应中返回最新 ownerVersion。
+- 前端附件操作成功后必须重新获取 owner 及最新 version；附件上传期间不得并行提交仍携带旧 version 的审批、下单或到货确认动作。
+- 旧 ownerVersion 返回 409 `VERSION_CONFLICT`；前端必须刷新并比较，不得自动覆盖或静默重试写操作。
+- 附件列表、元数据和内容访问必须通过采购单或到货记录重新计算 ACL，不能只判断用户已登录，也不能仅凭 mediaId 放行。
+- owner 不可见时，任何响应均不得泄露附件数量、文件名、mediaId、purpose 或存在性；统一按不可见资源处理。
+- 新增采购 ownerType/purpose 只能 additive 扩展，不得改变既有 COMPONENT 图片数量限制、确定性占位、逻辑删除和 ACL。
+- 业务 API 只返回 mediaId 和受控元数据；不得返回 objectKey、路径、bucket、provider、endpoint、签名 URL 或其他存储基础设施字段。
 
 ## 8. 请求与响应样例
 
@@ -776,18 +800,29 @@ GET /api/procurement-orders?page=1&pageSize=20
 
 重放后 batch、movement 行数和库存余额不变。使用新 key 再确认同一终态 receipt 返回 409 `RECEIPT_ALREADY_CONFIRMED`，而不是再次返回新的批次。
 
+### 12.7 权限与真实故障验收门
+
+- 完整权限验收至少使用四个互不相同的账号：采购申请人、非申请人的审批人、库存管理员、无关普通成员。
+- SYSTEM_ADMIN 只可用于冒烟或环境兜底，不能替代全部角色后宣称权限边界通过。
+- 测试环境受控事务故障注入必须在后端 PR 转为 Ready for review 前至少执行一次。
+- 故障后必须同时证明：receipt 仍为 DRAFT、没有新增库存批次、没有新增流水、余额未变化、采购明细到货数量和采购单到货进度未变化。
+- 精确重放必须返回首次 receipt/batch/movement 事实 ID，并证明批次行数、流水行数和余额均不变化。
+- 使用新 Idempotency-Key 重复确认已 CONFIRMED 到货必须返回 `RECEIPT_ALREADY_CONFIRMED`。
+- 因缺少独立角色账号而使用管理员兜底时，脚本和报告必须输出“权限边界未完整验证”，不得判定 W45 全部通过。
+
 ## 13. 页面信息层级与 UI 状态
 
 ### 13.1 路由范围
 
 - `/procurements`：采购列表、筛选、待审批入口。
-- `/procurements/new`：创建采购单。
-- `/procurements/{id}`：详情、审批时间线、金额、到货进度、附件和审计。
-- `/procurements/{id}/edit`：仅 DRAFT 编辑。
-- `/procurements/{id}/approval`：人工批准/拒绝。
+- `/procurements/new` 与 `/procurements/{id}/edit`：创建/编辑路由复用同一表单，仅 DRAFT 可编辑。
+- `/procurements/{id}`：详情主承载页，统一展示金额、明细、审批时间线、到货进度、附件和审计。
+- `/procurements/{id}/approval`：保留路由语义；审批、下单和上传附件可复用详情页组件或对话框，不要求各自建设孤立复杂页面。
 - `/procurements/{id}/receipts/new`：新建分批到货草稿。
-- `/procurement-receipts/{id}`：到货详情、确认和照片。
+- `/procurement-receipts/{id}`：到货详情、确认和照片；允许独立路由，并与新建到货复用明细组件。
 - `/procurement/settings`：SYSTEM_ADMIN 采购策略版本。
+
+以上路由不减少冻结字段、状态、权限或验收场景。三视口验收覆盖关键页面、关键弹窗和关键异常状态，不机械重复截取无差异页面。
 
 ### 13.2 采购详情显示顺序
 
@@ -829,6 +864,8 @@ GET /api/procurement-orders?page=1&pageSize=20
 
 固定视口：1440×900、1280×800、390×844。移动端金额摘要优先，明细和到货按卡片/折叠展示；禁止通过横向超宽表强塞全部字段。金额始终带 `¥` 与两位小数，数量最多三位小数并显示单位。
 
+`orderVersion`、`receiptVersion` 与附件 `ownerVersion` 必须在成功写操作后刷新。附件成功后，审批、下单或确认到货按钮只能使用重新获取的最新 owner version；冲突态必须让用户比较新旧事实后重新操作。
+
 ## 14. 与 W44 及后续周兼容
 
 - W44：componentId、specSnapshotId、baseUnit、mediaId、媒体内容端点和供应商中立存储边界保持不变；ownerType/purpose 仅 additive 扩展。
@@ -851,10 +888,12 @@ GET /api/procurement-orders?page=1&pageSize=20
 - [x] D8 一到货明细一批次、成本与保质字段
 - [x] D9 四类媒体用途、数量、格式和 ACL
 - [x] D10 取消范围与退货/退款延期
-- [ ] 后端确认 V13、锁序、事务、幂等、唯一约束和故障回滚可实现
-- [ ] 前端确认页面、金额/数量展示、附件 ACL 和三视口可实现
+- [ ] 后端提交书面结论并确认：V13 数据保留、统一锁序、首次余额并发 SQL/upsert 方案、单事务回滚、幂等、唯一约束、精度分摊、故障注入和媒体 ACL 可实现
+- [ ] 前端提交书面结论并确认：页面/组件复用、金额/数量/状态、owner/order/receipt version、附件零泄露、全部 UI 状态、默认关闭 mock 和三视口可实现
 
 确认记录：负责人于 2026-11-06 明确回复“确认”，同意 D1-D10 推荐方案，包括职责分离、实付不得超过审批应付和 baseUnit 历史保护。后端与前端可实现性尚无证据，本契约继续保持 REVIEW；两方评审完成前不得标记 FROZEN、合入 dev、创建实现分支、迁移或业务页面。
+
+两方结论必须记录评审人、日期、逐项“可实现/需调整/阻塞”、遗留风险和建议改约条款。产品不得代答或凭口头“没问题”勾选；收到两份明确书面结论并完成必要修订后，才可进入 FROZEN 审批。
 
 ## 16. 变更记录
 
@@ -862,3 +901,4 @@ GET /api/procurement-orders?page=1&pageSize=20
 |---|---|---|
 | 2026-11-05 | 初始 v1.0-draft：采购、审批、分批到货、库存增加事务和采购附件 | REVIEW |
 | 2026-11-06 | 负责人确认 D1-D10；等待后端/前端可实现性评审 | REVIEW |
+| 2026-11-07 | 拆分评审/开工门，补充首次余额并发、固定锁序、ownerVersion/ACL、页面复用与四账号验收规则 | REVIEW |
