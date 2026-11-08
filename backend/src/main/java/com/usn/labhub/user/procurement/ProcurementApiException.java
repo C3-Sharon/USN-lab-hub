@@ -3,6 +3,7 @@ package com.usn.labhub.user.procurement;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @Getter
@@ -60,6 +61,19 @@ public class ProcurementApiException extends RuntimeException {
         return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_POLICY_DENIED", "无采购策略管理权限");
     }
 
+    public static ProcurementApiException receiptDenied() {
+        return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_RECEIPT_DENIED",
+                "无到货或入库操作权限");
+    }
+
+    public static ProcurementApiException receiptLinesRequired() {
+        return new ProcurementApiException(HttpStatus.BAD_REQUEST, "RECEIPT_LINES_REQUIRED", "到货明细不能为空");
+    }
+
+    public static ProcurementApiException receiptDateInvalid() {
+        return new ProcurementApiException(HttpStatus.BAD_REQUEST, "RECEIPT_DATE_INVALID", "到货日期非法");
+    }
+
     public static ProcurementApiException projectNotFound() {
         return new ProcurementApiException(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "项目不存在或不可见");
     }
@@ -67,6 +81,11 @@ public class ProcurementApiException extends RuntimeException {
     public static ProcurementApiException orderNotFound() {
         return new ProcurementApiException(HttpStatus.NOT_FOUND, "PROCUREMENT_ORDER_NOT_FOUND",
                 "采购单不存在或不可见");
+    }
+
+    public static ProcurementApiException receiptNotFound() {
+        return new ProcurementApiException(HttpStatus.NOT_FOUND, "PROCUREMENT_RECEIPT_NOT_FOUND",
+                "到货记录不存在或不可见");
     }
 
     public static ProcurementApiException invalidTransition() {
@@ -90,6 +109,20 @@ public class ProcurementApiException extends RuntimeException {
     public static ProcurementApiException platformOrderDuplicate() {
         return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_PLATFORM_ORDER_DUPLICATE",
                 "平台订单号已存在");
+    }
+
+    public static ProcurementApiException receiptDraftExists() {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "RECEIPT_DRAFT_EXISTS", "采购单已有到货草稿");
+    }
+
+    public static ProcurementApiException receiptOverQuantity(Long lineId, BigDecimal remaining,
+                                                               BigDecimal requested) {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "RECEIPT_OVER_QUANTITY", "到货数量超过剩余数量",
+                Map.of("lineId", lineId, "remaining", remaining, "requested", requested));
+    }
+
+    public static ProcurementApiException receiptAlreadyConfirmed() {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "RECEIPT_ALREADY_CONFIRMED", "到货记录已确认");
     }
 
     public static ProcurementApiException policyChanged(Integer currentVersion) {

@@ -89,6 +89,20 @@ public class ProcurementAccessPolicy {
         throw ProcurementApiException.operationDenied();
     }
 
+    public void requireReceiptManagement() {
+        Set<String> roles = UserContext.getRoles();
+        if (roles.contains("SYSTEM_ADMIN") || roles.contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw ProcurementApiException.receiptDenied();
+    }
+
+    public void requireInventoryDetail() {
+        if (!canViewAll()) {
+            throw ProcurementApiException.operationDenied();
+        }
+    }
+
     public void requireCancel(ProcurementOrderRecord order) {
         Set<String> roles = UserContext.getRoles();
         boolean requester = userId().equals(order.getRequesterId());

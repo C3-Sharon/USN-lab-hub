@@ -65,7 +65,12 @@ public class ProcurementSupport {
 
     public void audit(String requestId, String action, Long targetId, String previousStatus,
                       String newStatus, String reason, Object details) {
-        mapper.insertAudit(requestId, access.userId(), action, "PROCUREMENT_ORDER", targetId,
+        audit(requestId, action, "PROCUREMENT_ORDER", targetId, previousStatus, newStatus, reason, details);
+    }
+
+    public void audit(String requestId, String action, String targetType, Long targetId,
+                      String previousStatus, String newStatus, String reason, Object details) {
+        mapper.insertAudit(requestId, access.userId(), action, targetType, targetId,
                 previousStatus, newStatus, reason,
                 details == null ? null : writeJson(details), LocalDateTime.now());
     }

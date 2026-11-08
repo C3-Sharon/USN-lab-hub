@@ -260,6 +260,228 @@
         SELECT COUNT(*) FROM lab_procurement_receipt WHERE order_id=#{orderId} AND status='CONFIRMED'
     </select>
 
+    <insert id="insertReceipt" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_procurement_receipt(
+            receipt_no,order_id,status,received_at,note,version,
+            created_by,create_time,updated_by,update_time,active_draft_slot
+        ) VALUES(#{receiptNo},#{orderId},'DRAFT',#{receivedAt},#{note},1,
+                 #{createdBy},#{createTime},#{updatedBy},#{updateTime},1)
+    </insert>
+
+    <insert id="insertReceiptLine">
+        INSERT INTO lab_procurement_receipt_line(
+            receipt_id,order_line_id,component_id,quantity,unit,supplier_lot_no,
+            production_date,expiry_date,location_note,quality_note,version
+        ) VALUES(#{receiptId},#{line.orderLineId},#{line.componentId},#{line.quantity},#{line.unit},
+                 #{line.supplierLotNo},#{line.productionDate},#{line.expiryDate},
+                 #{line.locationNote},#{line.qualityNote},1)
+    </insert>
+
+    <sql id="receiptRecordColumns">
+        id,receipt_no AS receiptNo,order_id AS orderId,status,received_at AS receivedAt,
+        receiver_id AS receiverId,receiver_name AS receiverName,note,
+        confirmed_at AS confirmedAt,canceled_at AS canceledAt,version,
+        created_by AS createdBy,create_time AS createTime,updated_by AS updatedBy,update_time AS updateTime
+    </sql>
+
+    <select id="selectReceipt" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementReceiptRecord">
+        SELECT <include refid="receiptRecordColumns"/> FROM lab_procurement_receipt WHERE id=#{id}
+    </select>
+
+    <select id="selectReceiptForUpdate" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementReceiptRecord">
+        SELECT <include refid="receiptRecordColumns"/> FROM lab_procurement_receipt WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectReceiptView" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementReceiptVO">
+        SELECT r.id,r.receipt_no AS receiptNo,r.order_id AS orderId,o.purchase_no AS purchaseNo,
+               r.status,r.received_at AS receivedAt,r.receiver_id AS receiverId,
+               r.receiver_name AS receiverName,r.note,r.confirmed_at AS confirmedAt,
+               r.canceled_at AS canceledAt,r.version,o.version AS orderVersion,
+               r.create_time AS createTime,r.update_time AS updateTime
+        FROM lab_procurement_receipt r
+        INNER JOIN lab_procurement_order o ON o.id=r.order_id
+        WHERE r.id=#{id}
+    </select>
+
+    <select id="selectReceiptLineViews" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementReceiptLineVO">
+        SELECT rl.id,rl.order_line_id AS orderLineId,rl.component_id AS componentId,
+               ol.component_name AS componentName,rl.quantity,rl.unit,
+               rl.supplier_lot_no AS supplierLotNo,rl.production_date AS productionDate,
+               rl.expiry_date AS expiryDate,rl.location_note AS locationNote,
+               rl.quality_note AS qualityNote,rl.version
+        FROM lab_procurement_receipt_line rl
+        INNER JOIN lab_procurement_order_line ol ON ol.id=rl.order_line_id
+        WHERE rl.receipt_id=#{receiptId}
+        ORDER BY rl.id ASC
+    </select>
+
+    <sql id="receiptLineColumns">
+        id,receipt_id AS receiptId,order_line_id AS orderLineId,component_id AS componentId,
+        quantity,unit,supplier_lot_no AS supplierLotNo,production_date AS productionDate,
+        expiry_date AS expiryDate,location_note AS locationNote,quality_note AS qualityNote,version
+    </sql>
+
+    <select id="selectReceiptLines" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementReceiptLineRecord">
+        SELECT <include refid="receiptLineColumns"/> FROM lab_procurement_receipt_line
+        WHERE receipt_id=#{receiptId} ORDER BY id ASC
+    </select>
+
+    <select id="selectReceiptLinesForUpdate" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementReceiptLineRecord">
+        SELECT <include refid="receiptLineColumns"/> FROM lab_procurement_receipt_line
+        WHERE receipt_id=#{receiptId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectReceipts" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementReceiptVO">
+        SELECT r.id,r.receipt_no AS receiptNo,r.order_id AS orderId,o.purchase_no AS purchaseNo,
+               r.status,r.received_at AS receivedAt,r.receiver_id AS receiverId,
+               r.receiver_name AS receiverName,r.note,r.confirmed_at AS confirmedAt,
+               r.canceled_at AS canceledAt,r.version,o.version AS orderVersion,
+               r.create_time AS createTime,r.update_time AS updateTime
+        FROM lab_procurement_receipt r
+        INNER JOIN lab_procurement_order o ON o.id=r.order_id
+        WHERE r.order_id=#{orderId}
+        ORDER BY r.create_time DESC,r.id DESC
+    </select>
+
+    <update id="updateReceiptDraft">
+        UPDATE lab_procurement_receipt
+        SET received_at=#{receivedAt},note=#{note},version=version+1,
+            updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <delete id="deleteReceiptLines">
+        DELETE FROM lab_procurement_receipt_line WHERE receipt_id=#{receiptId}
+    </delete>
+
+    <update id="touchOrderVersion">
+        UPDATE lab_procurement_order
+        SET version=version+1,updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{status}
+    </update>
+
+    <update id="cancelReceipt">
+        UPDATE lab_procurement_receipt
+        SET status='CANCELED',active_draft_slot=NULL,canceled_at=#{now},
+            version=version+1,updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <select id="selectOrderLinesForUpdate" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementOrderLineVO">
+        SELECT id,line_no AS lineNo,component_id AS componentId,component_name AS componentName,
+               manufacturer_name AS manufacturerName,mpn,
+               component_spec_snapshot_id AS componentSpecSnapshotId,spec_version AS specVersion,
+               unit,ordered_quantity AS orderedQuantity,unit_price AS unitPrice,line_subtotal AS lineSubtotal,
+               allocated_net_amount AS allocatedNetAmount,effective_unit_cost AS effectiveUnitCost,
+               received_quantity AS receivedQuantity,canceled_quantity AS canceledQuantity,
+               (ordered_quantity-received_quantity-canceled_quantity) AS remainingQuantity,version
+        FROM lab_procurement_order_line
+        WHERE order_id=#{orderId} AND id IN
+        <foreach collection="lineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <insert id="upsertInventoryBalance">
+        INSERT INTO lab_component_inventory_balance(component_id,on_hand_quantity,unit,version,update_time)
+        VALUES(#{componentId},0.000,#{unit},1,#{now})
+        ON DUPLICATE KEY UPDATE component_id=component_id
+    </insert>
+
+    <select id="selectInventoryBalancesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.procurement.InventoryBalanceRecord">
+        SELECT component_id AS componentId,on_hand_quantity AS onHandQuantity,unit,version,update_time AS updateTime
+        FROM lab_component_inventory_balance WHERE component_id IN
+        <foreach collection="componentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY component_id ASC FOR UPDATE
+    </select>
+
+    <insert id="insertInventoryBatch" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_batch(
+            batch_no,component_id,source_receipt_line_id,initial_quantity,current_quantity,
+            unit,unit_cost,supplier_lot_no,production_date,expiry_date,location_note,quality_note,
+            status,created_by,create_time
+        ) VALUES(#{batchNo},#{componentId},#{sourceReceiptLineId},#{quantity},#{quantity},
+                 #{unit},#{unitCost},#{supplierLotNo},#{productionDate},#{expiryDate},
+                 #{locationNote},#{qualityNote},'AVAILABLE',#{createdBy},#{createTime})
+    </insert>
+
+    <update id="updateInventoryBalance">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity+#{quantity},version=version+1,update_time=#{now}
+        WHERE component_id=#{componentId}
+    </update>
+
+    <insert id="insertInventoryMovement" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_movement(
+            movement_no,movement_type,component_id,batch_id,source_type,source_id,
+            quantity_delta,balance_before,balance_after,unit,unit_cost,
+            operator_id,occurred_at,request_id
+        ) VALUES(#{movementNo},'PROCUREMENT_RECEIPT_IN',#{componentId},#{batchId},'RECEIPT_LINE',#{sourceId},
+                 #{quantityDelta},#{balanceBefore},#{balanceAfter},#{unit},#{unitCost},
+                 #{operatorId},#{occurredAt},#{requestId})
+    </insert>
+
+    <update id="updateOrderLineReceived">
+        UPDATE lab_procurement_order_line
+        SET received_quantity=received_quantity+#{quantity},version=version+1
+        WHERE id=#{id} AND version=#{version}
+          AND received_quantity+canceled_quantity+#{quantity} &lt;= ordered_quantity
+    </update>
+
+    <select id="countOrderLinesWithRemaining" resultType="int">
+        SELECT COUNT(*) FROM lab_procurement_order_line
+        WHERE order_id=#{orderId} AND ordered_quantity-received_quantity-canceled_quantity > 0
+    </select>
+
+    <update id="confirmReceipt">
+        UPDATE lab_procurement_receipt
+        SET status='CONFIRMED',active_draft_slot=NULL,receiver_id=#{receiverId},receiver_name=#{receiverName},
+            confirmed_at=#{now},version=version+1,updated_by=#{receiverId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <update id="updateOrderReceiptStatus">
+        UPDATE lab_procurement_order
+        SET status=#{toStatus},version=version+1,updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{fromStatus}
+    </update>
+
+    <select id="selectInventoryBalance" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryBalanceVO">
+        SELECT c.id AS componentId,c.name AS componentName,c.status,
+               COALESCE(b.on_hand_quantity,0.000) AS onHandQuantity,c.base_unit AS unit,
+               COALESCE(b.version,0) AS version,b.update_time AS updateTime
+        FROM lab_component c LEFT JOIN lab_component_inventory_balance b ON b.component_id=c.id
+        WHERE c.id=#{componentId}
+    </select>
+
+    <select id="countInventoryBatches" resultType="long">
+        SELECT COUNT(*) FROM lab_inventory_batch WHERE component_id=#{componentId}
+    </select>
+
+    <select id="selectInventoryBatches" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryBatchVO">
+        SELECT id,batch_no AS batchNo,component_id AS componentId,source_receipt_line_id AS sourceReceiptLineId,
+               initial_quantity AS initialQuantity,current_quantity AS currentQuantity,unit,unit_cost AS unitCost,
+               supplier_lot_no AS supplierLotNo,production_date AS productionDate,expiry_date AS expiryDate,
+               location_note AS locationNote,quality_note AS qualityNote,status,create_time AS createTime
+        FROM lab_inventory_batch WHERE component_id=#{componentId}
+        ORDER BY create_time DESC,id DESC LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countInventoryMovements" resultType="long">
+        SELECT COUNT(*) FROM lab_inventory_movement
+        <if test="componentId != null">WHERE component_id=#{componentId}</if>
+    </select>
+
+    <select id="selectInventoryMovements" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryMovementVO">
+        SELECT id,movement_no AS movementNo,movement_type AS movementType,component_id AS componentId,
+               batch_id AS batchId,source_id AS sourceId,quantity_delta AS quantityDelta,
+               balance_before AS balanceBefore,balance_after AS balanceAfter,unit,unit_cost AS unitCost,
+               operator_id AS operatorId,occurred_at AS occurredAt
+        FROM lab_inventory_movement
+        <if test="componentId != null">WHERE component_id=#{componentId}</if>
+        ORDER BY occurred_at DESC,id DESC LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
     <sql id="visibilityFilter">
         <if test="!viewAll">
             AND (
