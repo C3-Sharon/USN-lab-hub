@@ -99,6 +99,7 @@ class ProcurementInventoryMigrationTest {
         assertEquals(1, primaryKeyColumnCount(jdbc, "LAB_COMPONENT_INVENTORY_BALANCE", "COMPONENT_ID"));
         assertEquals(1, tableCount(jdbc, "LAB_REQUEST_IDEMPOTENCY"),
                 "existing shared idempotency table should be reused");
+        assertEquals(128, columnLength(jdbc, "LAB_REQUEST_IDEMPOTENCY", "IDEMPOTENCY_KEY"));
     }
 
     @Test
@@ -150,6 +151,7 @@ class ProcurementInventoryMigrationTest {
         for (String table : V13_TABLES) {
             assertEquals(1, tableCount(jdbc, table), table + " should exist on MySQL");
         }
+        assertEquals(128, columnLength(jdbc, "LAB_REQUEST_IDEMPOTENCY", "IDEMPOTENCY_KEY"));
         assertEquals(pm001Before, pm001Fact(jdbc));
         assertEquals(componentCountBefore,
                 jdbc.queryForObject("SELECT COUNT(*) FROM lab_component", Integer.class));
@@ -262,7 +264,7 @@ class ProcurementInventoryMigrationTest {
     private int tableCount(JdbcTemplate jdbc, String tableName) {
         return jdbc.queryForObject("""
                 SELECT COUNT(*) FROM information_schema.tables
-                WHERE UPPER(table_name)=UPPER(?)
+                WHERE UPPER(table_schema)=UPPER(SCHEMA()) AND UPPER(table_name)=UPPER(?)
                 """, Integer.class, tableName);
     }
 
@@ -285,6 +287,14 @@ class ProcurementInventoryMigrationTest {
                  AND tc.table_name=kcu.table_name
                 WHERE UPPER(tc.table_name)=UPPER(?) AND UPPER(kcu.column_name)=UPPER(?)
                   AND tc.constraint_type='PRIMARY KEY'
+                """, Integer.class, tableName, columnName);
+    }
+
+    private int columnLength(JdbcTemplate jdbc, String tableName, String columnName) {
+        return jdbc.queryForObject("""
+                SELECT character_maximum_length FROM information_schema.columns
+                WHERE UPPER(table_schema)=UPPER(SCHEMA())
+                  AND UPPER(table_name)=UPPER(?) AND UPPER(column_name)=UPPER(?)
                 """, Integer.class, tableName, columnName);
     }
 

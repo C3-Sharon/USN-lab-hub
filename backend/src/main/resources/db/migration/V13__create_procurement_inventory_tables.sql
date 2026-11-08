@@ -5,6 +5,9 @@ ALTER TABLE `lab_media_object`
     ADD CONSTRAINT `ck_media_owner_type`
         CHECK (`owner_type` IN ('COMPONENT', 'PROCUREMENT_ORDER', 'PROCUREMENT_RECEIPT'));
 
+ALTER TABLE `lab_request_idempotency`
+    MODIFY COLUMN `idempotency_key` varchar(128) NOT NULL;
+
 CREATE TABLE `lab_procurement_policy_version` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `policy_version` int NOT NULL,

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ProcurementMapper">
+
+    <sql id="orderRecordColumns">
+        id, purchase_no AS purchaseNo, title, requester_id AS requesterId,
+        requester_name AS requesterName, buyer_id AS buyerId, buyer_name AS buyerName,
+        project_id AS projectId, project_name AS projectName, funding_source AS fundingSource,
+        supplier_name AS supplierName, platform_type AS platformType,
+        platform_order_no AS platformOrderNo, currency,
+        item_subtotal AS itemSubtotal, shipping_amount AS shippingAmount,
+        discount_amount AS discountAmount, payable_amount AS payableAmount,
+        actual_paid_amount AS actualPaidAmount, payment_difference_note AS paymentDifferenceNote,
+        status, approval_required AS approvalRequired,
+        approval_policy_version AS approvalPolicyVersion,
+        approval_reasons_json AS approvalReasonsJson,
+        ordered_at AS orderedAt, completed_at AS completedAt, close_reason AS closeReason,
+        version, created_by AS createdBy, create_time AS createTime,
+        updated_by AS updatedBy, update_time AS updateTime
+    </sql>
+
+    <sql id="orderViewColumns">
+        o.id, o.purchase_no AS purchaseNo, o.title,
+        o.requester_id AS requesterId, o.requester_name AS requesterName,
+        o.buyer_id AS buyerId, o.buyer_name AS buyerName,
+        o.project_id AS projectId, o.project_name AS projectName,
+        o.funding_source AS fundingSource, o.supplier_name AS supplierName,
+        o.platform_type AS platformType, o.platform_order_no AS platformOrderNo,
+        o.currency, o.item_subtotal AS itemSubtotal,
+        o.shipping_amount AS shippingAmount, o.discount_amount AS discountAmount,
+        o.payable_amount AS payableAmount, o.actual_paid_amount AS actualPaidAmount,
+        o.payment_difference_note AS paymentDifferenceNote, o.status,
+        o.approval_required AS approvalRequired,
+        o.approval_policy_version AS approvalPolicyVersion,
+        o.ordered_at AS orderedAt, o.completed_at AS completedAt,
+        o.close_reason AS closeReason, o.version,
+        o.create_time AS createTime, o.update_time AS updateTime
+    </sql>
+
+    <insert id="insertOrder" parameterType="com.usn.labhub.user.domain.entity.procurement.ProcurementOrderRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_procurement_order(
+            purchase_no, title, requester_id, requester_name,
+            project_id, project_name, funding_source, currency,
+            item_subtotal, shipping_amount, discount_amount, payable_amount,
+            status, version, created_by, create_time, updated_by, update_time
+        ) VALUES(
+            #{purchaseNo}, #{title}, #{requesterId}, #{requesterName},
+            #{projectId}, #{projectName}, #{fundingSource}, 'CNY',
+            #{itemSubtotal}, #{shippingAmount}, #{discountAmount}, #{payableAmount},
+            'DRAFT', 1, #{createdBy}, #{createTime}, #{updatedBy}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateDraftOrder" parameterType="com.usn.labhub.user.domain.entity.procurement.ProcurementOrderRecord">
+        UPDATE lab_procurement_order
+        SET title=#{title}, project_id=#{projectId}, project_name=#{projectName},
+            funding_source=#{fundingSource}, item_subtotal=#{itemSubtotal},
+            shipping_amount=#{shippingAmount}, discount_amount=#{discountAmount},
+            payable_amount=#{payableAmount}, version=version+1,
+            updated_by=#{updatedBy}, update_time=#{updateTime}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <insert id="insertLine">
+        INSERT INTO lab_procurement_order_line(
+            order_id, line_no, component_id, component_name, manufacturer_name, mpn,
+            component_spec_snapshot_id, spec_version, unit,
+            ordered_quantity, unit_price, line_subtotal,
+            received_quantity, canceled_quantity, version
+        ) VALUES(
+            #{orderId}, #{lineNo}, #{component.id}, #{component.name},
+            #{component.manufacturerName}, #{component.mpn},
+            #{component.currentSpecSnapshotId}, #{component.specVersion}, #{component.baseUnit},
+            #{quantity}, #{unitPrice}, #{lineSubtotal}, 0.000, 0.000, 1
+        )
+    </insert>
+
+    <delete id="deleteLines">
+        DELETE FROM lab_procurement_order_line WHERE order_id=#{orderId}
+    </delete>
+
+    <select id="selectOrder" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementOrderRecord">
+        SELECT <include refid="orderRecordColumns"/>
+        FROM lab_procurement_order WHERE id=#{id}
+    </select>
+
+    <select id="selectOrderView" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementOrderVO">
+        SELECT <include refid="orderViewColumns"/>
+        FROM lab_procurement_order o WHERE o.id=#{id}
+    </select>
+
+    <select id="selectOrderLines" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementOrderLineVO">
+        SELECT id, line_no AS lineNo, component_id AS componentId,
+               component_name AS componentName, manufacturer_name AS manufacturerName, mpn,
+               component_spec_snapshot_id AS componentSpecSnapshotId, spec_version AS specVersion,
+               unit, ordered_quantity AS orderedQuantity, unit_price AS unitPrice,
+               line_subtotal AS lineSubtotal, allocated_net_amount AS allocatedNetAmount,
+               effective_unit_cost AS effectiveUnitCost,
+               received_quantity AS receivedQuantity, canceled_quantity AS canceledQuantity,
+               (ordered_quantity-received_quantity-canceled_quantity) AS remainingQuantity,
+               version
+        FROM lab_procurement_order_line
+        WHERE order_id=#{orderId}
+        ORDER BY line_no ASC, id ASC
+    </select>
+
+    <select id="selectComponentForPurchase"
+            resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementComponentRecord">
+        SELECT c.id, c.name, m.name AS manufacturerName, c.mpn,
+               c.base_unit AS baseUnit, c.status,
+               c.current_spec_snapshot_id AS currentSpecSnapshotId, c.spec_version AS specVersion
+        FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        WHERE c.id=#{id}
+    </select>
+
+    <sql id="visibilityFilter">
+        <if test="!viewAll">
+            AND (
+                o.requester_id=#{userId} OR o.buyer_id=#{userId}
+                OR EXISTS(
+                    SELECT 1 FROM lab_project_member pm
+                    WHERE pm.project_id=o.project_id AND pm.user_id=#{userId}
+                      AND pm.project_role IN ('OWNER','MAINTAINER')
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="orderFilters">
+        <include refid="visibilityFilter"/>
+        <if test="status != null">AND o.status=#{status}</if>
+        <if test="projectId != null">AND o.project_id=#{projectId}</if>
+        <if test="requesterId != null">AND o.requester_id=#{requesterId}</if>
+        <if test="supplierKeyword != null">
+            AND o.supplier_name LIKE CONCAT('%', #{supplierKeyword}, '%')
+        </if>
+        <if test="keyword != null">
+            AND (o.purchase_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR o.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR o.platform_order_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="countOrders" resultType="long">
+        SELECT COUNT(*) FROM lab_procurement_order o
+        WHERE 1=1 <include refid="orderFilters"/>
+    </select>
+
+    <select id="selectOrders" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementOrderVO">
+        SELECT <include refid="orderViewColumns"/>
+        FROM lab_procurement_order o
+        WHERE 1=1 <include refid="orderFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, o.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <insert id="claimIdempotency">
+        INSERT IGNORE INTO lab_request_idempotency(
+            actor_id, operation, idempotency_key, request_digest, status, create_time, update_time
+        ) VALUES(#{actorId}, #{operation}, #{key}, #{digest}, 'PROCESSING', #{now}, #{now})
+    </insert>
+
+    <select id="selectIdempotency" resultType="com.usn.labhub.user.domain.entity.experiment.IdempotencyRow">
+        SELECT request_digest AS requestDigest, status, response_json AS responseJson
+        FROM lab_request_idempotency
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </select>
+
+    <update id="completeIdempotency">
+        UPDATE lab_request_idempotency
+        SET status='COMPLETED', response_code=200, response_json=#{responseJson}, update_time=#{now}
+        WHERE actor_id=#{actorId} AND operation=#{operation} AND idempotency_key=#{key}
+    </update>
+
+    <insert id="insertAudit">
+        INSERT INTO lab_procurement_audit_log(
+            request_id, actor_id, action, target_type, target_id,
+            previous_status, new_status, details_json, create_time
+        ) VALUES(#{requestId}, #{actorId}, #{action}, #{targetType}, #{targetId},
+                 #{previousStatus}, #{newStatus}, #{detailsJson}, #{now})
+    </insert>
+</mapper>
