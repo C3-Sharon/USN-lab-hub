@@ -4,9 +4,14 @@ import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.procurement.ProcurementOrderCreateDTO;
 import com.usn.labhub.user.domain.dto.procurement.ProcurementOrderUpdateDTO;
+import com.usn.labhub.user.domain.dto.procurement.ProcurementApprovalDTO;
+import com.usn.labhub.user.domain.dto.procurement.ProcurementCancelDTO;
+import com.usn.labhub.user.domain.dto.procurement.ProcurementMarkOrderedDTO;
+import com.usn.labhub.user.domain.dto.procurement.ProcurementOrderCommandDTO;
 import com.usn.labhub.user.domain.vo.procurement.ProcurementOrderPageVO;
 import com.usn.labhub.user.domain.vo.procurement.ProcurementOrderVO;
 import com.usn.labhub.user.service.ProcurementOrderService;
+import com.usn.labhub.user.service.ProcurementWorkflowService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +30,12 @@ import java.util.Map;
 @RequireRoles({"SYSTEM_ADMIN", "TEACHER", "STOCK_KEEPER", "MEMBER"})
 public class ProcurementOrderController {
     private final ProcurementOrderService service;
+    private final ProcurementWorkflowService workflowService;
 
-    public ProcurementOrderController(ProcurementOrderService service) {
+    public ProcurementOrderController(ProcurementOrderService service,
+                                      ProcurementWorkflowService workflowService) {
         this.service = service;
+        this.workflowService = workflowService;
     }
 
     @PostMapping
@@ -61,5 +69,54 @@ public class ProcurementOrderController {
     public Result<ProcurementOrderVO> update(@PathVariable Long id,
                                              @Valid @RequestBody ProcurementOrderUpdateDTO request) {
         return Result.success(service.update(id, request));
+    }
+
+    @PostMapping("/{id}/submit")
+    public Result<Map<String, Object>> submit(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String key,
+                                              @RequestBody ProcurementOrderCommandDTO request) {
+        return Result.success(workflowService.submit(id, key, request));
+    }
+
+    @PostMapping("/{id}/approve")
+    public Result<Map<String, Object>> approve(@PathVariable Long id,
+                                               @RequestHeader("Idempotency-Key") String key,
+                                               @RequestBody ProcurementApprovalDTO request) {
+        return Result.success(workflowService.approve(id, key, request));
+    }
+
+    @PostMapping("/{id}/reject")
+    public Result<Map<String, Object>> reject(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String key,
+                                              @RequestBody ProcurementApprovalDTO request) {
+        return Result.success(workflowService.reject(id, key, request));
+    }
+
+    @PostMapping("/{id}/mark-ordered")
+    public Result<Map<String, Object>> markOrdered(@PathVariable Long id,
+                                                   @RequestHeader("Idempotency-Key") String key,
+                                                   @RequestBody ProcurementMarkOrderedDTO request) {
+        return Result.success(workflowService.markOrdered(id, key, request));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public Result<Map<String, Object>> cancel(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String key,
+                                              @RequestBody ProcurementCancelDTO request) {
+        return Result.success(workflowService.cancel(id, key, request));
+    }
+
+    @PostMapping("/{id}/cancel-remaining")
+    public Result<Map<String, Object>> cancelRemaining(@PathVariable Long id,
+                                                       @RequestHeader("Idempotency-Key") String key,
+                                                       @RequestBody ProcurementCancelDTO request) {
+        return Result.success(workflowService.cancelRemaining(id, key, request));
+    }
+
+    @PostMapping("/{id}/complete")
+    public Result<Map<String, Object>> complete(@PathVariable Long id,
+                                                @RequestHeader("Idempotency-Key") String key,
+                                                @RequestBody ProcurementOrderCommandDTO request) {
+        return Result.success(workflowService.complete(id, key, request));
     }
 }

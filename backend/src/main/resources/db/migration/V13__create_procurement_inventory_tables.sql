@@ -62,6 +62,7 @@ CREATE TABLE `lab_procurement_order` (
     `approval_required` tinyint(1) DEFAULT NULL,
     `approval_policy_version` int DEFAULT NULL,
     `approval_reasons_json` text DEFAULT NULL,
+    `approval_trigger_snapshot_json` text DEFAULT NULL,
     `ordered_at` datetime DEFAULT NULL,
     `completed_at` datetime DEFAULT NULL,
     `close_reason` varchar(500) DEFAULT NULL,

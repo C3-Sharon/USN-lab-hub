@@ -63,6 +63,55 @@ public class ProcurementAccessPolicy {
         throw ProcurementApiException.operationDenied();
     }
 
+    public void requireSubmitOrCancel(ProcurementOrderRecord order) {
+        if (isSystemAdmin() || userId().equals(order.getRequesterId())) {
+            return;
+        }
+        throw ProcurementApiException.operationDenied();
+    }
+
+    public void requireApprove(ProcurementOrderRecord order) {
+        Set<String> roles = UserContext.getRoles();
+        if (userId().equals(order.getRequesterId())) {
+            throw ProcurementApiException.selfApproval();
+        }
+        if (roles.contains("SYSTEM_ADMIN") || roles.contains("TEACHER")) {
+            return;
+        }
+        throw ProcurementApiException.approvalDenied();
+    }
+
+    public void requireOrderManagement() {
+        Set<String> roles = UserContext.getRoles();
+        if (roles.contains("SYSTEM_ADMIN") || roles.contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw ProcurementApiException.operationDenied();
+    }
+
+    public void requireCancel(ProcurementOrderRecord order) {
+        Set<String> roles = UserContext.getRoles();
+        boolean requester = userId().equals(order.getRequesterId());
+        boolean admin = roles.contains("SYSTEM_ADMIN");
+        boolean stockKeeper = roles.contains("STOCK_KEEPER");
+        if (!Set.of("DRAFT", "PENDING_APPROVAL", "APPROVED", "ORDERED").contains(order.getStatus())
+                && (requester || admin || stockKeeper)) {
+            return;
+        }
+        if ((Set.of("DRAFT", "PENDING_APPROVAL").contains(order.getStatus()) && (requester || admin))
+                || ("APPROVED".equals(order.getStatus()) && (requester || admin || stockKeeper))
+                || ("ORDERED".equals(order.getStatus()) && (admin || stockKeeper))) {
+            return;
+        }
+        throw ProcurementApiException.operationDenied();
+    }
+
+    public void requirePolicyManagement() {
+        if (!isSystemAdmin()) {
+            throw ProcurementApiException.policyDenied();
+        }
+    }
+
     public Long userId() {
         Long userId = UserContext.getUserId();
         if (userId == null) {
@@ -71,7 +120,7 @@ public class ProcurementAccessPolicy {
         return userId;
     }
 
-    private boolean isSystemAdmin() {
+    public boolean isSystemAdmin() {
         return UserContext.getRoles().contains("SYSTEM_ADMIN");
     }
 }

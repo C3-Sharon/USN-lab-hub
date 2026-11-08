@@ -100,6 +100,7 @@ class ProcurementInventoryMigrationTest {
         assertEquals(1, tableCount(jdbc, "LAB_REQUEST_IDEMPOTENCY"),
                 "existing shared idempotency table should be reused");
         assertEquals(128, columnLength(jdbc, "LAB_REQUEST_IDEMPOTENCY", "IDEMPOTENCY_KEY"));
+        assertEquals(1, columnCount(jdbc, "LAB_PROCUREMENT_ORDER", "APPROVAL_TRIGGER_SNAPSHOT_JSON"));
     }
 
     @Test
@@ -152,6 +153,7 @@ class ProcurementInventoryMigrationTest {
             assertEquals(1, tableCount(jdbc, table), table + " should exist on MySQL");
         }
         assertEquals(128, columnLength(jdbc, "LAB_REQUEST_IDEMPOTENCY", "IDEMPOTENCY_KEY"));
+        assertEquals(1, columnCount(jdbc, "LAB_PROCUREMENT_ORDER", "APPROVAL_TRIGGER_SNAPSHOT_JSON"));
         assertEquals(pm001Before, pm001Fact(jdbc));
         assertEquals(componentCountBefore,
                 jdbc.queryForObject("SELECT COUNT(*) FROM lab_component", Integer.class));
@@ -293,6 +295,14 @@ class ProcurementInventoryMigrationTest {
     private int columnLength(JdbcTemplate jdbc, String tableName, String columnName) {
         return jdbc.queryForObject("""
                 SELECT character_maximum_length FROM information_schema.columns
+                WHERE UPPER(table_schema)=UPPER(SCHEMA())
+                  AND UPPER(table_name)=UPPER(?) AND UPPER(column_name)=UPPER(?)
+                """, Integer.class, tableName, columnName);
+    }
+
+    private int columnCount(JdbcTemplate jdbc, String tableName, String columnName) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
                 WHERE UPPER(table_schema)=UPPER(SCHEMA())
                   AND UPPER(table_name)=UPPER(?) AND UPPER(column_name)=UPPER(?)
                 """, Integer.class, tableName, columnName);

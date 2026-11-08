@@ -31,6 +31,7 @@ public class ProcurementOrderRecord {
     private Boolean approvalRequired;
     private Integer approvalPolicyVersion;
     private String approvalReasonsJson;
+    private String approvalTriggerSnapshotJson;
     private LocalDateTime orderedAt;
     private LocalDateTime completedAt;
     private String closeReason;

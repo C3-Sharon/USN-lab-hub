@@ -60,8 +60,18 @@ public class ProcurementSupport {
     }
 
     public void audit(String requestId, String action, Long targetId, Object details) {
+        audit(requestId, action, targetId, "DRAFT", "DRAFT", null, details);
+    }
+
+    public void audit(String requestId, String action, Long targetId, String previousStatus,
+                      String newStatus, String reason, Object details) {
         mapper.insertAudit(requestId, access.userId(), action, "PROCUREMENT_ORDER", targetId,
-                "DRAFT", "DRAFT", details == null ? null : writeJson(details), LocalDateTime.now());
+                previousStatus, newStatus, reason,
+                details == null ? null : writeJson(details), LocalDateTime.now());
+    }
+
+    public String json(Object value) {
+        return writeJson(value);
     }
 
     private String digest(Object value) {

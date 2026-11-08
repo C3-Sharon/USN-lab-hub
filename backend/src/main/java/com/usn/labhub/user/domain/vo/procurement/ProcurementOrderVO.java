@@ -1,5 +1,6 @@
 package com.usn.labhub.user.domain.vo.procurement;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -32,6 +33,9 @@ public class ProcurementOrderVO {
     private Boolean approvalRequired;
     private Integer approvalPolicyVersion;
     private List<String> approvalReasons;
+    @JsonIgnore
+    private String approvalReasonsJson;
+    private List<ProcurementApprovalVO> approvalRecords;
     private LocalDateTime orderedAt;
     private LocalDateTime completedAt;
     private String closeReason;

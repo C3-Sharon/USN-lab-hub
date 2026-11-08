@@ -1,5 +1,8 @@
 package com.usn.labhub.user.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.usn.labhub.user.common.utils.UserContext;
 import com.usn.labhub.user.domain.dto.procurement.ProcurementOrderCreateDTO;
 import com.usn.labhub.user.domain.dto.procurement.ProcurementOrderLineDTO;
@@ -45,13 +48,16 @@ public class ProcurementOrderService {
     private final SysUserMapper userMapper;
     private final ProcurementAccessPolicy access;
     private final ProcurementSupport support;
+    private final ObjectMapper objectMapper;
 
     public ProcurementOrderService(ProcurementMapper mapper, SysUserMapper userMapper,
-                                   ProcurementAccessPolicy access, ProcurementSupport support) {
+                                   ProcurementAccessPolicy access, ProcurementSupport support,
+                                   ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.userMapper = userMapper;
         this.access = access;
         this.support = support;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -213,13 +219,20 @@ public class ProcurementOrderService {
             throw ProcurementApiException.orderNotFound();
         }
         view.setLines(mapper.selectOrderLines(id));
+        view.setApprovalRecords(mapper.selectApprovals(id));
         decorateOrder(view);
         return view;
     }
 
     private void decorateOrder(ProcurementOrderVO view) {
-        if (view.getApprovalReasons() == null) {
+        if (!StringUtils.hasText(view.getApprovalReasonsJson())) {
             view.setApprovalReasons(List.of());
+            return;
+        }
+        try {
+            view.setApprovalReasons(objectMapper.readValue(view.getApprovalReasonsJson(), new TypeReference<>() { }));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot parse procurement approval reasons", exception);
         }
     }
 

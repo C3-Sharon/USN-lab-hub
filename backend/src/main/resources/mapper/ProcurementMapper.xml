@@ -14,6 +14,7 @@
         status, approval_required AS approvalRequired,
         approval_policy_version AS approvalPolicyVersion,
         approval_reasons_json AS approvalReasonsJson,
+        approval_trigger_snapshot_json AS approvalTriggerSnapshotJson,
         ordered_at AS orderedAt, completed_at AS completedAt, close_reason AS closeReason,
         version, created_by AS createdBy, create_time AS createTime,
         updated_by AS updatedBy, update_time AS updateTime
@@ -32,6 +33,7 @@
         o.payment_difference_note AS paymentDifferenceNote, o.status,
         o.approval_required AS approvalRequired,
         o.approval_policy_version AS approvalPolicyVersion,
+        o.approval_reasons_json AS approvalReasonsJson,
         o.ordered_at AS orderedAt, o.completed_at AS completedAt,
         o.close_reason AS closeReason, o.version,
         o.create_time AS createTime, o.update_time AS updateTime
@@ -85,6 +87,11 @@
         FROM lab_procurement_order WHERE id=#{id}
     </select>
 
+    <select id="selectOrderForUpdate" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementOrderRecord">
+        SELECT <include refid="orderRecordColumns"/>
+        FROM lab_procurement_order WHERE id=#{id} FOR UPDATE
+    </select>
+
     <select id="selectOrderView" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementOrderVO">
         SELECT <include refid="orderViewColumns"/>
         FROM lab_procurement_order o WHERE o.id=#{id}
@@ -105,6 +112,15 @@
         ORDER BY line_no ASC, id ASC
     </select>
 
+    <select id="selectApprovals" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementApprovalVO">
+        SELECT a.id,a.decision,a.policy_version AS policyVersion,a.actor_type AS actorType,
+               a.decided_by AS decidedBy,u.username AS decidedByName,a.decided_at AS decidedAt,a.comment
+        FROM lab_procurement_approval_record a
+        LEFT JOIN sys_user u ON u.id=a.decided_by
+        WHERE a.order_id=#{orderId}
+        ORDER BY a.decided_at ASC,a.id ASC
+    </select>
+
     <select id="selectComponentForPurchase"
             resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementComponentRecord">
         SELECT c.id, c.name, m.name AS manufacturerName, c.mpn,
@@ -113,6 +129,135 @@
         FROM lab_component c
         INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
         WHERE c.id=#{id}
+    </select>
+
+    <select id="selectSubmitLines"
+            resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementSubmitLineRecord">
+        SELECT l.id, l.component_id AS componentId, c.name AS componentName,
+               m.name AS manufacturerName, c.mpn, c.status AS componentStatus,
+               c.current_spec_snapshot_id AS currentSpecSnapshotId, c.spec_version AS specVersion,
+               c.category_id AS categoryId, cat.path AS categoryPath,
+               l.unit_price AS unitPrice, l.ordered_quantity AS orderedQuantity,
+               l.line_subtotal AS lineSubtotal
+        FROM lab_procurement_order_line l
+        INNER JOIN lab_component c ON c.id=l.component_id
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        INNER JOIN lab_component_category cat ON cat.id=c.category_id
+        WHERE l.order_id=#{orderId}
+        ORDER BY l.id ASC
+    </select>
+
+    <update id="freezeSubmitLine">
+        UPDATE lab_procurement_order_line
+        SET component_name=#{componentName}, manufacturer_name=#{manufacturerName}, mpn=#{mpn},
+            component_spec_snapshot_id=#{currentSpecSnapshotId}, spec_version=#{specVersion}, version=version+1
+        WHERE id=#{id}
+    </update>
+
+    <sql id="policyColumns">
+        id, policy_version AS policyVersion, currency,
+        approval_threshold AS approvalThreshold,
+        valuable_unit_price_threshold AS valuableUnitPriceThreshold,
+        effective_at AS effectiveAt, created_by AS createdBy, create_time AS createTime
+    </sql>
+
+    <select id="selectCurrentPolicy"
+            resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementPolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_procurement_policy_version ORDER BY policy_version DESC LIMIT 1
+    </select>
+
+    <select id="selectCurrentPolicyForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementPolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_procurement_policy_version ORDER BY policy_version DESC LIMIT 1 FOR UPDATE
+    </select>
+
+    <select id="selectPolicyVersions"
+            resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementPolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_procurement_policy_version ORDER BY policy_version DESC
+    </select>
+
+    <select id="selectForcedCategoryIds" resultType="long">
+        SELECT category_id FROM lab_procurement_policy_forced_category
+        WHERE policy_id=#{policyId} ORDER BY category_id ASC
+    </select>
+
+    <select id="countActiveCategories" resultType="int">
+        SELECT COUNT(*) FROM lab_component_category
+        WHERE status='ACTIVE' AND id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <insert id="insertPolicy" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_procurement_policy_version(
+            policy_version,currency,approval_threshold,valuable_unit_price_threshold,
+            effective_at,created_by,create_time
+        ) VALUES(#{policyVersion},'CNY',#{approvalThreshold},#{valuableUnitPriceThreshold},
+                 #{effectiveAt},#{createdBy},#{createTime})
+    </insert>
+
+    <insert id="insertForcedCategory">
+        INSERT INTO lab_procurement_policy_forced_category(policy_id,category_id)
+        VALUES(#{policyId},#{categoryId})
+    </insert>
+
+    <update id="updateSubmittedOrder">
+        UPDATE lab_procurement_order
+        SET status=#{status}, approval_required=#{approvalRequired},
+            approval_policy_version=#{policyVersion}, approval_reasons_json=#{reasonsJson},
+            approval_trigger_snapshot_json=#{triggerSnapshotJson},
+            version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <insert id="insertApproval">
+        INSERT INTO lab_procurement_approval_record(
+            order_id,decision,policy_version,trigger_snapshot_json,actor_type,
+            decided_by,decided_at,comment,request_id
+        ) VALUES(#{orderId},#{decision},#{policyVersion},#{triggerSnapshotJson},#{actorType},
+                 #{decidedBy},#{now},#{comment},#{requestId})
+    </insert>
+
+    <select id="selectLatestManualApprover" resultType="long">
+        SELECT decided_by FROM lab_procurement_approval_record
+        WHERE order_id=#{orderId} AND decision='APPROVED' AND actor_type='USER'
+        ORDER BY decided_at DESC,id DESC LIMIT 1
+    </select>
+
+    <update id="updateDecisionState">
+        UPDATE lab_procurement_order
+        SET status=#{toStatus}, close_reason=#{closeReason}, completed_at=#{completedAt},
+            version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{fromStatus}
+    </update>
+
+    <update id="updateOrderedState">
+        UPDATE lab_procurement_order
+        SET status='ORDERED', buyer_id=#{buyerId}, buyer_name=#{buyerName},
+            supplier_name=#{supplierName}, platform_type=#{platformType},
+            platform_order_no=#{platformOrderNo}, normalized_platform_order_no=#{normalizedPlatformOrderNo},
+            actual_paid_amount=#{actualPaidAmount}, payment_difference_note=#{paymentDifferenceNote},
+            ordered_at=#{now}, version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='APPROVED'
+    </update>
+
+    <update id="updateLineAllocation">
+        UPDATE lab_procurement_order_line
+        SET allocated_net_amount=#{allocatedNetAmount}, effective_unit_cost=#{effectiveUnitCost},
+            version=version+1
+        WHERE id=#{id}
+    </update>
+
+    <update id="cancelRemainingLines">
+        UPDATE lab_procurement_order_line
+        SET canceled_quantity=ordered_quantity-received_quantity, version=version+1
+        WHERE order_id=#{orderId} AND ordered_quantity-received_quantity-canceled_quantity > 0
+    </update>
+
+    <select id="countConfirmedReceipts" resultType="int">
+        SELECT COUNT(*) FROM lab_procurement_receipt WHERE order_id=#{orderId} AND status='CONFIRMED'
     </select>
 
     <sql id="visibilityFilter">
@@ -177,8 +322,8 @@
     <insert id="insertAudit">
         INSERT INTO lab_procurement_audit_log(
             request_id, actor_id, action, target_type, target_id,
-            previous_status, new_status, details_json, create_time
+            previous_status, new_status, reason, details_json, create_time
         ) VALUES(#{requestId}, #{actorId}, #{action}, #{targetType}, #{targetId},
-                 #{previousStatus}, #{newStatus}, #{detailsJson}, #{now})
+                 #{previousStatus}, #{newStatus}, #{reason}, #{detailsJson}, #{now})
     </insert>
 </mapper>

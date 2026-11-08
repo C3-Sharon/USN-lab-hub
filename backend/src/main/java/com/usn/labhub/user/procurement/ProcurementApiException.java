@@ -48,6 +48,18 @@ public class ProcurementApiException extends RuntimeException {
         return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_OPERATION_DENIED", "无采购操作权限");
     }
 
+    public static ProcurementApiException approvalDenied() {
+        return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_APPROVAL_DENIED", "无采购审批权限");
+    }
+
+    public static ProcurementApiException selfApproval() {
+        return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_SELF_APPROVAL", "不能审批本人采购");
+    }
+
+    public static ProcurementApiException policyDenied() {
+        return new ProcurementApiException(HttpStatus.FORBIDDEN, "PROCUREMENT_POLICY_DENIED", "无采购策略管理权限");
+    }
+
     public static ProcurementApiException projectNotFound() {
         return new ProcurementApiException(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "项目不存在或不可见");
     }
@@ -59,7 +71,7 @@ public class ProcurementApiException extends RuntimeException {
 
     public static ProcurementApiException invalidTransition() {
         return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_INVALID_TRANSITION",
-                "当前采购单状态不允许编辑");
+                "当前采购单状态不允许该操作");
     }
 
     public static ProcurementApiException versionConflict(Integer currentVersion) {
@@ -69,5 +81,19 @@ public class ProcurementApiException extends RuntimeException {
 
     public static ProcurementApiException idempotencyReused() {
         return new ProcurementApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "幂等键已用于不同请求");
+    }
+
+    public static ProcurementApiException dutyConflict() {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_DUTY_CONFLICT", "采购职责分离冲突");
+    }
+
+    public static ProcurementApiException platformOrderDuplicate() {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_PLATFORM_ORDER_DUPLICATE",
+                "平台订单号已存在");
+    }
+
+    public static ProcurementApiException policyChanged(Integer currentVersion) {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_POLICY_CHANGED", "采购策略已更新",
+                Map.of("currentPolicyVersion", currentVersion));
     }
 }
