@@ -137,6 +137,12 @@ public interface ProcurementMapper {
                           @Param("status") String status, @Param("actorId") Long actorId,
                           @Param("now") LocalDateTime now);
 
+    int incrementOrderVersion(@Param("id") Long id, @Param("version") Integer version,
+                              @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int incrementReceiptVersion(@Param("id") Long id, @Param("version") Integer version,
+                                @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
     int cancelReceipt(@Param("id") Long id, @Param("version") Integer version,
                       @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
 

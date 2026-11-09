@@ -360,6 +360,18 @@
         WHERE id=#{id} AND version=#{version} AND status=#{status}
     </update>
 
+    <update id="incrementOrderVersion">
+        UPDATE lab_procurement_order
+        SET version=version+1,updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version}
+    </update>
+
+    <update id="incrementReceiptVersion">
+        UPDATE lab_procurement_receipt
+        SET version=version+1,updated_by=#{actorId},update_time=#{now}
+        WHERE id=#{id} AND version=#{version}
+    </update>
+
     <update id="cancelReceipt">
         UPDATE lab_procurement_receipt
         SET status='CANCELED',active_draft_slot=NULL,canceled_at=#{now},

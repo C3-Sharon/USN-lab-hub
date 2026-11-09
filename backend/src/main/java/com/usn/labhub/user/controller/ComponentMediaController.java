@@ -7,6 +7,7 @@ import com.usn.labhub.user.domain.dto.component.MediaOrderDTO;
 import com.usn.labhub.user.domain.dto.component.MediaVersionDTO;
 import com.usn.labhub.user.domain.vo.component.MediaObjectVO;
 import com.usn.labhub.user.service.ComponentMediaService;
+import com.usn.labhub.user.service.MediaAccessService;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,9 +33,11 @@ import java.util.Map;
 @RequireRoles({"SYSTEM_ADMIN", "STOCK_KEEPER", "TEACHER", "MEMBER"})
 public class ComponentMediaController {
     private final ComponentMediaService service;
+    private final MediaAccessService mediaAccess;
 
-    public ComponentMediaController(ComponentMediaService service) {
+    public ComponentMediaController(ComponentMediaService service, MediaAccessService mediaAccess) {
         this.service = service;
+        this.mediaAccess = mediaAccess;
     }
 
     @GetMapping("/components/{componentId}/images")
@@ -87,12 +90,12 @@ public class ComponentMediaController {
 
     @GetMapping("/media/{mediaId}")
     public Result<MediaObjectVO> metadata(@PathVariable Long mediaId) {
-        return Result.success(service.metadata(mediaId));
+        return Result.success(mediaAccess.metadata(mediaId));
     }
 
     @GetMapping("/media/{mediaId}/content")
     public ResponseEntity<InputStreamResource> content(@PathVariable Long mediaId) {
-        ComponentMediaService.MediaContent content = service.content(mediaId);
+        MediaAccessService.MediaContent content = mediaAccess.content(mediaId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(content.contentType()))
                 .body(new InputStreamResource(content.input()));

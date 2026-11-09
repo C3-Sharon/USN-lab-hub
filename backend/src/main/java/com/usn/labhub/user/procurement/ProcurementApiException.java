@@ -125,6 +125,35 @@ public class ProcurementApiException extends RuntimeException {
         return new ProcurementApiException(HttpStatus.CONFLICT, "RECEIPT_ALREADY_CONFIRMED", "到货记录已确认");
     }
 
+    public static ProcurementApiException attachmentLimitExceeded() {
+        return new ProcurementApiException(HttpStatus.CONFLICT, "ATTACHMENT_LIMIT_EXCEEDED",
+                "附件数量已达到上限");
+    }
+
+    public static ProcurementApiException mediaNotFound() {
+        return new ProcurementApiException(HttpStatus.NOT_FOUND, "MEDIA_NOT_FOUND", "媒体不存在或不可见");
+    }
+
+    public static ProcurementApiException mediaStorageFailed() {
+        return new ProcurementApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MEDIA_STORAGE_FAILED", "媒体存储操作失败");
+    }
+
+    public static ProcurementApiException mediaTypeUnsupported() {
+        return new ProcurementApiException(HttpStatus.BAD_REQUEST, "MEDIA_TYPE_UNSUPPORTED", "仅支持安全的 JPEG/PNG 图片");
+    }
+
+    public static ProcurementApiException mediaTooLarge() {
+        return new ProcurementApiException(HttpStatus.BAD_REQUEST, "MEDIA_TOO_LARGE", "图片大小或尺寸超过限制");
+    }
+
+    public static ProcurementApiException mediaDecodeFailed() {
+        return new ProcurementApiException(HttpStatus.BAD_REQUEST, "MEDIA_DECODE_FAILED", "图片无法安全解码");
+    }
+
+    public static ProcurementApiException mediaProcessingFailed() {
+        return new ProcurementApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MEDIA_PROCESSING_FAILED", "图片安全处理失败");
+    }
+
     public static ProcurementApiException policyChanged(Integer currentVersion) {
         return new ProcurementApiException(HttpStatus.CONFLICT, "PROCUREMENT_POLICY_CHANGED", "采购策略已更新",
                 Map.of("currentPolicyVersion", currentVersion));

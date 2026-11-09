@@ -5,6 +5,8 @@ import com.usn.labhub.user.controller.ProcurementOrderController;
 import com.usn.labhub.user.controller.ProcurementPolicyController;
 import com.usn.labhub.user.controller.ProcurementReceiptController;
 import com.usn.labhub.user.controller.InventoryController;
+import com.usn.labhub.user.controller.ProcurementAttachmentController;
+import com.usn.labhub.user.controller.ComponentMediaController;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -23,7 +25,8 @@ import java.util.UUID;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {ProcurementOrderController.class, ProcurementPolicyController.class,
-        ProcurementReceiptController.class, InventoryController.class})
+        ProcurementReceiptController.class, InventoryController.class, ProcurementAttachmentController.class,
+        ComponentMediaController.class})
 public class ProcurementExceptionHandler {
     @ExceptionHandler(ProcurementApiException.class)
     public ResponseEntity<Result<Object>> handle(ProcurementApiException exception) {

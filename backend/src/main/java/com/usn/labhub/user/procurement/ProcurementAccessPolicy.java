@@ -97,6 +97,27 @@ public class ProcurementAccessPolicy {
         throw ProcurementApiException.receiptDenied();
     }
 
+    public void requireOrderAttachmentWrite(ProcurementOrderRecord order) {
+        Set<String> roles = UserContext.getRoles();
+        if (roles.contains("SYSTEM_ADMIN") || roles.contains("STOCK_KEEPER")) {
+            return;
+        }
+        boolean own = userId().equals(order.getRequesterId()) || userId().equals(order.getBuyerId());
+        if (roles.contains("TEACHER") && own) {
+            return;
+        }
+        if (roles.contains("MEMBER") && own
+                && ("DRAFT".equals(order.getStatus())
+                || Set.of("ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "COMPLETED").contains(order.getStatus()))) {
+            return;
+        }
+        throw ProcurementApiException.operationDenied();
+    }
+
+    public void requireReceiptAttachmentWrite() {
+        requireReceiptManagement();
+    }
+
     public void requireInventoryDetail() {
         if (!canViewAll()) {
             throw ProcurementApiException.operationDenied();
