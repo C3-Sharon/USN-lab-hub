@@ -32,6 +32,12 @@ import ComponentEditor from '@/views/components/ComponentEditor.vue'
 import SpecCandidates from '@/views/components/SpecCandidates.vue'
 import CategoryManage from '@/views/components/CategoryManage.vue'
 import ManufacturerManage from '@/views/components/ManufacturerManage.vue'
+import ProcurementList from '@/views/procurement/ProcurementList.vue'
+import ProcurementEditor from '@/views/procurement/ProcurementEditor.vue'
+import ProcurementDetail from '@/views/procurement/ProcurementDetail.vue'
+import ProcurementReceiptEditor from '@/views/procurement/ProcurementReceiptEditor.vue'
+import ProcurementReceiptDetail from '@/views/procurement/ProcurementReceiptDetail.vue'
+import ProcurementSettings from '@/views/procurement/ProcurementSettings.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -261,6 +267,54 @@ const routes = [
         name: 'ComponentManufacturers',
         component: ManufacturerManage,
         meta: { title: '制造商管理', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER, ROLE.TEACHER] }
+      },
+      {
+        path: 'procurements',
+        name: 'ProcurementList',
+        component: ProcurementList,
+        meta: { title: '采购单', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurements/new',
+        name: 'ProcurementCreate',
+        component: ProcurementEditor,
+        meta: { title: '新建采购单', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurements/:id/edit',
+        name: 'ProcurementEdit',
+        component: ProcurementEditor,
+        meta: { title: '编辑采购草稿', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurements/:id/approval',
+        name: 'ProcurementApproval',
+        component: ProcurementDetail,
+        meta: { title: '采购审批', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurements/:id/receipts/new',
+        name: 'ProcurementReceiptCreate',
+        component: ProcurementReceiptEditor,
+        meta: { title: '新建到货草稿', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurements/:id',
+        name: 'ProcurementDetail',
+        component: ProcurementDetail,
+        meta: { title: '采购单详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurement-receipts/:id',
+        name: 'ProcurementReceiptDetail',
+        component: ProcurementReceiptDetail,
+        meta: { title: '到货记录详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'procurement/settings',
+        name: 'ProcurementSettings',
+        component: ProcurementSettings,
+        meta: { title: '采购审批策略', roles: [ROLE.SYSTEM_ADMIN] }
       }
     ]
   },
