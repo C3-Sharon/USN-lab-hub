@@ -8,14 +8,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Map;
+import java.util.UUID;
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthException.class)
-    public ResponseEntity<Result<String>> handleAuthException(AuthException e) {
+    public ResponseEntity<Result<Map<String, String>>> handleAuthException(AuthException e) {
+        Result<Map<String, String>> result = Result.error(
+                e.getHttpStatus(), e.getMessage(), e.getReason().name());
+        result.setData(Map.of("traceId", UUID.randomUUID().toString()));
         return ResponseEntity.status(e.getHttpStatus())
-                .body(Result.error(e.getHttpStatus(), e.getMessage(), e.getReason().name()));
+                .body(result);
     }
 
     @ExceptionHandler(IotApiException.class)

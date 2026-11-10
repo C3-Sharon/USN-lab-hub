@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.ProcurementAttachmentMapper">
+    <sql id="attachmentColumns">
+        id,owner_type AS ownerType,owner_id AS ownerId,media_id AS mediaId,purpose,
+        invoice_no AS invoiceNo,note,version,status,created_by AS createdBy,
+        create_time AS createTime,deleted_by AS deletedBy,deleted_at AS deletedAt
+    </sql>
+    <sql id="mediaColumns">
+        id,owner_type AS ownerType,owner_id AS ownerId,role,status,
+        original_file_name AS originalFileName,content_type AS contentType,size_bytes AS sizeBytes,
+        width,height,sha256,original_object_key AS originalObjectKey,display_object_key AS displayObjectKey,
+        sort_order AS sortOrder,ready_dedup_slot AS readyDedupSlot,ready_primary_slot AS readyPrimarySlot,
+        version,uploaded_by AS uploadedBy,uploaded_at AS uploadedAt,deleted_by AS deletedBy,deleted_at AS deletedAt
+    </sql>
+    <sql id="viewColumns">
+        a.id,a.owner_type AS ownerType,a.owner_id AS ownerId,a.media_id AS mediaId,a.purpose,
+        a.invoice_no AS invoiceNo,a.note,a.version AS attachmentVersion,
+        m.original_file_name AS originalFileName,m.content_type AS contentType,m.size_bytes AS size,
+        m.width,m.height,m.sha256,CONCAT('/api/media/',m.id,'/content') AS contentPath,
+        m.version AS mediaVersion,m.uploaded_by AS uploadedBy,m.uploaded_at AS uploadedAt
+    </sql>
+    <insert id="insertMedia" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_media_object(owner_type,owner_id,role,status,original_file_name,content_type,
+            size_bytes,width,height,sha256,original_object_key,display_object_key,sort_order,
+            ready_dedup_slot,ready_primary_slot,version,uploaded_by,uploaded_at)
+        VALUES(#{ownerType},#{ownerId},#{role},#{status},#{originalFileName},#{contentType},
+            #{sizeBytes},#{width},#{height},#{sha256},#{originalObjectKey},#{displayObjectKey},
+            #{sortOrder},#{readyDedupSlot},#{readyPrimarySlot},#{version},#{uploadedBy},#{uploadedAt})
+    </insert>
+    <insert id="insertAttachment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_procurement_attachment(owner_type,owner_id,media_id,purpose,invoice_no,note,
+            version,status,created_by,create_time)
+        VALUES(#{ownerType},#{ownerId},#{mediaId},#{purpose},#{invoiceNo},#{note},#{version},#{status},
+            #{createdBy},#{createTime})
+    </insert>
+    <select id="selectAttachment" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementAttachmentRecord">
+        SELECT <include refid="attachmentColumns"/> FROM lab_procurement_attachment WHERE id=#{id}
+    </select>
+    <select id="selectAttachmentForUpdate" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementAttachmentRecord">
+        SELECT <include refid="attachmentColumns"/> FROM lab_procurement_attachment WHERE id=#{id} FOR UPDATE
+    </select>
+    <select id="selectAttachmentByMedia" resultType="com.usn.labhub.user.domain.entity.procurement.ProcurementAttachmentRecord">
+        SELECT <include refid="attachmentColumns"/> FROM lab_procurement_attachment WHERE media_id=#{mediaId}
+    </select>
+    <select id="selectMedia" resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaColumns"/> FROM lab_media_object WHERE id=#{mediaId}
+    </select>
+    <select id="selectMediaForUpdate" resultType="com.usn.labhub.user.domain.entity.component.MediaObjectRecord">
+        SELECT <include refid="mediaColumns"/> FROM lab_media_object WHERE id=#{mediaId} FOR UPDATE
+    </select>
+    <select id="selectView" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementAttachmentVO">
+        SELECT <include refid="viewColumns"/> FROM lab_procurement_attachment a
+        JOIN lab_media_object m ON m.id=a.media_id
+        WHERE a.id=#{id} AND a.status='READY' AND m.status='READY'
+    </select>
+    <select id="selectViews" resultType="com.usn.labhub.user.domain.vo.procurement.ProcurementAttachmentVO">
+        SELECT <include refid="viewColumns"/> FROM lab_procurement_attachment a
+        JOIN lab_media_object m ON m.id=a.media_id
+        WHERE a.owner_type=#{ownerType} AND a.owner_id=#{ownerId}
+          AND a.status='READY' AND m.status='READY'
+        ORDER BY a.create_time ASC,a.id ASC
+    </select>
+    <select id="countReady" resultType="long">
+        SELECT COUNT(*) FROM lab_procurement_attachment
+        WHERE owner_type=#{ownerType} AND owner_id=#{ownerId} AND purpose=#{purpose} AND status='READY'
+    </select>
+    <select id="countReadyByOwner" resultType="long">
+        SELECT COUNT(*) FROM lab_procurement_attachment
+        WHERE owner_type=#{ownerType} AND owner_id=#{ownerId} AND status='READY'
+    </select>
+    <update id="markMediaDeleted">
+        UPDATE lab_media_object SET status='DELETED',ready_dedup_slot=NULL,ready_primary_slot=NULL,
+            version=version+1,deleted_by=#{actorId},deleted_at=#{now}
+        WHERE id=#{mediaId} AND version=#{version} AND status='READY'
+    </update>
+    <update id="replaceAttachmentMedia">
+        UPDATE lab_procurement_attachment SET media_id=#{mediaId},version=version+1
+        WHERE id=#{id} AND version=#{version} AND status='READY'
+    </update>
+    <update id="markAttachmentDeleted">
+        UPDATE lab_procurement_attachment SET status='DELETED',version=version+1,
+            deleted_by=#{actorId},deleted_at=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='READY'
+    </update>
+</mapper>
