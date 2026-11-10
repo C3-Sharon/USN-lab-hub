@@ -330,7 +330,7 @@ function goDetail(row) {
 
 async function loadProjects() {
   try {
-    const response = await listProjects({ page: 1, pageSize: 100 })
+    const response = await listProjects({ page: 1, pageSize: 50 })
     projects.value = normalizePage(response).list
   } catch {
     projects.value = []

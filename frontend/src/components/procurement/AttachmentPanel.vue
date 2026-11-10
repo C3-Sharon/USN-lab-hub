@@ -140,6 +140,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Upload } from '@element-plus/icons-vue'
 import {
   ATTACHMENT_LIMITS,
   ATTACHMENT_OWNER_TYPE,

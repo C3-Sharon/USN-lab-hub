@@ -772,6 +772,17 @@ const run = async () => {
       assert.ok(layout.includes("index: '/procurement/settings'"))
     })
 
+    await test('采购筛选项目分页符合既有项目接口上限', () => {
+      const listPage = readFileSync(path.join(frontendRoot, 'src/views/procurement/ProcurementList.vue'), 'utf8')
+      assert.ok(listPage.includes('listProjects({ page: 1, pageSize: 50 })'))
+      assert.ok(!listPage.includes('listProjects({ page: 1, pageSize: 100 })'))
+    })
+
+    await test('附件上传按钮注册 Upload 图标', () => {
+      const attachmentPanel = readFileSync(path.join(frontendRoot, 'src/components/procurement/AttachmentPanel.vue'), 'utf8')
+      assert.ok(attachmentPanel.includes("import { Upload } from '@element-plus/icons-vue'"))
+    })
+
     await test('三视口：桌面表格 + 移动卡片 + 平板自适应', () => {
       for (const file of pages) {
         const source = readFileSync(path.join(frontendRoot, file), 'utf8')
