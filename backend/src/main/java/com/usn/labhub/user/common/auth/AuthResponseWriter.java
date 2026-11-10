@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class AuthResponseWriter {
@@ -22,6 +24,8 @@ public class AuthResponseWriter {
         response.setStatus(status);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), Result.error(status, message, reason.name()));
+        Result<Map<String, String>> result = Result.error(status, message, reason.name());
+        result.setData(Map.of("traceId", UUID.randomUUID().toString()));
+        objectMapper.writeValue(response.getWriter(), result);
     }
 }

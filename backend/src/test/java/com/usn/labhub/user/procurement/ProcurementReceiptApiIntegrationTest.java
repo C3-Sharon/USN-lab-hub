@@ -155,8 +155,7 @@ class ProcurementReceiptApiIntegrationTest {
         Map<String, Object> receipt = createReceipt(admin, order, "receipt-fault-create", "1.000");
         ResponseEntity<Map> failed = post(receiptPath(receipt, "confirm"), admin,
                 "receipt-fault-confirm", command(receipt));
-        assertEquals(HttpStatus.OK, failed.getStatusCode());
-        assertEquals(500, ((Number) failed.getBody().get("code")).intValue());
+        assertReason(failed, HttpStatus.INTERNAL_SERVER_ERROR, "PROCUREMENT_TRANSACTION_FAILED");
         assertEquals("DRAFT", jdbc.queryForObject(
                 "SELECT status FROM lab_procurement_receipt WHERE id=?", String.class, receipt.get("id")));
         assertEquals("ORDERED", jdbc.queryForObject(

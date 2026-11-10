@@ -339,33 +339,25 @@ try {
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body $firstConfirmBody
     } | Out-Null
 
-    # 6. An over-quantity receipt rolls back as a whole, then its draft is canceled.
+    # 6. An obviously over-quantity receipt is rejected before a draft or inventory fact is created.
     $balanceBeforeOver = Get-ApiData (Invoke-JsonApi -Method GET `
         -Path "/api/inventory/components/$ComponentId" -Token $stockKeeper.token) "balance before over receipt"
-    $overReceipt = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
-        -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-            orderVersion = [int]$firstConfirmed.orderVersion
-            receivedAt = [DateTimeOffset]::Now.ToString("o")
-            note = "W45 over receipt must fail"
-            lines = @(@{ orderLineId = $line1Id; quantity = 7.000; supplierLotNo = "OVER"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
-        }) "over receipt create"
-    Assert-ApiError -Status 409 -Reason "RECEIPT_OVER_QUANTITY" -Label "over receipt confirmation" -RequireTraceId -Action {
-        Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($overReceipt.id)/confirm" `
+    $factsBeforeOver = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "facts before over receipt"
+    Assert-ApiError -Status 409 -Reason "RECEIPT_OVER_QUANTITY" -Label "over receipt creation" -RequireTraceId -Action {
+        Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-                receiptVersion = [int]$overReceipt.version
-                orderVersion = [int]$overReceipt.orderVersion
+                orderVersion = [int]$firstConfirmed.orderVersion
+                receivedAt = [DateTimeOffset]::Now.ToString("o")
+                note = "W45 over receipt must fail"
+                lines = @(@{ orderLineId = $line1Id; quantity = 7.000; supplierLotNo = "OVER"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
             }
     } | Out-Null
     $balanceAfterOver = Get-ApiData (Invoke-JsonApi -Method GET `
         -Path "/api/inventory/components/$ComponentId" -Token $stockKeeper.token) "balance after over receipt"
+    $factsAfterOver = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "facts after over receipt"
     Assert-Equal $balanceAfterOver.onHandQuantity $balanceBeforeOver.onHandQuantity "over receipt leaves inventory unchanged"
-    $overCanceled = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($overReceipt.id)/cancel" `
-        -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-            version = [int]$overReceipt.version
-            orderVersion = [int]$overReceipt.orderVersion
-            reason = "Cancel failed over-quantity draft"
-        }) "over receipt cancel"
-    Assert-Equal $overCanceled.status "CANCELED" "over receipt canceled"
+    Assert-Equal $factsAfterOver.batchTotal $factsBeforeOver.batchTotal "over receipt leaves batch count unchanged"
+    Assert-Equal $factsAfterOver.movementTotal $factsBeforeOver.movementTotal "over receipt leaves movement count unchanged"
 
     # 7. Optional test-profile fault proves database rollback after a mid-transaction failure.
     $orderAfterOver = Get-ApiData (Invoke-JsonApi -Method GET -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order after over receipt"
@@ -409,7 +401,7 @@ try {
         Assert-Equal $orderAfterFault.lines[1].receivedQuantity $orderBeforeFault.lines[1].receivedQuantity "failed transaction leaves second line progress unchanged"
         Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($faultReceipt.id)/cancel" `
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-                version = [int]$faultAfter.version
+                receiptVersion = [int]$faultAfter.version
                 orderVersion = [int]$faultAfter.orderVersion
                 reason = "Cancel fault-injection draft"
             }) "fault receipt cancel" | Out-Null
@@ -420,20 +412,21 @@ try {
     }
 
     # 8. Optional attachments use mediaId only and do not gate receipt confirmation.
-    $uploadHeaders = @{
-        Authorization = "Bearer $($requester.token)"
-        "Idempotency-Key" = New-IdempotencyKey
+    $attachmentJson = & curl.exe --silent --show-error --fail-with-body `
+        --request POST "$BaseUrl/api/procurement-orders/$highId/attachments" `
+        --header "Authorization: Bearer $($requester.token)" `
+        --header "Idempotency-Key: $(New-IdempotencyKey)" `
+        --form "file=@$tempPng;type=image/png" `
+        --form-string "purpose=ORDER_SCREENSHOT" `
+        --form-string "orderVersion=$([int]$orderAfterOver.version)" `
+        --form-string "note=W45 acceptance order screenshot"
+    if ($LASTEXITCODE -ne 0) {
+        throw "order attachment upload failed: $attachmentJson"
     }
-    $attachmentUpload = Invoke-RestMethod -Uri "$BaseUrl/api/procurement-orders/$highId/attachments" `
-        -Method POST -Headers $uploadHeaders -Form @{
-            file = Get-Item -LiteralPath $tempPng
-            purpose = "ORDER_SCREENSHOT"
-            orderVersion = [int]$orderAfterOver.version
-            note = "W45 acceptance order screenshot"
-        }
+    $attachmentUpload = $attachmentJson | ConvertFrom-Json
     $attachmentData = Get-ApiData $attachmentUpload "order attachment upload"
     Assert-NoInfrastructureFields $attachmentData "order attachment response"
-    $attachmentMediaId = if ($attachmentData.mediaId) { [long]$attachmentData.mediaId } else { [long]$attachmentData.media.mediaId }
+    $attachmentMediaId = [long]$attachmentData.attachment.mediaId
     Assert-True ($attachmentMediaId -gt 0) "attachment returns mediaId"
     $orderAfterAttachment = Get-ApiData (Invoke-JsonApi -Method GET `
         -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order after attachment"

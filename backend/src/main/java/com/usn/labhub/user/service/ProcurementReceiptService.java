@@ -115,10 +115,11 @@ public class ProcurementReceiptService {
     }
 
     @Transactional
-    public Map<String, Object> confirm(Long receiptId, String key, ProcurementReceiptCommandDTO request) {
+    public Map<String, Object> confirm(Long receiptId, String key, String testFaultPoint,
+                                       ProcurementReceiptCommandDTO request) {
         access.requireReceiptManagement();
         return support.idempotent("POST:/api/procurement-receipts/" + receiptId + "/confirm", key, request,
-                () -> confirmValue(receiptId, request));
+                () -> confirmValue(receiptId, request, testFaultPoint));
     }
 
     private Map<String, Object> createValue(Long orderId, ProcurementReceiptCreateDTO request) {
@@ -168,7 +169,8 @@ public class ProcurementReceiptService {
         return support.asMap(receiptView(receiptId));
     }
 
-    private Map<String, Object> confirmValue(Long receiptId, ProcurementReceiptCommandDTO request) {
+    private Map<String, Object> confirmValue(Long receiptId, ProcurementReceiptCommandDTO request,
+                                             String testFaultPoint) {
         ProcurementReceiptRecord initial = requiredReceipt(receiptId);
         ProcurementOrderRecord order = lockedOrder(initial.getOrderId());
 
@@ -244,7 +246,7 @@ public class ProcurementReceiptService {
             movementResults.add(movementResult(movement));
             if (firstMovement) {
                 firstMovement = false;
-                failIfConfigured("AFTER_FIRST_MOVEMENT");
+                failIfConfigured("AFTER_FIRST_MOVEMENT", testFaultPoint);
             }
         }
 
@@ -512,11 +514,11 @@ public class ProcurementReceiptService {
         return prefix + "-" + date + "-" + String.format(Locale.ROOT, "%06d", suffix);
     }
 
-    private void failIfConfigured(String point) {
+    private void failIfConfigured(String point, String requestedPoint) {
         String configured = environment.getProperty("usnhub.procurement.test-fault-point");
         if (Arrays.asList(environment.getActiveProfiles()).contains("test")
-                && point.equals(configured)) {
-            throw new IllegalStateException("Controlled procurement transaction failure: " + point);
+                && (point.equals(configured) || point.equals(requestedPoint))) {
+            throw ProcurementApiException.transactionFailed();
         }
     }
 }

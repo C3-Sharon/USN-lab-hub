@@ -41,8 +41,10 @@ public class ProcurementReceiptController {
     @PostMapping("/{id}/confirm")
     public Result<Map<String, Object>> confirm(@PathVariable Long id,
                                                @RequestHeader("Idempotency-Key") String key,
+                                               @RequestHeader(value = "X-USN-Test-Fault", required = false)
+                                               String testFaultPoint,
                                                @RequestBody ProcurementReceiptCommandDTO request) {
-        return Result.success(service.confirm(id, key, request));
+        return Result.success(service.confirm(id, key, testFaultPoint, request));
     }
 
     @PostMapping("/{id}/cancel")

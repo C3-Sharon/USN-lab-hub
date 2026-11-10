@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,7 +58,9 @@ class JwtInterceptorTest {
         assertFalse(interceptor.preHandle(new MockHttpServletRequest(), response, openHandler));
 
         assertEquals(401, response.getStatus());
-        assertTrue(response.getContentAsString().contains("TOKEN_MISSING"));
+        Map<?, ?> body = new ObjectMapper().readValue(response.getContentAsString(), Map.class);
+        assertEquals("TOKEN_MISSING", body.get("reason"));
+        assertTrue(((Map<?, ?>) body.get("data")).get("traceId") instanceof String);
     }
 
     @Test

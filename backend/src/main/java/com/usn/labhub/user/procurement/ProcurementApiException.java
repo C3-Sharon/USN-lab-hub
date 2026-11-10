@@ -125,6 +125,11 @@ public class ProcurementApiException extends RuntimeException {
         return new ProcurementApiException(HttpStatus.CONFLICT, "RECEIPT_ALREADY_CONFIRMED", "到货记录已确认");
     }
 
+    public static ProcurementApiException transactionFailed() {
+        return new ProcurementApiException(HttpStatus.INTERNAL_SERVER_ERROR, "PROCUREMENT_TRANSACTION_FAILED",
+                "到货确认失败，未产生库存变化");
+    }
+
     public static ProcurementApiException attachmentLimitExceeded() {
         return new ProcurementApiException(HttpStatus.CONFLICT, "ATTACHMENT_LIMIT_EXCEEDED",
                 "附件数量已达到上限");
