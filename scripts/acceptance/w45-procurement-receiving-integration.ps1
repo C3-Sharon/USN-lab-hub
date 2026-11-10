@@ -339,17 +339,22 @@ try {
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body $firstConfirmBody
     } | Out-Null
 
-    # 6. An obviously over-quantity receipt is rejected before a draft or inventory fact is created.
+    # 6. An over-quantity draft can be saved, but confirmation rolls back as a whole.
     $balanceBeforeOver = Get-ApiData (Invoke-JsonApi -Method GET `
         -Path "/api/inventory/components/$ComponentId" -Token $stockKeeper.token) "balance before over receipt"
     $factsBeforeOver = Get-InventoryFactCounts -TargetComponentId $ComponentId -Token $stockKeeper.token -Label "facts before over receipt"
-    Assert-ApiError -Status 409 -Reason "RECEIPT_OVER_QUANTITY" -Label "over receipt creation" -RequireTraceId -Action {
-        Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
+    $overReceipt = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-orders/$highId/receipts" `
+        -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+            orderVersion = [int]$firstConfirmed.orderVersion
+            receivedAt = [DateTimeOffset]::Now.ToString("o")
+            note = "W45 over receipt must fail on confirmation"
+            lines = @(@{ orderLineId = $line1Id; quantity = 7.000; supplierLotNo = "OVER"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
+        }) "over receipt create"
+    Assert-ApiError -Status 409 -Reason "RECEIPT_OVER_QUANTITY" -Label "over receipt confirmation" -RequireTraceId -Action {
+        Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($overReceipt.id)/confirm" `
             -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
-                orderVersion = [int]$firstConfirmed.orderVersion
-                receivedAt = [DateTimeOffset]::Now.ToString("o")
-                note = "W45 over receipt must fail"
-                lines = @(@{ orderLineId = $line1Id; quantity = 7.000; supplierLotNo = "OVER"; productionDate = $null; expiryDate = $null; locationNote = $null; qualityNote = $null })
+                receiptVersion = [int]$overReceipt.version
+                orderVersion = [int]$overReceipt.orderVersion
             }
     } | Out-Null
     $balanceAfterOver = Get-ApiData (Invoke-JsonApi -Method GET `
@@ -358,6 +363,13 @@ try {
     Assert-Equal $balanceAfterOver.onHandQuantity $balanceBeforeOver.onHandQuantity "over receipt leaves inventory unchanged"
     Assert-Equal $factsAfterOver.batchTotal $factsBeforeOver.batchTotal "over receipt leaves batch count unchanged"
     Assert-Equal $factsAfterOver.movementTotal $factsBeforeOver.movementTotal "over receipt leaves movement count unchanged"
+    $overCanceled = Get-ApiData (Invoke-JsonApi -Method POST -Path "/api/procurement-receipts/$($overReceipt.id)/cancel" `
+        -Token $stockKeeper.token -IdempotencyKey (New-IdempotencyKey) -Body @{
+            receiptVersion = [int]$overReceipt.version
+            orderVersion = [int]$overReceipt.orderVersion
+            reason = "Cancel rejected over-quantity draft"
+        }) "over receipt cancel"
+    Assert-Equal $overCanceled.status "CANCELED" "over receipt canceled"
 
     # 7. Optional test-profile fault proves database rollback after a mid-transaction failure.
     $orderAfterOver = Get-ApiData (Invoke-JsonApi -Method GET -Path "/api/procurement-orders/$highId" -Token $stockKeeper.token) "order after over receipt"

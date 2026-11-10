@@ -298,10 +298,6 @@ public class ProcurementReceiptService {
                 throw ProcurementApiException.invalid();
             }
             BigDecimal quantity = quantity(request.quantity());
-            if (quantity.compareTo(orderLine.getRemainingQuantity()) > 0) {
-                throw ProcurementApiException.receiptOverQuantity(orderLine.getId(),
-                        orderLine.getRemainingQuantity(), quantity);
-            }
             validateDates(request.productionDate(), request.expiryDate());
             ProcurementReceiptLineRecord line = new ProcurementReceiptLineRecord();
             line.setOrderLineId(orderLine.getId());

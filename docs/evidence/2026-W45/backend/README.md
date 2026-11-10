@@ -14,14 +14,14 @@
 执行 `scripts/acceptance/w45-procurement-receiving-integration.ps1`，启用 `EnableTestFaultInjection`，结果：
 
 ```text
-W45 REAL INTEGRATION PASSED: order=14 firstReceipt=13 finalReceipt=15 media=3
+W45 REAL INTEGRATION PASSED: order=16 firstReceipt=16 finalReceipt=19 media=4
 ```
 
 已验证：
 
 - 采购创建、金额计算、提交、人工审批、登记下单与完成。
 - 两次到货从部分到全部完成，确认动作原子写入到货、批次、流水、余额和采购进度。
-- 同一幂等键精确重放不重复入库；超量请求不改变库存事实。
+- 同一幂等键精确重放不重复入库；超量草稿可保存，但确认返回 `RECEIPT_OVER_QUANTITY`，且不改变库存事实，随后可正常取消。
 - test profile 首条流水后的受控故障返回 HTTP 500、`PROCUREMENT_TRANSACTION_FAILED`，全部写入回滚。
 - SYSTEM_ADMIN、TEACHER、STOCK_KEEPER、MEMBER 权限边界与附件零泄露。
 - PNG 上传、媒体元数据和内容读取；匿名访问返回 401、`TOKEN_MISSING` 与 `data.traceId`。
@@ -54,3 +54,7 @@ BUILD SUCCESS
 6. 测试数据库和测试媒体目录可在确认不再需要复核后人工清理，不纳入应用自动清理。
 
 前端联调时必须关闭 mock，使用真实 API 重走权限、重复确认、超量、事务失败和附件 ACL；本文件不代替三视口 UI 验收。
+
+## 前后端联合检查
+
+2026-11-10 关闭 mock 后通过 Vite 同源代理连接真实 8082 后端，采购列表、采购详情、审批策略及附件元数据均读取成功。检查 390×844、1280×800 和默认桌面视口，未发现页面级横向溢出。联调修复了采购列表项目查询超过既有 `pageSize <= 50` 上限，以及附件面板未注册 `Upload` 图标的运行时告警。

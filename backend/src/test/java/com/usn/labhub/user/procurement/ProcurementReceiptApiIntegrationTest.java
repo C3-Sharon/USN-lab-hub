@@ -134,9 +134,7 @@ class ProcurementReceiptApiIntegrationTest {
     void rejectsOverQuantityWithoutInventoryFacts() {
         String admin = token(login("admin", "admin123"));
         Map<String, Object> order = createOrdered(admin, "receipt-over-01", "2.000");
-        Map<String, Object> receipt = createReceipt(admin, order, "receipt-over-create", "2.000");
-        Long orderLineId = number(firstLine(order).get("id"));
-        jdbc.update("UPDATE lab_procurement_order_line SET received_quantity=1.000 WHERE id=?", orderLineId);
+        Map<String, Object> receipt = createReceipt(admin, order, "receipt-over-create", "3.000");
 
         assertReason(post(receiptPath(receipt, "confirm"), admin, "receipt-over-confirm", command(receipt)),
                 HttpStatus.CONFLICT, "RECEIPT_OVER_QUANTITY");
