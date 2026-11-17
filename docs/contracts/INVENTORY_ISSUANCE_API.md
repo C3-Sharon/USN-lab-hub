@@ -62,6 +62,7 @@
 **推荐：使用追加写、版本化 `InventoryIssuePolicyVersion`；只有 SYSTEM_ADMIN 可发布。**
 
 - 默认阈值见 D1；发布新版本只影响后续提交。
+- component 级直接数量上限作为同一策略版本的不可变子项随策略整体发布，不是可独立覆盖的可变配置。
 - 提交时冻结 policyVersion、触发原因、分类路径、成本估算、数量阈值和库存紧张计算结果。
 - 已提交申请不因策略、分类、批次成本或库存变化追溯重算。
 
@@ -119,7 +120,10 @@ STOCK_KEEPER/SYSTEM_ADMIN 可在 APPROVED 且未发放时通过 `reallocate` 改
 
 - 库存不足时提交整体失败，申请保持 DRAFT，不产生 ACTIVE 预占。
 - 预占到期由数据库安全的定时扫描释放；任何状态命令执行前同时做惰性过期检查。
-- 多实例下不得依赖 JVM 单机锁；后端可选择 `FOR UPDATE SKIP LOCKED` 或条件更新，但必须保持固定锁序和一次性释放。
+- 调度默认每 60 秒运行一次，每轮最多读取 100 个候选 requestId；配置范围固定为间隔 10-300 秒、批量 1-500，单轮不得无界循环。
+- 候选判断和事务内重验都使用 MySQL `CURRENT_TIMESTAMP(3)`，不得使用 JVM 本地时间决定是否过期。
+- 候选查询可以无锁且允许多实例读到同一 ID；每个申请使用独立事务并从 request 开始按 §8.1 加锁，后一实例看到已释放或终态时幂等退出。
+- 多实例下不得依赖 JVM 单机锁或任务主节点；候选查询不加锁，安全性只由逐申请事务的统一锁序、状态重验和条件更新保证。
 - 超时只改变 reserved 和申请/预占状态，不生成库存数量流水，因为 onHand 未变化。
 
 ### D8 库存紧张判定
@@ -128,7 +132,7 @@ STOCK_KEEPER/SYSTEM_ADMIN 可在 APPROVED 且未发放时通过 `reallocate` 改
 
 - 判定使用本次预占后的 available/onHand。
 - `onHand=0` 直接视为库存不足；不能进入审批后等待未知库存。
-- component 级覆盖只影响审批判断，不改变实际库存事实。
+- component 级覆盖只影响审批判断，不改变实际库存事实；其版本归属、字段和发布入口见 §4.1.1 与 §9.1。
 
 ### D9 权限与职责分离
 
@@ -189,6 +193,8 @@ component onHandQuantity = 该 component 所有可计量批次 currentQuantity �
 
 V14 为 W45 `InventoryBatch` additive 增加 `reservedQuantity DECIMAL(19,3) DEFAULT 0`；响应增加 `availableQuantity = currentQuantity - reservedQuantity`。
 
+W46 不为 `InventoryBatch` 增加 version，也不接受客户端 batchVersion。批次没有独立编辑入口；所有 reserved/current 写入必须在 `SELECT ... FOR UPDATE` 行锁后执行，并附带 §8.7 的数量条件更新。`ComponentInventoryBalance.version` 继续递增，用于余额投影和查询冲突提示，但不能替代批次行锁。
+
 ```text
 currentQuantity >= 0
 reservedQuantity >= 0
@@ -215,7 +221,20 @@ currentQuantity - reservedQuantity >= 0
 | effectiveAt | datetime | 自动 | 发布即生效 |
 | createdBy/createTime | long/datetime | 自动 | 审计 |
 
-策略追加写、不可覆盖和物理删除。component 级直接数量上限覆盖单独版本化审计，提交时写入触发快照。
+策略追加写、不可覆盖和物理删除。component 级直接数量上限随所属策略版本共同审计，提交时写入触发快照。
+
+#### 4.1.1 `InventoryIssuePolicyComponentOverride`
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| id | long | 自动 | 主键 |
+| policyId/policyVersion | long/int | 自动 | 固定归属一个不可变策略版本 |
+| componentId | long | 是 | 必须是 ACTIVE 元器件 |
+| directQuantityLimit | decimal(19,3) | 是 | `>0`，单位固定为 component.baseUnit |
+| componentName/unitSnapshot | string/enum | 自动 | 发布时冻结展示快照 |
+| createdBy/createTime | long/datetime | 自动 | 审计 |
+
+`(policyId, componentId)` 唯一。SYSTEM_ADMIN 通过发布新策略版本的同一请求整体提交 `componentOverrides`；发布事务同时写策略、分类项和覆盖子项，任一失败全部回滚。已发布子项不可 PUT/DELETE，后续修改只能发布新 policyVersion。提交申请时将命中的 override ID、数量上限和单位写入 `triggerSnapshot`。
 
 ### 4.2 `InventoryIssueRequest`
 
@@ -397,14 +416,18 @@ ReturnLine 引用原 fulfillmentLineId、batchId、quantity；累计确认退回
 4. 按 componentId ASC 锁 `ComponentInventoryBalance`。
 5. 按 componentId ASC、batchId ASC 锁 `InventoryBatch`。
 6. 按 reservationId ASC 锁预占及 allocation。
-7. 锁 fulfillment/return/write-off 当前命令事实。
-8. 重算条件并写入事实、审计和幂等响应。
+7. 按 fulfillmentId、fulfillmentLineId ASC 锁发放及发放明细。
+8. 按 returnId、returnLineId ASC 锁退回及退回明细；无退回的入口跳过。
+9. 锁 write-off 当前命令事实；无损耗/报废的入口跳过。
+10. 重算条件并写入事实、审计和幂等响应。
 
-过期任务先无锁读取候选 ID，再按上述顺序逐单进入事务；不得先锁 reservation 再反向锁 request/balance/batch。LOSS/SCRAP 入口没有 request/reservation，但公共锁顺序仍必须是 balance → batch。
+RETURN_IN 允许先无锁读取关联 ID，但进入事务后必须从 request 开始按上述统一顺序加锁并重新验证所有关联；不得先锁 fulfillment/return 再反向锁 request/balance/batch。reallocate 必须先收集旧、新批次 ID 并按 `(componentId,batchId)` 并集升序一次锁定。过期任务先无锁读取候选 ID，再按上述顺序逐单进入事务。LOSS/SCRAP 入口没有 request/reservation/fulfillment/return，但公共锁顺序仍必须是 balance → batch → write-off。
 
 ### 8.2 提交预占事务
 
 同一事务完成申请状态、审批事实、reservation/allocation、component/batch reserved、审计和幂等响应。任一步失败全部回滚。
+
+领用时不创建缺失的 `ComponentInventoryBalance`；找不到余额行即按可用库存不足处理。持有行锁后，balance 预占条件为 `on_hand_quantity-reserved_quantity >= delta`，batch 预占条件为 `current_quantity-reserved_quantity >= delta`。任一条件更新 affectedRows 不为 1 时整体回滚，不得留下部分 allocation 或 reserved。
 
 ### 8.3 确认发放事务
 
@@ -426,7 +449,7 @@ ReturnLine 引用原 fulfillmentLineId、batchId、quantity；累计确认退回
 
 ### 8.5 退回、损耗与报废事务
 
-- RETURN_IN：锁原申请/发放、balance、原 batch 和 return；校验可退余额后增加 current/onHand，写唯一 RETURN_IN。
+- RETURN_IN：可先无锁解析原关联 ID；事务内严格按 idempotency → request → requestLine → balance → batch → reservation/allocation → fulfillment/fulfillmentLine → return/returnLine 加锁并重验。校验累计可退余额后增加原 batch.current 和 component.onHand，写唯一 RETURN_IN；不得从 fulfillment 或 return 反向取得锁。
 - LOSS_OUT/SCRAP_OUT：锁 balance→batch；只能扣减 `current-reserved`，写负向流水。不得消费别人的 ACTIVE 预占。
 
 ### 8.6 唯一约束
@@ -441,6 +464,7 @@ ReturnLine 引用原 fulfillmentLineId、batchId、quantity；累计确认退回
 - 同 key 换请求返回 409 `IDEMPOTENCY_KEY_REUSED`。
 - PUT/状态动作携带 requestVersion；发放另携带 reservationVersion，退回携带 returnVersion。
 - 版本冲突不得自动覆盖；前端刷新库存、预占和申请后由用户重新确认。
+- `InventoryBatch` 不增加 version：所有批次写入先持有行锁，并使用条件更新。预占要求 `current_quantity-reserved_quantity >= delta`；发放要求 `current_quantity >= delta AND reserved_quantity >= delta`；释放要求 `reserved_quantity >= delta`；LOSS/SCRAP 要求 `current_quantity-reserved_quantity >= delta`。任一 affectedRows 不为 1，整笔事务回滚并返回稳定 409。
 
 ## 9. API 草案
 
@@ -450,10 +474,12 @@ ReturnLine 引用原 fulfillmentLineId、batchId、quantity；累计确认退回
 |---|---|---|
 | GET | `/api/inventory/issue-policy` | 当前策略 |
 | GET | `/api/inventory/issue-policy/versions` | 历史版本 |
-| PUT | `/api/inventory/issue-policy` | SYSTEM_ADMIN 发布新版本 |
+| PUT | `/api/inventory/issue-policy` | SYSTEM_ADMIN 原子发布新版本；请求包含阈值、forcedCategoryIds 与完整 componentOverrides |
 | GET | `/api/inventory/components/{componentId}` | 扩展返回 onHand/reserved/available |
 | GET | `/api/inventory/components/{componentId}/batches` | 授权角色查看批次可用量 |
 | GET | `/api/inventory/movements` | 扩展 movementType/source 筛选 |
+
+策略发布请求必须携带 `basePolicyVersion`、全部阈值、`forcedCategoryIds` 和完整 `componentOverrides:[{componentId,directQuantityLimit}]`。服务端校验 basePolicyVersion 仍为当前版本后，在单事务创建下一 policyVersion 及全部子项；同一 component 重复、单位不兼容或并发版本变化分别返回 400 `ISSUE_POLICY_OVERRIDE_INVALID` 或 409 `VERSION_CONFLICT`。响应返回新 policyVersion 和规范化后的完整 overrides。
 
 ### 9.2 领用申请
 
@@ -595,7 +621,7 @@ test profile 在第一条 ISSUE_OUT 写入后抛出受控异常：
 
 ### 11.1 400
 
-`INVALID_PARAMETER / ISSUE_LINES_REQUIRED / ISSUE_QUANTITY_INVALID / ISSUE_COMPONENT_INVALID / ISSUE_POLICY_INVALID / RETURN_QUANTITY_INVALID / WRITE_OFF_REASON_REQUIRED`。
+`INVALID_PARAMETER / ISSUE_LINES_REQUIRED / ISSUE_QUANTITY_INVALID / ISSUE_COMPONENT_INVALID / ISSUE_POLICY_INVALID / ISSUE_POLICY_OVERRIDE_INVALID / RETURN_QUANTITY_INVALID / WRITE_OFF_REASON_REQUIRED`。
 
 ### 11.2 401/403
 
@@ -657,6 +683,8 @@ test profile 在第一条 ISSUE_OUT 写入后抛出受控异常：
 
 损耗/报废使用批次详情中的受控对话框，不要求孤立复杂页面。退回发起/确认复用详情组件。
 
+策略页面发布表单必须展示当前 basePolicyVersion、全局阈值、强制分类和 componentOverrides。每个 override 通过元器件搜索选择，展示只读 baseUnit 并填写 `directQuantityLimit`；重复元器件、非正数量和停用元器件在提交前提示。已发布版本只读，编辑行为实际创建完整新版本，不能对单个 override 静默覆盖或删除。
+
 ### 13.2 详情顺序
 
 1. requestNo、标题、状态、申请人、项目、到期时间、主要动作。
@@ -697,8 +725,11 @@ test profile 在第一条 ISSUE_OUT 写入后抛出受控异常：
 
 ## 14. V14 数据保留与兼容边界
 
-- V14 只能 additive 新建领用、审批、预占、分配、发放、退回和 write-off 表，并为 W45 balance/batch 增加 reservedQuantity 默认 0。
-- V14 可受控扩展 W45 movementType CHECK/枚举，但不得修改 V1-V13 文件或改写既有 PROCUREMENT_RECEIPT_IN。
+- V14 只能 additive 新建领用策略、component override、申请、审批、预占、分配、发放、退回和 write-off 表，并为 W45 balance/batch 增加 `reserved_quantity DECIMAL(19,3) NOT NULL DEFAULT 0`；同时增加 `on_hand/current/reserved >= 0` 与 available 非负 CHECK，以及 FEFO/FIFO 查询索引。批次不新增 version。
+- V14 必须删除后重建 W45 的受限 CHECK，使 `movement_type` 精确允许 `PROCUREMENT_RECEIPT_IN / ISSUE_OUT / RETURN_IN / LOSS_OUT / SCRAP_OUT`，不得修改 V13 文件或改写既有入库流水。
+- `source_type` 精确映射：`PROCUREMENT_RECEIPT_IN→RECEIPT_LINE`、`ISSUE_OUT→FULFILLMENT_LINE`、`RETURN_IN→RETURN_LINE`、`LOSS_OUT/SCRAP_OUT→WRITE_OFF_COMMAND`；应用层和数据库 CHECK 均拒绝其他组合。
+- V14 删除原 `uk_inventory_movement_source` 后创建 `(movement_type, source_type, source_id, batch_id)` 唯一索引；建索引前必须先验证 V13 历史数据无重复，不得通过删除或合并既有流水解决冲突。
+- V14 为流水增加可空 `reason VARCHAR(500)`：既有采购入库与 ISSUE_OUT/RETURN_IN 可为空，LOSS_OUT/SCRAP_OUT 必填且长度 1-500。重建数量 CHECK，统一要求 `balance_after = balance_before + quantity_delta` 且 before/after 非负；采购入库/退回 delta 必须为正，领用/损耗/报废 delta 必须为负。
 - 验证 V1→V14 干净库和含 V13 采购/批次/余额/流水/媒体事实的 V13→V14；迁移前后 W45 主流程事实不变。
 - 应用回滚保留 V14 表/列，不执行破坏性 down migration；旧应用忽略新增列。
 - W46 不影响 mediaId、采购附件 ACL、MQTT、知识、RAG 或 Agent。
@@ -737,6 +768,7 @@ SYSTEM_ADMIN 可用于冒烟，但不能代替全部角色后宣称权限门通�
 - [ ] D11 STOCKTAKE_ADJUSTMENT 冻结语义、第 12 周实现
 - [ ] D12 项目可选关联、成本与存在性零泄露
 - [x] 后端提交 V14、模型、固定锁序、条件更新、幂等、过期释放、真实 MySQL 双并发和故障注入书面结论（2026-11-17；结论为需调整后可实现，见 W46 §8.1）
+- [ ] 后端对五项产品修订完成轻量复核并明确确认无阻塞项
 - [ ] 前端提交页面范围、数量展示、冲突刷新、权限零泄露、全部 UI 状态、mock 与三视口书面结论
 
 两方结论必须记录评审人、日期、逐项“可实现/需调整/阻塞”、遗留风险和建议改约。负责人确认 D1-D12 且两方无阻塞项后，才可把 v1.0-draft 改为 v1.0 FROZEN。
@@ -746,3 +778,4 @@ SYSTEM_ADMIN 可用于冒烟，但不能代替全部角色后宣称权限门通�
 | 日期 | 变更 | 状态 |
 |---|---|---|
 | 2026-11-16 | 初始草案：领用申请、条件审批、预占、全量发放、退回、损耗/报废与并发一致性 | REVIEW |
+| 2026-11-17 | 根据后端评审补齐 component override 模型、统一 RETURN_IN 锁序、细化流水 V14、确定 batch 无 version 条件更新及有界数据库时间过期任务 | REVIEW |
