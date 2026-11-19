@@ -1,8 +1,8 @@
-# PR：第 10 周库存领用、预占与受控流水契约 REVIEW
+# PR：第 10 周库存领用、预占与受控流水契约冻结
 
 ## 建议标题
 
-`docs(product): review W46 inventory issuance and reservation contract`
+`docs(product): freeze W46 inventory issuance and reservation contract`
 
 ## 背景
 
@@ -18,13 +18,13 @@
 
 ## 本 PR 内容
 
-- 新增 `docs/contracts/INVENTORY_ISSUANCE_API.md` v1.0-draft REVIEW。
+- 新增并冻结 `docs/contracts/INVENTORY_ISSUANCE_API.md` v1.0。
 - 新增 `docs/weekly/2026-W46.md`：范围、D1-D12、三人矩阵、评审提示词和验收方法。
 - 校准 W45、CURRENT_STATE、ROADMAP、TRACEABILITY_MATRIX 和 CONTRACT_INDEX 的真实事实。
 - 明确 onHand/reserved/available 不变量、七态申请状态机、固定锁序、事务边界、权限和错误 reason。
 - 明确 RETURN_IN/LOSS_OUT/SCRAP_OUT 本周推荐范围，以及 STOCKTAKE_ADJUSTMENT 第 12 周恢复计划。
 
-## 待负责人确认 D1-D12
+## 已确认 D1-D12
 
 1. 直接领用金额/价值/数量/低库存阈值。
 2. 版本化策略与历史快照。
@@ -63,7 +63,9 @@
 
 - `fa1f26d` 已提交后端 1-11 项书面评审，总体结论为“需调整后可实现，无架构级阻塞”。
 - 产品已按五项意见补齐 component override、RETURN_IN 锁序、V14 流水约束、batch 并发策略及有界数据库时间过期任务。
-- 后端轻量复核已确认五项修订全部解决、无阻塞；前端 1-9 项书面评审仍待完成，契约继续保持 REVIEW。
+- 后端轻量复核已确认五项修订全部解决、无阻塞。
+- 前端 1-9 项书面评审已完成，结论为无阻塞、无需改约。
+- 负责人于 2026-11-19 确认 D1-D12，契约已冻结为 v1.0。
 
 ## 契约影响
 
@@ -95,4 +97,4 @@
 feature/m03-w03-product-inventory-issuance -> dev
 ```
 
-本 PR 保持 Draft/REVIEW。D1-D12 尚未确认；后端首轮评审和轻量复核均已完成且无阻塞，前端书面评审尚未提交。不得提前合入或发送正式开工词。
+本 PR 已满足冻结门：D1-D12 已确认，后端首轮评审、轻量复核和前端书面评审均已完成且无阻塞。可转 Ready 并合入 `dev`；合入后才能创建正式实现分支和发送开工词。
