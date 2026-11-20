@@ -77,7 +77,7 @@ class InventoryIssueApiIntegrationTest {
         jdbc.update("DELETE FROM lab_inventory_issue_line");
         jdbc.update("DELETE FROM lab_inventory_issue_request");
         jdbc.update("DELETE FROM lab_inventory_issue_policy_version");
-        jdbc.update("DELETE FROM lab_request_idempotency WHERE operation LIKE '%inventory-issue%'");
+        jdbc.update("DELETE FROM lab_request_idempotency WHERE operation LIKE '%/api/inventory%'");
         jdbc.update("DELETE FROM lab_inventory_movement");
         jdbc.update("DELETE FROM lab_inventory_batch");
         jdbc.update("DELETE FROM lab_component_inventory_balance");
@@ -556,6 +556,200 @@ class InventoryIssueApiIntegrationTest {
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM lab_inventory_reservation_allocation WHERE reservation_id=?",
                 Integer.class, reservationId));
+    }
+
+    @Test
+    void returnConfirmsRestoresOriginalBatchAndBalance() {
+        Map<String, Object> ctx = issueOne("full");
+        String member = (String) ctx.get("member");
+        String admin = (String) ctx.get("admin");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        Map<String, Object> created = data(post(
+                "/api/inventory-fulfillments/" + fulfillmentId + "/returns", member, "rtn-create-1",
+                returnCreateBody("多余物料退回", fulfillmentLineId, "2.000")));
+        long returnId = ((Number) created.get("returnId")).longValue();
+
+        data(post("/api/inventory-returns/" + returnId + "/confirm", admin, "rtn-confirm-1",
+                returnCommandBody(1)));
+
+        assertEquals("CONFIRMED", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_return WHERE id=?", String.class, returnId));
+        assertEquals("17.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals("17.000", jdbc.queryForObject(
+                "SELECT current_quantity FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'",
+                String.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='RETURN_IN'",
+                Integer.class));
+    }
+
+    @Test
+    void returnRejectsQuantityExceedingIssued() {
+        Map<String, Object> ctx = issueOne("over");
+        String member = (String) ctx.get("member");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        assertReason(post("/api/inventory-fulfillments/" + fulfillmentId + "/returns", member,
+                        "rtn-over-1", returnCreateBody("超量退回", fulfillmentLineId, "6.000")),
+                HttpStatus.CONFLICT, "INVENTORY_RETURN_EXCEEDS_ISSUED");
+    }
+
+    @Test
+    void returnConfirmRejectsStaleVersion() {
+        Map<String, Object> ctx = issueOne("stale");
+        String member = (String) ctx.get("member");
+        String admin = (String) ctx.get("admin");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        long returnId = ((Number) data(post("/api/inventory-fulfillments/" + fulfillmentId
+                + "/returns", member, "rtn-stale-1",
+                returnCreateBody("退回", fulfillmentLineId, "2.000"))).get("returnId")).longValue();
+        assertReason(post("/api/inventory-returns/" + returnId + "/confirm", admin,
+                        "rtn-stale-2", returnCommandBody(2)),
+                HttpStatus.CONFLICT, "VERSION_CONFLICT");
+    }
+
+    @Test
+    void returnRejectLeavesStockUntouched() {
+        Map<String, Object> ctx = issueOne("reject");
+        String member = (String) ctx.get("member");
+        String admin = (String) ctx.get("admin");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        long returnId = ((Number) data(post("/api/inventory-fulfillments/" + fulfillmentId
+                + "/returns", member, "rtn-rej-1",
+                returnCreateBody("退回", fulfillmentLineId, "2.000"))).get("returnId")).longValue();
+        data(post("/api/inventory-returns/" + returnId + "/reject", admin, "rtn-rej-2",
+                returnCommandBody(1)));
+
+        assertEquals("REJECTED", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_return WHERE id=?", String.class, returnId));
+        assertEquals("15.000", jdbc.queryForObject(
+                "SELECT on_hand_quantity FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='RETURN_IN'",
+                Integer.class));
+    }
+
+    @Test
+    void memberCannotConfirmReturn() {
+        Map<String, Object> ctx = issueOne("member-confirm");
+        String member = (String) ctx.get("member");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        long returnId = ((Number) data(post("/api/inventory-fulfillments/" + fulfillmentId
+                + "/returns", member, "rtn-mc-1",
+                returnCreateBody("退回", fulfillmentLineId, "2.000"))).get("returnId")).longValue();
+        assertReason(post("/api/inventory-returns/" + returnId + "/confirm", member, "rtn-mc-2",
+                        returnCommandBody(1)),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED");
+    }
+
+    @Test
+    void writeOffLossDeductsAvailableStock() {
+        String admin = token(login("admin", "admin123"));
+        long batchId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'", Long.class);
+
+        Map<String, Object> result = data(post("/api/inventory/batches/" + batchId + "/losses",
+                admin, "wo-loss-1", writeOffBody("3.000", "跌落损坏")));
+        assertEquals("LOSS", result.get("type"));
+
+        assertEquals("17.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals("17.000", jdbc.queryForObject(
+                "SELECT current_quantity FROM lab_inventory_batch WHERE id=?", String.class, batchId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='LOSS_OUT'",
+                Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_write_off_command WHERE type='LOSS'",
+                Integer.class));
+    }
+
+    @Test
+    void writeOffRejectsReservedStock() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "wo-rsv-1", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "wo-rsv-2", submitBody(1)));
+        long batchId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'", Long.class);
+
+        assertReason(post("/api/inventory/batches/" + batchId + "/losses", admin, "wo-rsv-3",
+                        writeOffBody("16.000", "试图扣预占")),
+                HttpStatus.CONFLICT, "INVENTORY_RESERVED_STOCK_PROTECTED");
+        assertEquals("20.000", jdbc.queryForObject(
+                "SELECT current_quantity FROM lab_inventory_batch WHERE id=?", String.class, batchId));
+    }
+
+    @Test
+    void writeOffRequiresReason() {
+        String admin = token(login("admin", "admin123"));
+        long batchId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'", Long.class);
+
+        assertReason(post("/api/inventory/batches/" + batchId + "/losses", admin, "wo-reason-1",
+                        writeOffBody("3.000", "")),
+                HttpStatus.BAD_REQUEST, "WRITE_OFF_REASON_REQUIRED");
+    }
+
+    private Map<String, Object> issueOne(String suffix) {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        Map<String, Object> created = data(post("/api/inventory-issue-requests", member,
+                "rtn-create-" + suffix, requestBody()));
+        long requestId = ((Number) created.get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "rtn-submit-" + suffix, submitBody(1)));
+        data(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue", admin,
+                "rtn-issue-" + suffix, confirmBody(2, 1, null)));
+        long fulfillmentId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_fulfillment WHERE request_id=?", Long.class, requestId);
+        long fulfillmentLineId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_fulfillment_line WHERE fulfillment_id=?",
+                Long.class, fulfillmentId);
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("requestId", requestId);
+        ctx.put("fulfillmentId", fulfillmentId);
+        ctx.put("fulfillmentLineId", fulfillmentLineId);
+        ctx.put("member", member);
+        ctx.put("admin", admin);
+        return ctx;
+    }
+
+    private Map<String, Object> returnCreateBody(String reason, long fulfillmentLineId,
+                                                 String quantity) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reason", reason);
+        body.put("lines", List.of(Map.of("fulfillmentLineId", fulfillmentLineId,
+                "quantity", new BigDecimal(quantity))));
+        return body;
+    }
+
+    private Map<String, Object> returnCommandBody(int version) {
+        return Map.of("returnVersion", version);
+    }
+
+    private Map<String, Object> writeOffBody(String quantity, String reason) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("quantity", new BigDecimal(quantity));
+        body.put("reason", reason);
+        return body;
     }
 
     private Map<String, Object> policyBody(int baseVersion) {

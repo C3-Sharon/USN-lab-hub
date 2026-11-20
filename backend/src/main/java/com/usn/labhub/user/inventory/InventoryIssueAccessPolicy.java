@@ -99,6 +99,29 @@ public class InventoryIssueAccessPolicy {
         throw InventoryIssueApiException.fulfillDenied();
     }
 
+    public void requireInitiateReturn(InventoryIssueRequestRecord request) {
+        if (userId().equals(request.getRequesterId()) || isSystemAdmin()
+                || UserContext.getRoles().contains("TEACHER")
+                || UserContext.getRoles().contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw InventoryIssueApiException.operationDenied();
+    }
+
+    public void requireReturnDecision() {
+        if (isSystemAdmin() || UserContext.getRoles().contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw InventoryIssueApiException.fulfillDenied();
+    }
+
+    public void requireWriteOff() {
+        if (isSystemAdmin() || UserContext.getRoles().contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw InventoryIssueApiException.writeOffDenied();
+    }
+
     public void requirePolicyManagement() {
         if (!isSystemAdmin()) {
             throw InventoryIssueApiException.policyDenied();

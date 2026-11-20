@@ -136,4 +136,54 @@ public class InventoryIssueApiException extends RuntimeException {
         return new InventoryIssueApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                 "INVENTORY_ISSUE_TRANSACTION_FAILED", "发放失败，库存未变化");
     }
+
+    public static InventoryIssueApiException returnQuantityInvalid() {
+        return new InventoryIssueApiException(HttpStatus.BAD_REQUEST, "RETURN_QUANTITY_INVALID",
+                "退回数量非法");
+    }
+
+    public static InventoryIssueApiException writeOffReasonRequired() {
+        return new InventoryIssueApiException(HttpStatus.BAD_REQUEST, "WRITE_OFF_REASON_REQUIRED",
+                "损耗或报废原因必填");
+    }
+
+    public static InventoryIssueApiException writeOffDenied() {
+        return new InventoryIssueApiException(HttpStatus.FORBIDDEN, "INVENTORY_WRITE_OFF_DENIED",
+                "无损耗或报废权限");
+    }
+
+    public static InventoryIssueApiException fulfillmentNotFound() {
+        return new InventoryIssueApiException(HttpStatus.NOT_FOUND, "INVENTORY_FULFILLMENT_NOT_FOUND",
+                "发放记录不存在或不可见");
+    }
+
+    public static InventoryIssueApiException returnNotFound() {
+        return new InventoryIssueApiException(HttpStatus.NOT_FOUND, "INVENTORY_RETURN_NOT_FOUND",
+                "退回记录不存在或不可见");
+    }
+
+    public static InventoryIssueApiException batchNotFound() {
+        return new InventoryIssueApiException(HttpStatus.NOT_FOUND, "INVENTORY_BATCH_NOT_FOUND",
+                "库存批次不存在或不可见");
+    }
+
+    public static InventoryIssueApiException returnExceedsIssued() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_RETURN_EXCEEDS_ISSUED",
+                "累计退回超过原发放");
+    }
+
+    public static InventoryIssueApiException reservedStockProtected() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_RESERVED_STOCK_PROTECTED",
+                "不能扣减已预占库存");
+    }
+
+    public static InventoryIssueApiException returnTransactionFailed() {
+        return new InventoryIssueApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "INVENTORY_RETURN_TRANSACTION_FAILED", "退回失败，库存未变化");
+    }
+
+    public static InventoryIssueApiException writeOffTransactionFailed() {
+        return new InventoryIssueApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "INVENTORY_WRITE_OFF_TRANSACTION_FAILED", "损耗或报废失败，库存未变化");
+    }
 }

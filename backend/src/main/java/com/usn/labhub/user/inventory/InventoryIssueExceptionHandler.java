@@ -3,6 +3,7 @@ package com.usn.labhub.user.inventory;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.controller.InventoryIssuePolicyController;
 import com.usn.labhub.user.controller.InventoryIssueRequestController;
+import com.usn.labhub.user.controller.InventoryReturnWriteOffController;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -21,7 +22,7 @@ import java.util.UUID;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {InventoryIssuePolicyController.class,
-        InventoryIssueRequestController.class})
+        InventoryIssueRequestController.class, InventoryReturnWriteOffController.class})
 public class InventoryIssueExceptionHandler {
     @ExceptionHandler(InventoryIssueApiException.class)
     public ResponseEntity<Result<Object>> handle(InventoryIssueApiException exception) {

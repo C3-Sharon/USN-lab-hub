@@ -3,6 +3,9 @@ package com.usn.labhub.user.service;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueCommandDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueConfirmIssueDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueReallocateDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryReturnCommandDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryReturnCreateDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryWriteOffDTO;
 import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord;
@@ -14,6 +17,10 @@ import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineSummaryRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryWriteOffCommandRecord;
 import com.usn.labhub.user.domain.entity.procurement.InventoryBalanceRecord;
 import com.usn.labhub.user.domain.entity.procurement.InventoryMovementRecord;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO;
@@ -126,6 +133,39 @@ public class InventoryIssueWorkflowService {
         expiryService.expireIfNeeded(id);
         return support.idempotent(operation(id, "confirm-issue"), key, request,
                 () -> confirmIssueValue(id, request, testFaultPoint));
+    }
+
+    @Transactional
+    public Map<String, Object> initiateReturn(Long fulfillmentId, String key,
+                                              InventoryReturnCreateDTO request) {
+        return support.idempotent("POST:/api/inventory-fulfillments/" + fulfillmentId + "/returns",
+                key, request, () -> initiateReturnValue(fulfillmentId, request));
+    }
+
+    public List<Map<String, Object>> listReturns(Long fulfillmentId) {
+        return listReturnsValue(fulfillmentId);
+    }
+
+    @Transactional
+    public Map<String, Object> confirmReturn(Long returnId, String key,
+                                             InventoryReturnCommandDTO request) {
+        return support.idempotent("POST:/api/inventory-returns/" + returnId + "/confirm",
+                key, request, () -> confirmReturnValue(returnId, request));
+    }
+
+    @Transactional
+    public Map<String, Object> rejectReturn(Long returnId, String key,
+                                            InventoryReturnCommandDTO request) {
+        return support.idempotent("POST:/api/inventory-returns/" + returnId + "/reject",
+                key, request, () -> rejectReturnValue(returnId, request));
+    }
+
+    @Transactional
+    public Map<String, Object> writeOff(Long batchId, String key, String type,
+                                        InventoryWriteOffDTO request) {
+        String action = "LOSS".equals(type) ? "losses" : "scraps";
+        return support.idempotent("POST:/api/inventory/batches/" + batchId + "/" + action,
+                key, request, () -> writeOffValue(batchId, type, request));
     }
 
     private Map<String, Object> submitValue(Long id, InventoryIssueCommandDTO request) {
@@ -619,6 +659,397 @@ public class InventoryIssueWorkflowService {
         result.put("requestVersion", issue.getVersion() + 1);
         result.put("movements", movementResults);
         return result;
+    }
+
+    private Map<String, Object> initiateReturnValue(Long fulfillmentId,
+                                                    InventoryReturnCreateDTO request) {
+        InventoryIssueFulfillmentRecord fulfillment = mapper.selectFulfillment(fulfillmentId);
+        if (fulfillment == null) {
+            throw InventoryIssueApiException.fulfillmentNotFound();
+        }
+        InventoryIssueRequestRecord issue = mapper.selectRequest(fulfillment.getRequestId());
+        if (issue == null || !access.canView(issue)) {
+            throw InventoryIssueApiException.requestNotFound();
+        }
+        access.requireInitiateReturn(issue);
+        if (!"ISSUED".equals(issue.getStatus())) {
+            throw InventoryIssueApiException.invalidTransition();
+        }
+        mapper.selectRequestForUpdate(issue.getId());
+
+        List<InventoryIssueFulfillmentLineRecord> fulfillmentLines =
+                mapper.selectFulfillmentLines(fulfillmentId);
+        if (fulfillmentLines.isEmpty()) {
+            throw InventoryIssueApiException.fulfillmentNotFound();
+        }
+        Map<Long, InventoryIssueFulfillmentLineRecord> lineById = fulfillmentLines.stream()
+                .collect(Collectors.toMap(InventoryIssueFulfillmentLineRecord::getId,
+                        Function.identity()));
+
+        Map<Long, BigDecimal> requestedByLine = new LinkedHashMap<>();
+        for (InventoryReturnCreateDTO.Line line : request.lines()) {
+            if (line == null || line.fulfillmentLineId() == null || line.quantity() == null
+                    || line.quantity().signum() <= 0
+                    || Math.max(0, line.quantity().stripTrailingZeros().scale()) > 3
+                    || !lineById.containsKey(line.fulfillmentLineId())
+                    || requestedByLine.containsKey(line.fulfillmentLineId())) {
+                throw InventoryIssueApiException.returnQuantityInvalid();
+            }
+            requestedByLine.put(line.fulfillmentLineId(), line.quantity());
+        }
+
+        Map<Long, BigDecimal> alreadyReturned = new HashMap<>();
+        for (InventoryReturnLineSummaryRecord summary
+                : mapper.selectReturnLineSummaries(fulfillmentId)) {
+            if (Set.of("PENDING_CONFIRMATION", "CONFIRMED").contains(summary.getStatus())) {
+                alreadyReturned.merge(summary.getFulfillmentLineId(), summary.getQuantity(),
+                        BigDecimal::add);
+            }
+        }
+        for (Map.Entry<Long, BigDecimal> entry : requestedByLine.entrySet()) {
+            InventoryIssueFulfillmentLineRecord line = lineById.get(entry.getKey());
+            BigDecimal already = alreadyReturned.getOrDefault(entry.getKey(), BigDecimal.ZERO);
+            if (already.add(entry.getValue()).compareTo(line.getQuantity()) > 0) {
+                throw InventoryIssueApiException.returnExceedsIssued();
+            }
+        }
+
+        String reason = requiredText(request.reason(), 500);
+        if (reason.length() < 2) {
+            throw InventoryIssueApiException.invalid();
+        }
+        Long actorId = access.userId();
+        LocalDateTime dbNow = mapper.selectCurrentTimestamp();
+
+        InventoryReturnRecord record = new InventoryReturnRecord();
+        record.setReturnNo(number("RTN", dbNow.toLocalDate()));
+        record.setFulfillmentId(fulfillmentId);
+        record.setRequestId(issue.getId());
+        record.setStatus("PENDING_CONFIRMATION");
+        record.setReason(reason);
+        record.setRequestedBy(actorId);
+        record.setVersion(1);
+        record.setCreatedBy(actorId);
+        record.setCreateTime(dbNow);
+        record.setUpdatedBy(actorId);
+        record.setUpdateTime(dbNow);
+        mapper.insertReturn(record);
+
+        for (Map.Entry<Long, BigDecimal> entry : requestedByLine.entrySet()) {
+            InventoryIssueFulfillmentLineRecord line = lineById.get(entry.getKey());
+            InventoryReturnLineRecord returnLine = new InventoryReturnLineRecord();
+            returnLine.setReturnId(record.getId());
+            returnLine.setFulfillmentLineId(entry.getKey());
+            returnLine.setBatchId(line.getBatchId());
+            returnLine.setQuantity(entry.getValue());
+            mapper.insertReturnLine(returnLine);
+        }
+
+        support.audit(UUID.randomUUID().toString(), "INITIATE_RETURN", "INVENTORY_RETURN",
+                record.getId(), "PENDING_CONFIRMATION", "PENDING_CONFIRMATION", reason,
+                Map.of("fulfillmentId", fulfillmentId, "requestId", issue.getId()));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("returnId", record.getId());
+        result.put("returnNo", record.getReturnNo());
+        result.put("status", "PENDING_CONFIRMATION");
+        result.put("version", 1);
+        return result;
+    }
+
+    private List<Map<String, Object>> listReturnsValue(Long fulfillmentId) {
+        InventoryIssueFulfillmentRecord fulfillment = mapper.selectFulfillment(fulfillmentId);
+        if (fulfillment == null) {
+            throw InventoryIssueApiException.fulfillmentNotFound();
+        }
+        InventoryIssueRequestRecord issue = mapper.selectRequest(fulfillment.getRequestId());
+        if (issue == null || !access.canView(issue)) {
+            throw InventoryIssueApiException.requestNotFound();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (InventoryReturnRecord record : mapper.selectReturnsByFulfillment(fulfillmentId)) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", record.getId());
+            item.put("returnNo", record.getReturnNo());
+            item.put("status", record.getStatus());
+            item.put("reason", record.getReason());
+            item.put("requestedBy", record.getRequestedBy());
+            item.put("confirmedBy", record.getConfirmedBy());
+            item.put("version", record.getVersion());
+            item.put("lines", mapper.selectReturnLines(record.getId()).stream()
+                    .map(line -> Map.of("fulfillmentLineId", line.getFulfillmentLineId(),
+                            "batchId", line.getBatchId(), "quantity", line.getQuantity()))
+                    .toList());
+            result.add(item);
+        }
+        return result;
+    }
+
+    private Map<String, Object> confirmReturnValue(Long returnId, InventoryReturnCommandDTO request) {
+        InventoryReturnRecord pre = mapper.selectReturn(returnId);
+        if (pre == null) {
+            throw InventoryIssueApiException.returnNotFound();
+        }
+        access.requireReturnDecision();
+
+        InventoryIssueRequestRecord issue = mapper.selectRequestForUpdate(pre.getRequestId());
+        if (issue == null || !access.canView(issue)) {
+            throw InventoryIssueApiException.requestNotFound();
+        }
+        if (!"ISSUED".equals(issue.getStatus())) {
+            throw InventoryIssueApiException.invalidTransition();
+        }
+        mapper.selectLinesForUpdate(issue.getId());
+
+        List<InventoryReturnLineRecord> preLines = mapper.selectReturnLines(returnId);
+        if (preLines.isEmpty()) {
+            throw InventoryIssueApiException.returnQuantityInvalid();
+        }
+        List<Long> batchIds = preLines.stream().map(InventoryReturnLineRecord::getBatchId)
+                .distinct().sorted().toList();
+        List<Long> componentIds = mapper.selectBatchesByIds(batchIds).stream()
+                .map(InventoryIssueBatchRecord::getComponentId).distinct().sorted().toList();
+        if (componentIds.isEmpty()) {
+            throw InventoryIssueApiException.batchNotFound();
+        }
+
+        List<InventoryBalanceRecord> balances =
+                procurementMapper.selectInventoryBalancesForUpdate(componentIds);
+        Map<Long, InventoryBalanceRecord> balanceByComponent = balances.stream()
+                .collect(Collectors.toMap(InventoryBalanceRecord::getComponentId, Function.identity()));
+        Map<Long, InventoryIssueBatchRecord> batchById =
+                mapper.selectBatchesForUpdateByIds(batchIds).stream()
+                        .collect(Collectors.toMap(InventoryIssueBatchRecord::getId, Function.identity()));
+        mapper.selectReservationsForUpdate(issue.getId());
+        mapper.selectAllocationsForRequest(issue.getId());
+        mapper.selectFulfillmentForUpdate(pre.getFulfillmentId());
+        Map<Long, InventoryIssueFulfillmentLineRecord> fulfillmentLineById =
+                mapper.selectFulfillmentLinesForUpdate(pre.getFulfillmentId()).stream()
+                        .collect(Collectors.toMap(InventoryIssueFulfillmentLineRecord::getId,
+                                Function.identity()));
+
+        InventoryReturnRecord lockedReturn = mapper.selectReturnForUpdate(returnId);
+        if (lockedReturn == null) {
+            throw InventoryIssueApiException.returnNotFound();
+        }
+        if (!"PENDING_CONFIRMATION".equals(lockedReturn.getStatus())) {
+            throw InventoryIssueApiException.invalidTransition();
+        }
+        if (!lockedReturn.getVersion().equals(request.returnVersion())) {
+            throw InventoryIssueApiException.versionConflict(lockedReturn.getVersion());
+        }
+        List<InventoryReturnLineRecord> returnLines = mapper.selectReturnLinesForUpdate(returnId);
+        if (returnLines.isEmpty()) {
+            throw InventoryIssueApiException.returnQuantityInvalid();
+        }
+
+        Map<Long, BigDecimal> confirmedByLine = new HashMap<>();
+        for (InventoryReturnLineSummaryRecord summary
+                : mapper.selectReturnLineSummaries(pre.getFulfillmentId())) {
+            if ("CONFIRMED".equals(summary.getStatus())) {
+                confirmedByLine.merge(summary.getFulfillmentLineId(), summary.getQuantity(),
+                        BigDecimal::add);
+            }
+        }
+        for (InventoryReturnLineRecord line : returnLines) {
+            InventoryIssueFulfillmentLineRecord fulfillmentLine =
+                    fulfillmentLineById.get(line.getFulfillmentLineId());
+            if (fulfillmentLine == null) {
+                throw InventoryIssueApiException.returnQuantityInvalid();
+            }
+            BigDecimal already = confirmedByLine.getOrDefault(line.getFulfillmentLineId(),
+                    BigDecimal.ZERO);
+            if (already.add(line.getQuantity()).compareTo(fulfillmentLine.getQuantity()) > 0) {
+                throw InventoryIssueApiException.returnExceedsIssued();
+            }
+        }
+
+        LocalDateTime dbNow = mapper.selectCurrentTimestamp();
+        Map<Long, BigDecimal> runningOnHand = new HashMap<>();
+        for (InventoryBalanceRecord balance : balances) {
+            runningOnHand.put(balance.getComponentId(), balance.getOnHandQuantity());
+        }
+        List<Map<String, Object>> movements = new ArrayList<>();
+        for (InventoryReturnLineRecord line : returnLines) {
+            InventoryIssueFulfillmentLineRecord fulfillmentLine =
+                    fulfillmentLineById.get(line.getFulfillmentLineId());
+            InventoryIssueBatchRecord batch = batchById.get(line.getBatchId());
+            InventoryBalanceRecord balance = balanceByComponent.get(batch.getComponentId());
+            if (batch == null || balance == null) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+            if (mapper.increaseBatchCurrent(batch.getId(), line.getQuantity()) != 1
+                    || mapper.increaseOnHand(batch.getComponentId(), line.getQuantity(), dbNow) != 1) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+
+            BigDecimal before = runningOnHand.get(batch.getComponentId());
+            BigDecimal after = before.add(line.getQuantity());
+            runningOnHand.put(batch.getComponentId(), after);
+
+            InventoryMovementRecord movement = new InventoryMovementRecord();
+            movement.setMovementNo(number("MOV", dbNow.toLocalDate()));
+            movement.setMovementType("RETURN_IN");
+            movement.setComponentId(batch.getComponentId());
+            movement.setBatchId(batch.getId());
+            movement.setSourceType("RETURN_LINE");
+            movement.setSourceId(line.getId());
+            movement.setQuantityDelta(line.getQuantity());
+            movement.setBalanceBefore(before);
+            movement.setBalanceAfter(after);
+            movement.setUnit(balance.getUnit());
+            movement.setUnitCost(fulfillmentLine.getUnitCostSnapshot());
+            movement.setOperatorId(access.userId());
+            movement.setOccurredAt(dbNow);
+            movement.setRequestId(issue.getRequestNo());
+            procurementMapper.insertInventoryMovementTyped(movement);
+
+            Map<String, Object> movementResult = new LinkedHashMap<>();
+            movementResult.put("movementId", movement.getId());
+            movementResult.put("movementType", "RETURN_IN");
+            movementResult.put("batchId", batch.getId());
+            movementResult.put("quantityDelta", movement.getQuantityDelta());
+            movementResult.put("balanceBefore", before);
+            movementResult.put("balanceAfter", after);
+            movements.add(movementResult);
+        }
+
+        if (mapper.confirmReturn(returnId, lockedReturn.getVersion(), access.userId(), dbNow) != 1) {
+            throw InventoryIssueApiException.versionConflict(latestReturnVersion(returnId));
+        }
+        support.audit(UUID.randomUUID().toString(), "CONFIRM_RETURN", "INVENTORY_RETURN",
+                returnId, "PENDING_CONFIRMATION", "CONFIRMED", null,
+                Map.of("fulfillmentId", pre.getFulfillmentId()));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("returnId", returnId);
+        result.put("status", "CONFIRMED");
+        result.put("returnVersion", lockedReturn.getVersion() + 1);
+        result.put("movements", movements);
+        return result;
+    }
+
+    private Map<String, Object> rejectReturnValue(Long returnId, InventoryReturnCommandDTO request) {
+        access.requireReturnDecision();
+        InventoryReturnRecord record = mapper.selectReturnForUpdate(returnId);
+        if (record == null) {
+            throw InventoryIssueApiException.returnNotFound();
+        }
+        if (!"PENDING_CONFIRMATION".equals(record.getStatus())) {
+            throw InventoryIssueApiException.invalidTransition();
+        }
+        if (!record.getVersion().equals(request.returnVersion())) {
+            throw InventoryIssueApiException.versionConflict(record.getVersion());
+        }
+        String comment = optionalText(request.comment(), 500);
+        LocalDateTime dbNow = mapper.selectCurrentTimestamp();
+        if (mapper.rejectReturn(returnId, record.getVersion(), access.userId(), dbNow) != 1) {
+            throw InventoryIssueApiException.versionConflict(latestReturnVersion(returnId));
+        }
+        support.audit(UUID.randomUUID().toString(), "REJECT_RETURN", "INVENTORY_RETURN",
+                returnId, "PENDING_CONFIRMATION", "REJECTED", comment, null);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("returnId", returnId);
+        result.put("status", "REJECTED");
+        result.put("returnVersion", record.getVersion() + 1);
+        return result;
+    }
+
+    private Map<String, Object> writeOffValue(Long batchId, String type, InventoryWriteOffDTO request) {
+        access.requireWriteOff();
+        if (request.quantity() == null || request.quantity().signum() <= 0
+                || Math.max(0, request.quantity().stripTrailingZeros().scale()) > 3) {
+            throw InventoryIssueApiException.invalid();
+        }
+        if (!StringUtils.hasText(request.reason())) {
+            throw InventoryIssueApiException.writeOffReasonRequired();
+        }
+        String reason = request.reason().trim();
+        if (reason.length() > 500) {
+            throw InventoryIssueApiException.invalid();
+        }
+
+        InventoryIssueBatchRecord batch = mapper.selectBatch(batchId);
+        if (batch == null) {
+            throw InventoryIssueApiException.batchNotFound();
+        }
+        Long componentId = batch.getComponentId();
+        List<InventoryBalanceRecord> balances =
+                procurementMapper.selectInventoryBalancesForUpdate(List.of(componentId));
+        if (balances.isEmpty()) {
+            throw InventoryIssueApiException.reservedStockProtected();
+        }
+        InventoryBalanceRecord balance = balances.get(0);
+        List<InventoryIssueBatchRecord> locked = mapper.selectBatchesForUpdateByIds(List.of(batchId));
+        if (locked.isEmpty()) {
+            throw InventoryIssueApiException.batchNotFound();
+        }
+        InventoryIssueBatchRecord lockedBatch = locked.get(0);
+
+        LocalDateTime dbNow = mapper.selectCurrentTimestamp();
+        if (mapper.writeOffBalance(componentId, request.quantity(), dbNow) != 1) {
+            throw InventoryIssueApiException.reservedStockProtected();
+        }
+        if (mapper.writeOffBatch(batchId, request.quantity()) != 1) {
+            throw InventoryIssueApiException.reservedStockProtected();
+        }
+
+        BigDecimal before = balance.getOnHandQuantity();
+        BigDecimal after = before.subtract(request.quantity());
+        InventoryMovementRecord movement = new InventoryMovementRecord();
+        movement.setMovementNo(number("MOV", dbNow.toLocalDate()));
+        movement.setMovementType("LOSS".equals(type) ? "LOSS_OUT" : "SCRAP_OUT");
+        movement.setComponentId(componentId);
+        movement.setBatchId(batchId);
+        movement.setSourceType("WRITE_OFF_COMMAND");
+        movement.setSourceId(-1L);
+        movement.setQuantityDelta(request.quantity().negate());
+        movement.setBalanceBefore(before);
+        movement.setBalanceAfter(after);
+        movement.setUnit(balance.getUnit());
+        movement.setUnitCost(lockedBatch.getUnitCost());
+        movement.setReason(reason);
+        movement.setOperatorId(access.userId());
+        movement.setOccurredAt(dbNow);
+        movement.setRequestId(UUID.randomUUID().toString());
+        procurementMapper.insertInventoryMovementTyped(movement);
+
+        InventoryWriteOffCommandRecord command = new InventoryWriteOffCommandRecord();
+        command.setCommandNo(number("WOF", dbNow.toLocalDate()));
+        command.setType(type);
+        command.setComponentId(componentId);
+        command.setBatchId(batchId);
+        command.setQuantity(request.quantity());
+        command.setReason(reason);
+        command.setOperatorId(access.userId());
+        command.setOccurredAt(dbNow);
+        command.setMovementId(movement.getId());
+        command.setRequestId(movement.getRequestId());
+        command.setCreatedBy(access.userId());
+        command.setCreateTime(dbNow);
+        mapper.insertWriteOffCommand(command);
+        procurementMapper.updateInventoryMovementSourceId(movement.getId(), command.getId());
+
+        support.audit(UUID.randomUUID().toString(), "WRITE_OFF_" + type,
+                "INVENTORY_WRITE_OFF_COMMAND", command.getId(), null, type, reason,
+                Map.of("batchId", batchId, "quantity", request.quantity()));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("commandId", command.getId());
+        result.put("commandNo", command.getCommandNo());
+        result.put("type", type);
+        result.put("movementId", movement.getId());
+        result.put("batchId", batchId);
+        result.put("quantityDelta", movement.getQuantityDelta());
+        result.put("balanceBefore", before);
+        result.put("balanceAfter", after);
+        return result;
+    }
+
+    private Integer latestReturnVersion(Long id) {
+        InventoryReturnRecord latest = mapper.selectReturn(id);
+        return latest == null ? 0 : latest.getVersion();
     }
 
     private void failIfConfigured(String point, String requestedPoint) {

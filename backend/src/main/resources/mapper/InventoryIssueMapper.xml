@@ -446,4 +446,161 @@
         WHERE id=#{id} AND version=#{version} AND status='APPROVED'
     </update>
 
+    <select id="selectFulfillment"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE id=#{id}
+    </select>
+
+    <select id="selectFulfillmentForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectFulfillmentLinesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord">
+        SELECT id, fulfillment_id AS fulfillmentId, request_line_id AS requestLineId,
+               reservation_allocation_id AS reservationAllocationId, batch_id AS batchId,
+               quantity, unit_cost_snapshot AS unitCostSnapshot, movement_id AS movementId
+        FROM lab_inventory_fulfillment_line WHERE fulfillment_id=#{fulfillmentId}
+        ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectBatch"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch WHERE id=#{id}
+    </select>
+
+    <select id="selectBatchesByIds"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch
+        WHERE id IN
+        <foreach collection="batchIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insertReturn" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_return(
+            return_no,fulfillment_id,request_id,status,reason,requested_by,confirmed_by,
+            version,created_by,create_time,updated_by,update_time
+        ) VALUES(#{returnNo},#{fulfillmentId},#{requestId},#{status},#{reason},#{requestedBy},
+                 #{confirmedBy},#{version},#{createdBy},#{createTime},#{updatedBy},#{updateTime})
+    </insert>
+
+    <insert id="insertReturnLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_return_line(return_id,fulfillment_line_id,batch_id,quantity)
+        VALUES(#{returnId},#{fulfillmentLineId},#{batchId},#{quantity})
+    </insert>
+
+    <select id="selectReturnsByFulfillment"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE fulfillment_id=#{fulfillmentId} ORDER BY id DESC
+    </select>
+
+    <select id="selectReturnLineSummaries"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineSummaryRecord">
+        SELECT rl.fulfillment_line_id AS fulfillmentLineId, r.status AS status,
+               rl.quantity AS quantity
+        FROM lab_inventory_return_line rl
+        JOIN lab_inventory_return r ON r.id=rl.return_id
+        WHERE r.fulfillment_id=#{fulfillmentId}
+    </select>
+
+    <select id="selectReturn"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE id=#{id}
+    </select>
+
+    <select id="selectReturnForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectReturnLines"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord">
+        SELECT id, return_id AS returnId, fulfillment_line_id AS fulfillmentLineId,
+               batch_id AS batchId, quantity
+        FROM lab_inventory_return_line WHERE return_id=#{returnId} ORDER BY id ASC
+    </select>
+
+    <select id="selectReturnLinesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord">
+        SELECT id, return_id AS returnId, fulfillment_line_id AS fulfillmentLineId,
+               batch_id AS batchId, quantity
+        FROM lab_inventory_return_line WHERE return_id=#{returnId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <update id="confirmReturn">
+        UPDATE lab_inventory_return
+        SET status='CONFIRMED', confirmed_by=#{confirmedBy}, version=version+1,
+            updated_by=#{confirmedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='PENDING_CONFIRMATION'
+    </update>
+
+    <update id="rejectReturn">
+        UPDATE lab_inventory_return
+        SET status='REJECTED', version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='PENDING_CONFIRMATION'
+    </update>
+
+    <update id="increaseOnHand">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity+#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+    </update>
+
+    <update id="increaseBatchCurrent">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity+#{delta}
+        WHERE id=#{batchId}
+    </update>
+
+    <update id="writeOffBalance">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity-#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+          AND on_hand_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="writeOffBatch">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity-#{delta}
+        WHERE id=#{batchId} AND current_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <insert id="insertWriteOffCommand" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_write_off_command(
+            command_no,type,component_id,batch_id,quantity,reason,operator_id,
+            occurred_at,movement_id,request_id,created_by,create_time
+        ) VALUES(#{commandNo},#{type},#{componentId},#{batchId},#{quantity},#{reason},#{operatorId},
+                 #{occurredAt},#{movementId},#{requestId},#{createdBy},#{createTime})
+    </insert>
+
 </mapper>

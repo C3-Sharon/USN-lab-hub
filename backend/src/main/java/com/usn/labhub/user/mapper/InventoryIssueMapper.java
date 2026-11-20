@@ -11,6 +11,10 @@ import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineSummaryRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryWriteOffCommandRecord;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -127,6 +131,52 @@ public interface InventoryIssueMapper {
 
     List<InventoryIssueFulfillmentLineRecord> selectFulfillmentLines(
             @Param("fulfillmentId") Long fulfillmentId);
+
+    InventoryIssueFulfillmentRecord selectFulfillment(@Param("id") Long id);
+
+    InventoryIssueFulfillmentRecord selectFulfillmentForUpdate(@Param("id") Long id);
+
+    List<InventoryIssueFulfillmentLineRecord> selectFulfillmentLinesForUpdate(
+            @Param("fulfillmentId") Long fulfillmentId);
+
+    InventoryIssueBatchRecord selectBatch(@Param("id") Long id);
+
+    List<InventoryIssueBatchRecord> selectBatchesByIds(@Param("batchIds") List<Long> batchIds);
+
+    int insertReturn(InventoryReturnRecord record);
+
+    int insertReturnLine(InventoryReturnLineRecord line);
+
+    List<InventoryReturnRecord> selectReturnsByFulfillment(@Param("fulfillmentId") Long fulfillmentId);
+
+    List<InventoryReturnLineSummaryRecord> selectReturnLineSummaries(
+            @Param("fulfillmentId") Long fulfillmentId);
+
+    InventoryReturnRecord selectReturn(@Param("id") Long id);
+
+    InventoryReturnRecord selectReturnForUpdate(@Param("id") Long id);
+
+    List<InventoryReturnLineRecord> selectReturnLines(@Param("returnId") Long returnId);
+
+    List<InventoryReturnLineRecord> selectReturnLinesForUpdate(@Param("returnId") Long returnId);
+
+    int confirmReturn(@Param("id") Long id, @Param("version") Integer version,
+                      @Param("confirmedBy") Long confirmedBy, @Param("now") LocalDateTime now);
+
+    int rejectReturn(@Param("id") Long id, @Param("version") Integer version,
+                     @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int increaseOnHand(@Param("componentId") Long componentId,
+                       @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
+
+    int increaseBatchCurrent(@Param("batchId") Long batchId, @Param("delta") BigDecimal delta);
+
+    int writeOffBalance(@Param("componentId") Long componentId,
+                        @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
+
+    int writeOffBatch(@Param("batchId") Long batchId, @Param("delta") BigDecimal delta);
+
+    int insertWriteOffCommand(InventoryWriteOffCommandRecord command);
 
     int consumeBalance(@Param("componentId") Long componentId,
                        @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
