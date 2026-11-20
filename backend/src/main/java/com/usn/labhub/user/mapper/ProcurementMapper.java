@@ -181,9 +181,21 @@ public interface ProcurementMapper {
     List<InventoryBatchVO> selectInventoryBatches(@Param("componentId") Long componentId,
                                                    @Param("offset") int offset, @Param("pageSize") int pageSize);
 
-    long countInventoryMovements(@Param("componentId") Long componentId);
+    long countInventoryMovements(@Param("componentId") Long componentId,
+                                 @Param("movementType") String movementType,
+                                 @Param("sourceType") String sourceType,
+                                 @Param("operatorId") Long operatorId,
+                                 @Param("batchNo") String batchNo,
+                                 @Param("occurredFrom") LocalDateTime occurredFrom,
+                                 @Param("occurredTo") LocalDateTime occurredTo);
 
     List<InventoryMovementVO> selectInventoryMovements(@Param("componentId") Long componentId,
+                                                        @Param("movementType") String movementType,
+                                                        @Param("sourceType") String sourceType,
+                                                        @Param("operatorId") Long operatorId,
+                                                        @Param("batchNo") String batchNo,
+                                                        @Param("occurredFrom") LocalDateTime occurredFrom,
+                                                        @Param("occurredTo") LocalDateTime occurredTo,
                                                         @Param("offset") int offset,
                                                         @Param("pageSize") int pageSize);
 

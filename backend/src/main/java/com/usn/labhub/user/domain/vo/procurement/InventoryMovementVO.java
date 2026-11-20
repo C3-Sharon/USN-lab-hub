@@ -12,12 +12,15 @@ public class InventoryMovementVO {
     private String movementType;
     private Long componentId;
     private Long batchId;
+    private String batchNo;
+    private String sourceType;
     private Long sourceId;
     private BigDecimal quantityDelta;
     private BigDecimal balanceBefore;
     private BigDecimal balanceAfter;
     private String unit;
     private BigDecimal unitCost;
+    private String reason;
     private Long operatorId;
     private LocalDateTime occurredAt;
 }

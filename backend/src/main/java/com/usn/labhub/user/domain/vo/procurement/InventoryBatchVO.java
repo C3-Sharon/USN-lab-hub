@@ -14,6 +14,8 @@ public class InventoryBatchVO {
     private Long sourceReceiptLineId;
     private BigDecimal initialQuantity;
     private BigDecimal currentQuantity;
+    private BigDecimal reservedQuantity;
+    private BigDecimal availableQuantity;
     private String unit;
     private BigDecimal unitCost;
     private String supplierLotNo;

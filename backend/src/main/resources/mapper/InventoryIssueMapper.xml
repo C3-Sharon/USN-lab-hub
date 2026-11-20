@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.InventoryIssueMapper">
+
+    <sql id="policyColumns">
+        id, policy_version AS policyVersion, currency,
+        direct_amount_threshold AS directAmountThreshold,
+        valuable_unit_cost_threshold AS valuableUnitCostThreshold,
+        default_direct_quantity_limit AS defaultDirectQuantityLimit,
+        low_stock_ratio AS lowStockRatio, reservation_ttl_hours AS reservationTtlHours,
+        effective_at AS effectiveAt, created_by AS createdBy, create_time AS createTime
+    </sql>
+
+    <select id="selectCurrentPolicy"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC LIMIT 1
+    </select>
+
+    <select id="selectCurrentPolicyForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC LIMIT 1 FOR UPDATE
+    </select>
+
+    <select id="selectPolicyVersions"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC
+    </select>
+
+    <select id="countActiveCategories" resultType="int">
+        SELECT COUNT(*) FROM lab_component_category
+        WHERE status='ACTIVE' AND id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <insert id="insertPolicy" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_policy_version(
+            policy_version,currency,direct_amount_threshold,valuable_unit_cost_threshold,
+            default_direct_quantity_limit,low_stock_ratio,reservation_ttl_hours,
+            effective_at,created_by,create_time
+        ) VALUES(#{policyVersion},'CNY',#{directAmountThreshold},#{valuableUnitCostThreshold},
+                 #{defaultDirectQuantityLimit},#{lowStockRatio},#{reservationTtlHours},
+                 #{effectiveAt},#{createdBy},#{createTime})
+    </insert>
+
+    <insert id="insertForcedCategory">
+        INSERT INTO lab_inventory_issue_policy_forced_category(policy_id,category_id)
+        VALUES(#{policyId},#{categoryId})
+    </insert>
+
+    <select id="selectForcedCategoryIds" resultType="long">
+        SELECT category_id FROM lab_inventory_issue_policy_forced_category
+        WHERE policy_id=#{policyId} ORDER BY category_id ASC
+    </select>
+
+    <insert id="insertOverride" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_policy_component_override(
+            policy_id,component_id,direct_quantity_limit,component_name,unit_snapshot,
+            created_by,create_time
+        ) VALUES(#{policyId},#{componentId},#{directQuantityLimit},#{componentName},#{unitSnapshot},
+                 #{createdBy},#{createTime})
+    </insert>
+
+    <select id="selectOverrides"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO">
+        SELECT id, policy_id AS policyId, component_id AS componentId,
+               component_name AS componentName, unit_snapshot AS unit,
+               direct_quantity_limit AS directQuantityLimit
+        FROM lab_inventory_issue_policy_component_override
+        WHERE policy_id=#{policyId} ORDER BY id ASC
+    </select>
+
+    <select id="selectComponentForIssue"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord">
+        SELECT c.id,c.name,m.name AS manufacturerName,c.mpn,c.base_unit AS baseUnit,c.status
+        FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        WHERE c.id=#{id}
+    </select>
+
+    <sql id="requestColumns">
+        r.id, r.request_no AS requestNo, r.title, r.purpose,
+        r.requester_id AS requesterId, r.requester_name AS requesterName,
+        r.project_id AS projectId, r.project_name AS projectName,
+        r.status, r.approval_required AS approvalRequired,
+        r.approval_reasons_json AS approvalReasonsJson,
+        r.policy_version AS policyVersion, r.estimated_amount AS estimatedAmount,
+        r.submitted_at AS submittedAt, r.approved_at AS approvedAt,
+        r.issued_at AS issuedAt, r.expires_at AS expiresAt,
+        r.version, r.created_by AS createdBy, r.create_time AS createTime,
+        r.updated_by AS updatedBy, r.update_time AS updateTime
+    </sql>
+
+    <insert id="insertRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_request(
+            request_no,title,purpose,requester_id,requester_name,project_id,project_name,
+            status,version,created_by,create_time,updated_by,update_time
+        ) VALUES(#{requestNo},#{title},#{purpose},#{requesterId},#{requesterName},#{projectId},#{projectName},
+                 'DRAFT',1,#{createdBy},#{createTime},#{updatedBy},#{updateTime})
+    </insert>
+
+    <update id="updateDraftRequest">
+        UPDATE lab_inventory_issue_request
+        SET title=#{title}, purpose=#{purpose}, project_id=#{projectId}, project_name=#{projectName},
+            version=version+1, updated_by=#{updatedBy}, update_time=#{updateTime}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <insert id="insertLine">
+        INSERT INTO lab_inventory_issue_line(
+            request_id,line_no,component_id,component_name,manufacturer_name,mpn,unit,
+            requested_quantity,reserved_quantity,issued_quantity,returned_quantity,version
+        ) VALUES(#{requestId},#{lineNo},#{componentId},#{componentName},#{manufacturerName},#{mpn},#{unit},
+                 #{requestedQuantity},0.000,0.000,0.000,1)
+    </insert>
+
+    <delete id="deleteLines">
+        DELETE FROM lab_inventory_issue_line WHERE request_id=#{requestId}
+    </delete>
+
+    <select id="selectRequest"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r WHERE r.id=#{id}
+    </select>
+
+    <select id="selectRequestView"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r WHERE r.id=#{id}
+    </select>
+
+    <select id="selectLines"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueLineVO">
+        SELECT id, request_id AS requestId, line_no AS lineNo, component_id AS componentId,
+               component_name AS componentName, manufacturer_name AS manufacturerName, mpn,
+               unit, requested_quantity AS requestedQuantity,
+               reserved_quantity AS reservedQuantity, issued_quantity AS issuedQuantity,
+               returned_quantity AS returnedQuantity, estimated_amount AS estimatedAmount,
+               version
+        FROM lab_inventory_issue_line
+        WHERE request_id=#{requestId}
+        ORDER BY line_no ASC, id ASC
+    </select>
+
+    <sql id="requestVisibility">
+        <if test="!viewAll">
+            AND (
+                r.requester_id=#{userId}
+                OR EXISTS(
+                    SELECT 1 FROM lab_project_member pm
+                    WHERE pm.project_id=r.project_id AND pm.user_id=#{userId}
+                      AND pm.project_role IN ('OWNER','MAINTAINER')
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="requestFilters">
+        <include refid="requestVisibility"/>
+        <if test="status != null">AND r.status=#{status}</if>
+        <if test="projectId != null">AND r.project_id=#{projectId}</if>
+        <if test="requesterId != null">AND r.requester_id=#{requesterId}</if>
+        <if test="componentId != null">
+            AND EXISTS(
+                SELECT 1 FROM lab_inventory_issue_line l
+                WHERE l.request_id=r.id AND l.component_id=#{componentId}
+            )
+        </if>
+        <if test="submittedFrom != null">AND r.submitted_at &gt;= #{submittedFrom}</if>
+        <if test="submittedTo != null">AND r.submitted_at &lt;= #{submittedTo}</if>
+        <if test="keyword != null">
+            AND (r.request_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.purpose LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="countRequests" resultType="long">
+        SELECT COUNT(*) FROM lab_inventory_issue_request r
+        WHERE 1=1 <include refid="requestFilters"/>
+    </select>
+
+    <select id="selectRequests"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r
+        WHERE 1=1 <include refid="requestFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, r.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+</mapper>
