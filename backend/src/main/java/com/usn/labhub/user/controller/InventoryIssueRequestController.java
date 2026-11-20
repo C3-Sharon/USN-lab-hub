@@ -2,11 +2,13 @@ package com.usn.labhub.user.controller;
 
 import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
+import com.usn.labhub.user.domain.dto.inventory.InventoryIssueCommandDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestCreateDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestUpdateDTO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePageVO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO;
 import com.usn.labhub.user.service.InventoryIssueRequestService;
+import com.usn.labhub.user.service.InventoryIssueWorkflowService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,9 +29,12 @@ import java.util.Map;
 @RequireRoles({"SYSTEM_ADMIN", "TEACHER", "STOCK_KEEPER", "MEMBER"})
 public class InventoryIssueRequestController {
     private final InventoryIssueRequestService service;
+    private final InventoryIssueWorkflowService workflowService;
 
-    public InventoryIssueRequestController(InventoryIssueRequestService service) {
+    public InventoryIssueRequestController(InventoryIssueRequestService service,
+                                           InventoryIssueWorkflowService workflowService) {
         this.service = service;
+        this.workflowService = workflowService;
     }
 
     @PostMapping
@@ -67,5 +72,33 @@ public class InventoryIssueRequestController {
     public Result<InventoryIssueRequestVO> update(@PathVariable Long id,
                                                   @Valid @RequestBody InventoryIssueRequestUpdateDTO request) {
         return Result.success(service.update(id, request));
+    }
+
+    @PostMapping("/{id}/submit")
+    public Result<Map<String, Object>> submit(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                              @Valid @RequestBody InventoryIssueCommandDTO request) {
+        return Result.success(workflowService.submit(id, idempotencyKey, request));
+    }
+
+    @PostMapping("/{id}/approve")
+    public Result<Map<String, Object>> approve(@PathVariable Long id,
+                                               @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                               @Valid @RequestBody InventoryIssueCommandDTO request) {
+        return Result.success(workflowService.approve(id, idempotencyKey, request));
+    }
+
+    @PostMapping("/{id}/reject")
+    public Result<Map<String, Object>> reject(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                              @Valid @RequestBody InventoryIssueCommandDTO request) {
+        return Result.success(workflowService.reject(id, idempotencyKey, request));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public Result<Map<String, Object>> cancel(@PathVariable Long id,
+                                              @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                              @Valid @RequestBody InventoryIssueCommandDTO request) {
+        return Result.success(workflowService.cancel(id, idempotencyKey, request));
     }
 }

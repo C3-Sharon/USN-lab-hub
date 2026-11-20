@@ -60,6 +60,10 @@ public class InventoryIssueSupport {
         return objectMapper.convertValue(value, new TypeReference<>() { });
     }
 
+    public String json(Object value) {
+        return writeJson(value);
+    }
+
     public void audit(String requestId, String action, String targetType, Long targetId,
                       String previousStatus, String newStatus, String reason, Object details) {
         mapper.insertAudit(requestId, access.userId(), action, targetType, targetId,

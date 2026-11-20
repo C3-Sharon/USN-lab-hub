@@ -65,6 +65,23 @@ public class InventoryIssueAccessPolicy {
         throw InventoryIssueApiException.operationDenied();
     }
 
+    public void requireSubmitOrCancel(InventoryIssueRequestRecord request) {
+        if (isSystemAdmin() || userId().equals(request.getRequesterId())) {
+            return;
+        }
+        throw InventoryIssueApiException.operationDenied();
+    }
+
+    public void requireApprove(InventoryIssueRequestRecord request) {
+        if (userId().equals(request.getRequesterId())) {
+            throw InventoryIssueApiException.selfApproval();
+        }
+        if (isSystemAdmin() || UserContext.getRoles().contains("TEACHER")) {
+            return;
+        }
+        throw InventoryIssueApiException.approvalDenied();
+    }
+
     public void requirePolicyManagement() {
         if (!isSystemAdmin()) {
             throw InventoryIssueApiException.policyDenied();

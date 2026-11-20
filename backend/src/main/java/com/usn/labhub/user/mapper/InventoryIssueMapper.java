@@ -1,15 +1,20 @@
 package com.usn.labhub.user.mapper;
 
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueLineRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyOverrideRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,6 +49,73 @@ public interface InventoryIssueMapper {
     int deleteLines(@Param("requestId") Long requestId);
 
     InventoryIssueRequestRecord selectRequest(@Param("id") Long id);
+
+    InventoryIssueRequestRecord selectRequestForUpdate(@Param("id") Long id);
+
+    List<InventoryIssueLineRecord> selectLinesForUpdate(@Param("requestId") Long requestId);
+
+    List<InventoryIssueBatchRecord> selectBatchesForUpdate(@Param("componentId") Long componentId);
+
+    List<InventoryIssueBatchRecord> selectBatchesForUpdateByIds(
+            @Param("batchIds") List<Long> batchIds);
+
+    LocalDateTime selectCurrentTimestamp();
+
+    int submitRequest(@Param("id") Long id, @Param("version") Integer version,
+                      @Param("status") String status,
+                      @Param("approvalRequired") boolean approvalRequired,
+                      @Param("approvalReasonsJson") String approvalReasonsJson,
+                      @Param("policyVersion") Integer policyVersion,
+                      @Param("estimatedAmount") BigDecimal estimatedAmount,
+                      @Param("submittedAt") LocalDateTime submittedAt,
+                      @Param("expiresAt") LocalDateTime expiresAt,
+                      @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int decideRequest(@Param("id") Long id, @Param("version") Integer version,
+                      @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus,
+                      @Param("approvedAt") LocalDateTime approvedAt,
+                      @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int cancelRequest(@Param("id") Long id, @Param("version") Integer version,
+                      @Param("status") String status,
+                      @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int expireRequest(@Param("id") Long id, @Param("version") Integer version,
+                      @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
+
+    int insertApproval(InventoryIssueApprovalRecord approval);
+
+    int insertReservation(InventoryIssueReservationRecord reservation);
+
+    int insertReservationAllocation(InventoryIssueReservationAllocationRecord allocation);
+
+    List<InventoryIssueReservationRecord> selectReservationsForUpdate(
+            @Param("requestId") Long requestId);
+
+    List<InventoryIssueReservationAllocationRecord> selectReservationAllocations(
+            @Param("reservationIds") List<Long> reservationIds);
+
+    List<InventoryIssueReservationAllocationRecord> selectAllocationsForRequest(
+            @Param("requestId") Long requestId);
+
+    int releaseReservation(@Param("id") Long id, @Param("status") String status,
+                           @Param("releaseReason") String releaseReason);
+
+    int reserveBalance(@Param("componentId") Long componentId,
+                       @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
+
+    int releaseBalance(@Param("componentId") Long componentId,
+                       @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
+
+    int reserveBatch(@Param("batchId") Long batchId, @Param("delta") BigDecimal delta);
+
+    int releaseBatch(@Param("batchId") Long batchId, @Param("delta") BigDecimal delta);
+
+    int reserveLine(@Param("lineId") Long lineId, @Param("delta") BigDecimal delta);
+
+    int releaseLine(@Param("lineId") Long lineId, @Param("delta") BigDecimal delta);
+
+    List<Long> selectExpiredCandidateIds(@Param("limit") int limit);
 
     InventoryIssueRequestVO selectRequestView(@Param("id") Long id);
 

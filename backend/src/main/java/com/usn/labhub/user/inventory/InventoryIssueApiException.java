@@ -3,6 +3,7 @@ package com.usn.labhub.user.inventory;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @Getter
@@ -81,5 +82,38 @@ public class InventoryIssueApiException extends RuntimeException {
     public static InventoryIssueApiException idempotencyReused() {
         return new InventoryIssueApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
                 "幂等键已用于不同请求");
+    }
+
+    public static InventoryIssueApiException approvalDenied() {
+        return new InventoryIssueApiException(HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_APPROVAL_DENIED",
+                "无领用审批权限");
+    }
+
+    public static InventoryIssueApiException selfApproval() {
+        return new InventoryIssueApiException(HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_SELF_APPROVAL",
+                "不能审批本人申请");
+    }
+
+    public static InventoryIssueApiException insufficientStock(Long componentId,
+                                                               BigDecimal requestedQuantity,
+                                                               BigDecimal availableQuantity) {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_INSUFFICIENT_STOCK",
+                "可用库存不足", Map.of("componentId", componentId,
+                "requestedQuantity", requestedQuantity, "availableQuantity", availableQuantity));
+    }
+
+    public static InventoryIssueApiException concurrentConflict() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_CONCURRENT_CONFLICT",
+                "库存或申请已变化，请刷新后重试");
+    }
+
+    public static InventoryIssueApiException reservationExpired() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_RESERVATION_EXPIRED",
+                "领用预占已过期，请重新申请");
+    }
+
+    public static InventoryIssueApiException reservationNotActive() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_RESERVATION_NOT_ACTIVE",
+                "领用预占已消费或释放");
     }
 }

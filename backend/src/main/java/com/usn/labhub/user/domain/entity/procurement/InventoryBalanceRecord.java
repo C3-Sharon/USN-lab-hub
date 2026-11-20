@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class InventoryBalanceRecord {
     private Long componentId;
     private BigDecimal onHandQuantity;
+    private BigDecimal reservedQuantity;
     private String unit;
     private Integer version;
     private LocalDateTime updateTime;

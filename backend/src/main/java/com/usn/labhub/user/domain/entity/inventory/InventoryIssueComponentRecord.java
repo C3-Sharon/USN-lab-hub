@@ -10,4 +10,6 @@ public class InventoryIssueComponentRecord {
     private String mpn;
     private String baseUnit;
     private String status;
+    private Long categoryId;
+    private String categoryPath;
 }

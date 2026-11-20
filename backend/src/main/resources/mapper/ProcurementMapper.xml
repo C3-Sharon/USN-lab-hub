@@ -401,7 +401,8 @@
 
     <select id="selectInventoryBalancesForUpdate"
             resultType="com.usn.labhub.user.domain.entity.procurement.InventoryBalanceRecord">
-        SELECT component_id AS componentId,on_hand_quantity AS onHandQuantity,unit,version,update_time AS updateTime
+        SELECT component_id AS componentId,on_hand_quantity AS onHandQuantity,
+               reserved_quantity AS reservedQuantity,unit,version,update_time AS updateTime
         FROM lab_component_inventory_balance WHERE component_id IN
         <foreach collection="componentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         ORDER BY component_id ASC FOR UPDATE
