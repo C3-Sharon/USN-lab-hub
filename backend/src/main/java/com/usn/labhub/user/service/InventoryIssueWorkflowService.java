@@ -1,15 +1,21 @@
 package com.usn.labhub.user.service;
 
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueCommandDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryIssueConfirmIssueDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryIssueReallocateDTO;
+import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueLineRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord;
 import com.usn.labhub.user.domain.entity.procurement.InventoryBalanceRecord;
+import com.usn.labhub.user.domain.entity.procurement.InventoryMovementRecord;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +24,8 @@ import com.usn.labhub.user.inventory.InventoryIssueApiException;
 import com.usn.labhub.user.inventory.InventoryIssueSupport;
 import com.usn.labhub.user.mapper.InventoryIssueMapper;
 import com.usn.labhub.user.mapper.ProcurementMapper;
+import com.usn.labhub.user.mapper.SysUserMapper;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -56,6 +65,8 @@ public class InventoryIssueWorkflowService {
     private final ObjectMapper objectMapper;
     private final InventoryIssueReleaseSupport releaseSupport;
     private final InventoryIssueExpiryService expiryService;
+    private final SysUserMapper userMapper;
+    private final Environment environment;
 
     public InventoryIssueWorkflowService(InventoryIssueMapper mapper,
                                          ProcurementMapper procurementMapper,
@@ -64,7 +75,9 @@ public class InventoryIssueWorkflowService {
                                          InventoryIssueRequestService requestService,
                                          ObjectMapper objectMapper,
                                          InventoryIssueReleaseSupport releaseSupport,
-                                         InventoryIssueExpiryService expiryService) {
+                                         InventoryIssueExpiryService expiryService,
+                                         SysUserMapper userMapper,
+                                         Environment environment) {
         this.mapper = mapper;
         this.procurementMapper = procurementMapper;
         this.access = access;
@@ -73,6 +86,8 @@ public class InventoryIssueWorkflowService {
         this.objectMapper = objectMapper;
         this.releaseSupport = releaseSupport;
         this.expiryService = expiryService;
+        this.userMapper = userMapper;
+        this.environment = environment;
     }
 
     @Transactional
@@ -96,6 +111,21 @@ public class InventoryIssueWorkflowService {
     public Map<String, Object> cancel(Long id, String key, InventoryIssueCommandDTO request) {
         expiryService.expireIfNeeded(id);
         return support.idempotent(operation(id, "cancel"), key, request, () -> cancelValue(id, request));
+    }
+
+    @Transactional
+    public Map<String, Object> reallocate(Long id, String key, InventoryIssueReallocateDTO request) {
+        expiryService.expireIfNeeded(id);
+        return support.idempotent(operation(id, "reallocate"), key, request,
+                () -> reallocateValue(id, request));
+    }
+
+    @Transactional
+    public Map<String, Object> confirmIssue(Long id, String key, String testFaultPoint,
+                                            InventoryIssueConfirmIssueDTO request) {
+        expiryService.expireIfNeeded(id);
+        return support.idempotent(operation(id, "confirm-issue"), key, request,
+                () -> confirmIssueValue(id, request, testFaultPoint));
     }
 
     private Map<String, Object> submitValue(Long id, InventoryIssueCommandDTO request) {
@@ -285,6 +315,324 @@ public class InventoryIssueWorkflowService {
         support.audit(UUID.randomUUID().toString(), "CANCEL", "INVENTORY_ISSUE_REQUEST", id,
                 issue.getStatus(), "CANCELED", null, null);
         return support.asMap(requestService.detail(id));
+    }
+
+    private Map<String, Object> reallocateValue(Long id, InventoryIssueReallocateDTO request) {
+        if (request == null || request.allocations() == null || request.allocations().isEmpty()) {
+            throw InventoryIssueApiException.invalid();
+        }
+        InventoryIssueRequestRecord issue = lockedVisible(id);
+        access.requireReallocate();
+        if ("EXPIRED".equals(issue.getStatus())) {
+            throw InventoryIssueApiException.reservationExpired();
+        }
+        requireVersion(issue, request.requestVersion());
+        requireStatus(issue, "APPROVED");
+        String reason = requiredText(request.reason(), 500);
+
+        List<InventoryIssueLineRecord> lines = mapper.selectLinesForUpdate(id);
+        List<Long> componentIds = lines.stream().map(InventoryIssueLineRecord::getComponentId)
+                .distinct().sorted().toList();
+        if (!componentIds.isEmpty()) {
+            procurementMapper.selectInventoryBalancesForUpdate(componentIds);
+        }
+
+        List<InventoryIssueReservationRecord> reservations = mapper.selectReservationsForUpdate(id);
+        Map<Long, InventoryIssueReservationRecord> reservationById = reservations.stream()
+                .collect(Collectors.toMap(InventoryIssueReservationRecord::getId, Function.identity()));
+        List<InventoryIssueReservationAllocationRecord> oldAllocations =
+                mapper.selectAllocationsForRequest(id);
+        List<InventoryIssueReservationRecord> activeReservations = reservations.stream()
+                .filter(reservation -> "ACTIVE".equals(reservation.getStatus())).toList();
+        if (activeReservations.isEmpty()) {
+            throw InventoryIssueApiException.reservationNotActive();
+        }
+
+        Map<Long, BigDecimal> newByReservation = new HashMap<>();
+        Map<Long, BigDecimal> newByBatch = new HashMap<>();
+        for (InventoryIssueReallocateDTO.Allocation allocation : request.allocations()) {
+            if (allocation == null || allocation.reservationId() == null
+                    || allocation.batchId() == null || allocation.quantity() == null
+                    || allocation.quantity().signum() <= 0
+                    || Math.max(0, allocation.quantity().stripTrailingZeros().scale()) > 3) {
+                throw InventoryIssueApiException.invalid();
+            }
+            InventoryIssueReservationRecord reservation = reservationById.get(allocation.reservationId());
+            if (reservation == null || !"ACTIVE".equals(reservation.getStatus())
+                    || !reservation.getRequestId().equals(id)) {
+                throw InventoryIssueApiException.reservationNotActive();
+            }
+            newByReservation.merge(allocation.reservationId(), allocation.quantity(), BigDecimal::add);
+            newByBatch.merge(allocation.batchId(), allocation.quantity(), BigDecimal::add);
+        }
+        for (InventoryIssueReservationRecord reservation : activeReservations) {
+            BigDecimal planned = newByReservation.get(reservation.getId());
+            if (planned == null || planned.compareTo(reservation.getQuantity()) != 0) {
+                throw InventoryIssueApiException.batchAllocationConflict();
+            }
+        }
+
+        Map<Long, BigDecimal> oldByBatch = new HashMap<>();
+        for (InventoryIssueReservationAllocationRecord allocation : oldAllocations) {
+            oldByBatch.merge(allocation.getBatchId(), allocation.getQuantity(), BigDecimal::add);
+        }
+        LinkedHashSet<Long> batchIdSet = new LinkedHashSet<>(oldByBatch.keySet());
+        batchIdSet.addAll(newByBatch.keySet());
+        List<Long> batchIds = batchIdSet.stream().sorted().toList();
+        Map<Long, InventoryIssueBatchRecord> batchById = mapper.selectBatchesForUpdateByIds(batchIds)
+                .stream().collect(Collectors.toMap(InventoryIssueBatchRecord::getId, Function.identity()));
+
+        for (InventoryIssueReallocateDTO.Allocation allocation : request.allocations()) {
+            InventoryIssueReservationRecord reservation = reservationById.get(allocation.reservationId());
+            InventoryIssueBatchRecord batch = batchById.get(allocation.batchId());
+            if (batch == null || !"AVAILABLE".equals(batch.getStatus())
+                    || !batch.getComponentId().equals(reservation.getComponentId())
+                    || (batch.getExpiryDate() != null && batch.getExpiryDate().isBefore(LocalDate.now()))) {
+                throw InventoryIssueApiException.batchAllocationConflict();
+            }
+        }
+
+        for (Long batchId : batchIdSet) {
+            BigDecimal oldQuantity = oldByBatch.getOrDefault(batchId, BigDecimal.ZERO);
+            BigDecimal net = newByBatch.getOrDefault(batchId, BigDecimal.ZERO)
+                    .subtract(oldQuantity);
+            if (net.signum() > 0) {
+                if (mapper.reserveBatch(batchId, net) != 1) {
+                    throw InventoryIssueApiException.batchAllocationConflict();
+                }
+            } else if (net.signum() < 0) {
+                if (mapper.releaseBatch(batchId, net.negate()) != 1) {
+                    throw InventoryIssueApiException.concurrentConflict();
+                }
+            }
+        }
+
+        List<Long> activeReservationIds = activeReservations.stream()
+                .map(InventoryIssueReservationRecord::getId).toList();
+        if (!activeReservationIds.isEmpty()) {
+            mapper.deleteAllocationsByReservationIds(activeReservationIds);
+        }
+        for (InventoryIssueReallocateDTO.Allocation allocation : request.allocations()) {
+            InventoryIssueBatchRecord batch = batchById.get(allocation.batchId());
+            InventoryIssueReservationAllocationRecord record =
+                    new InventoryIssueReservationAllocationRecord();
+            record.setReservationId(allocation.reservationId());
+            record.setBatchId(allocation.batchId());
+            record.setQuantity(allocation.quantity());
+            record.setUnitCostSnapshot(batch.getUnitCost());
+            mapper.insertReservationAllocation(record);
+        }
+
+        support.audit(UUID.randomUUID().toString(), "REALLOCATE", "INVENTORY_ISSUE_REQUEST", id,
+                "APPROVED", "APPROVED", reason, Map.of("reservationIds", activeReservationIds));
+        Map<String, Object> result = support.asMap(requestService.detail(id));
+        result.put("reservationVersion", activeReservations.get(0).getVersion());
+        return result;
+    }
+
+    private Map<String, Object> confirmIssueValue(Long id, InventoryIssueConfirmIssueDTO request,
+                                                  String testFaultPoint) {
+        InventoryIssueRequestRecord issue = lockedVisible(id);
+        access.requireConfirmIssue(issue);
+        if ("ISSUED".equals(issue.getStatus())) {
+            throw InventoryIssueApiException.issueAlreadyConfirmed();
+        }
+        if ("EXPIRED".equals(issue.getStatus())) {
+            throw InventoryIssueApiException.reservationExpired();
+        }
+        requireVersion(issue, request == null ? null : request.requestVersion());
+        requireStatus(issue, "APPROVED");
+        Integer reservationVersion = request == null ? null : request.reservationVersion();
+        if (reservationVersion == null) {
+            throw InventoryIssueApiException.invalid();
+        }
+        String note = optionalText(request == null ? null : request.note(), 500);
+        LocalDateTime dbNow = mapper.selectCurrentTimestamp();
+
+        List<InventoryIssueLineRecord> lines = mapper.selectLinesForUpdate(id);
+        if (lines.isEmpty()) {
+            throw InventoryIssueApiException.linesRequired();
+        }
+        List<Long> componentIds = lines.stream().map(InventoryIssueLineRecord::getComponentId)
+                .distinct().sorted().toList();
+        Map<Long, InventoryBalanceRecord> balanceByComponent =
+                procurementMapper.selectInventoryBalancesForUpdate(componentIds).stream()
+                        .collect(Collectors.toMap(InventoryBalanceRecord::getComponentId,
+                                Function.identity()));
+        Map<Long, String> unitByComponent = lines.stream().collect(Collectors.toMap(
+                InventoryIssueLineRecord::getComponentId, InventoryIssueLineRecord::getUnit,
+                (left, right) -> left));
+
+        List<InventoryIssueReservationRecord> reservations = mapper.selectReservationsForUpdate(id);
+        List<InventoryIssueReservationAllocationRecord> allocations =
+                mapper.selectAllocationsForRequest(id);
+        if (reservations.isEmpty() || allocations.isEmpty()) {
+            throw InventoryIssueApiException.reservationNotActive();
+        }
+        Map<Long, InventoryIssueReservationRecord> reservationById = reservations.stream()
+                .collect(Collectors.toMap(InventoryIssueReservationRecord::getId, Function.identity()));
+        for (InventoryIssueReservationRecord reservation : reservations) {
+            if (!"ACTIVE".equals(reservation.getStatus())) {
+                throw InventoryIssueApiException.reservationNotActive();
+            }
+            if (reservation.getExpiresAt() != null && reservation.getExpiresAt().isBefore(dbNow)) {
+                throw InventoryIssueApiException.reservationExpired();
+            }
+            if (!reservationVersion.equals(reservation.getVersion())) {
+                throw InventoryIssueApiException.versionConflict(reservation.getVersion());
+            }
+        }
+        List<Long> batchIds = allocations.stream()
+                .map(InventoryIssueReservationAllocationRecord::getBatchId)
+                .distinct().sorted().toList();
+        mapper.selectBatchesForUpdateByIds(batchIds);
+
+        Map<Long, BigDecimal> allocatedByReservation = new HashMap<>();
+        Map<Long, BigDecimal> deltaByComponent = new HashMap<>();
+        for (InventoryIssueReservationAllocationRecord allocation : allocations) {
+            InventoryIssueReservationRecord reservation =
+                    reservationById.get(allocation.getReservationId());
+            if (reservation == null || !"ACTIVE".equals(reservation.getStatus())) {
+                throw InventoryIssueApiException.reservationNotActive();
+            }
+            allocatedByReservation.merge(allocation.getReservationId(), allocation.getQuantity(),
+                    BigDecimal::add);
+            deltaByComponent.merge(reservation.getComponentId(), allocation.getQuantity(),
+                    BigDecimal::add);
+        }
+        for (InventoryIssueReservationRecord reservation : reservations) {
+            if (allocatedByReservation.getOrDefault(reservation.getId(), BigDecimal.ZERO)
+                    .compareTo(reservation.getQuantity()) != 0) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+        }
+
+        SysUser actor = userMapper.selectById(access.userId());
+        if (actor == null) {
+            throw InventoryIssueApiException.operationDenied();
+        }
+
+        for (Map.Entry<Long, BigDecimal> entry : deltaByComponent.entrySet()) {
+            if (mapper.consumeBalance(entry.getKey(), entry.getValue(), dbNow) != 1) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+        }
+
+        InventoryIssueFulfillmentRecord fulfillment = new InventoryIssueFulfillmentRecord();
+        fulfillment.setFulfillmentNo(number("FUL", dbNow.toLocalDate()));
+        fulfillment.setRequestId(id);
+        fulfillment.setOperatorId(actor.getId());
+        fulfillment.setOperatorName(actor.getUsername());
+        fulfillment.setRecipientId(issue.getRequesterId());
+        fulfillment.setRecipientName(issue.getRequesterName());
+        fulfillment.setIssuedAt(dbNow);
+        fulfillment.setNote(note);
+        mapper.insertFulfillment(fulfillment);
+
+        List<InventoryIssueReservationAllocationRecord> ordered = allocations.stream()
+                .sorted(Comparator.comparing(InventoryIssueReservationAllocationRecord::getReservationId)
+                        .thenComparing(InventoryIssueReservationAllocationRecord::getId))
+                .toList();
+        Map<Long, BigDecimal> consumedByComponent = new HashMap<>();
+        List<Map<String, Object>> movementResults = new ArrayList<>();
+        boolean firstMovement = true;
+        for (InventoryIssueReservationAllocationRecord allocation : ordered) {
+            InventoryIssueReservationRecord reservation =
+                    reservationById.get(allocation.getReservationId());
+            Long componentId = reservation.getComponentId();
+            BigDecimal starting = balanceByComponent.get(componentId).getOnHandQuantity();
+            BigDecimal before = starting.subtract(consumedByComponent.getOrDefault(componentId,
+                    BigDecimal.ZERO));
+            BigDecimal after = before.subtract(allocation.getQuantity());
+
+            if (mapper.consumeBatch(allocation.getBatchId(), allocation.getQuantity()) != 1) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+
+            InventoryMovementRecord movement = new InventoryMovementRecord();
+            movement.setMovementNo(number("MOV", dbNow.toLocalDate()));
+            movement.setMovementType("ISSUE_OUT");
+            movement.setComponentId(componentId);
+            movement.setBatchId(allocation.getBatchId());
+            movement.setSourceType("FULFILLMENT_LINE");
+            movement.setSourceId(-1L);
+            movement.setQuantityDelta(allocation.getQuantity().negate());
+            movement.setBalanceBefore(before);
+            movement.setBalanceAfter(after);
+            movement.setUnit(unitByComponent.get(componentId));
+            movement.setUnitCost(allocation.getUnitCostSnapshot());
+            movement.setOperatorId(actor.getId());
+            movement.setOccurredAt(dbNow);
+            movement.setRequestId(issue.getRequestNo());
+            procurementMapper.insertInventoryMovementTyped(movement);
+
+            InventoryIssueFulfillmentLineRecord fulfillmentLine =
+                    new InventoryIssueFulfillmentLineRecord();
+            fulfillmentLine.setFulfillmentId(fulfillment.getId());
+            fulfillmentLine.setRequestLineId(reservation.getRequestLineId());
+            fulfillmentLine.setReservationAllocationId(allocation.getId());
+            fulfillmentLine.setBatchId(allocation.getBatchId());
+            fulfillmentLine.setQuantity(allocation.getQuantity());
+            fulfillmentLine.setUnitCostSnapshot(allocation.getUnitCostSnapshot());
+            fulfillmentLine.setMovementId(movement.getId());
+            mapper.insertFulfillmentLine(fulfillmentLine);
+
+            procurementMapper.updateInventoryMovementSourceId(movement.getId(),
+                    fulfillmentLine.getId());
+
+            consumedByComponent.merge(componentId, allocation.getQuantity(), BigDecimal::add);
+            Map<String, Object> movementResult = new LinkedHashMap<>();
+            movementResult.put("movementId", movement.getId());
+            movementResult.put("movementType", "ISSUE_OUT");
+            movementResult.put("batchId", allocation.getBatchId());
+            movementResult.put("quantityDelta", movement.getQuantityDelta());
+            movementResult.put("balanceBefore", before);
+            movementResult.put("balanceAfter", after);
+            movementResults.add(movementResult);
+            if (firstMovement) {
+                firstMovement = false;
+                failIfConfigured("AFTER_FIRST_MOVEMENT", testFaultPoint);
+            }
+        }
+
+        for (InventoryIssueReservationRecord reservation : reservations) {
+            if (mapper.consumeReservation(reservation.getId()) != 1) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+        }
+        for (InventoryIssueLineRecord line : lines) {
+            if (mapper.consumeLine(line.getId(), line.getRequestedQuantity()) != 1) {
+                throw InventoryIssueApiException.concurrentConflict();
+            }
+        }
+        if (mapper.issueRequest(id, issue.getVersion(), dbNow, actor.getId(), dbNow) != 1) {
+            throw InventoryIssueApiException.versionConflict(latestVersion(id));
+        }
+        support.audit(UUID.randomUUID().toString(), "CONFIRM_ISSUE", "INVENTORY_ISSUE_REQUEST", id,
+                "APPROVED", "ISSUED", note, Map.of("fulfillmentId", fulfillment.getId()));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("requestId", id);
+        result.put("status", "ISSUED");
+        result.put("fulfillmentId", fulfillment.getId());
+        result.put("fulfillmentNo", fulfillment.getFulfillmentNo());
+        result.put("requestVersion", issue.getVersion() + 1);
+        result.put("movements", movementResults);
+        return result;
+    }
+
+    private void failIfConfigured(String point, String requestedPoint) {
+        String configured = environment.getProperty("usnhub.inventory.issue.test-fault-point");
+        if (Arrays.asList(environment.getActiveProfiles()).contains("test")
+                && (point.equals(configured) || point.equals(requestedPoint))) {
+            throw InventoryIssueApiException.issueTransactionFailed();
+        }
+    }
+
+    private String number(String prefix, LocalDate date) {
+        String day = date.format(DateTimeFormatter.BASIC_ISO_DATE);
+        int suffix = Math.floorMod(UUID.randomUUID().hashCode(), 1_000_000);
+        return prefix + "-" + day + "-" + String.format(Locale.ROOT, "%06d", suffix);
     }
 
     private void reserveBalances(Map<Long, BigDecimal> deltas, LocalDateTime now) {

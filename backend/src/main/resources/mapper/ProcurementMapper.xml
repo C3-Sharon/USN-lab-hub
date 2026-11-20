@@ -434,6 +434,20 @@
                  #{operatorId},#{occurredAt},#{requestId})
     </insert>
 
+    <insert id="insertInventoryMovementTyped" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_movement(
+            movement_no,movement_type,component_id,batch_id,source_type,source_id,
+            quantity_delta,balance_before,balance_after,unit,unit_cost,reason,
+            operator_id,occurred_at,request_id
+        ) VALUES(#{movementNo},#{movementType},#{componentId},#{batchId},#{sourceType},#{sourceId},
+                 #{quantityDelta},#{balanceBefore},#{balanceAfter},#{unit},#{unitCost},#{reason},
+                 #{operatorId},#{occurredAt},#{requestId})
+    </insert>
+
+    <update id="updateInventoryMovementSourceId">
+        UPDATE lab_inventory_movement SET source_id=#{sourceId} WHERE id=#{id}
+    </update>
+
     <update id="updateOrderLineReceived">
         UPDATE lab_procurement_order_line
         SET received_quantity=received_quantity+#{quantity},version=version+1

@@ -82,6 +82,23 @@ public class InventoryIssueAccessPolicy {
         throw InventoryIssueApiException.approvalDenied();
     }
 
+    public void requireReallocate() {
+        if (isSystemAdmin() || UserContext.getRoles().contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw InventoryIssueApiException.fulfillDenied();
+    }
+
+    public void requireConfirmIssue(InventoryIssueRequestRecord request) {
+        if (userId().equals(request.getRequesterId())) {
+            throw InventoryIssueApiException.fulfillDenied();
+        }
+        if (isSystemAdmin() || UserContext.getRoles().contains("STOCK_KEEPER")) {
+            return;
+        }
+        throw InventoryIssueApiException.fulfillDenied();
+    }
+
     public void requirePolicyManagement() {
         if (!isSystemAdmin()) {
             throw InventoryIssueApiException.policyDenied();

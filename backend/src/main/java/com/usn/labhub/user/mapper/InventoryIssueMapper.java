@@ -4,6 +4,8 @@ import com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueLineRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyOverrideRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
@@ -114,6 +116,30 @@ public interface InventoryIssueMapper {
     int reserveLine(@Param("lineId") Long lineId, @Param("delta") BigDecimal delta);
 
     int releaseLine(@Param("lineId") Long lineId, @Param("delta") BigDecimal delta);
+
+    int deleteAllocationsByReservationIds(@Param("reservationIds") List<Long> reservationIds);
+
+    int insertFulfillment(InventoryIssueFulfillmentRecord fulfillment);
+
+    int insertFulfillmentLine(InventoryIssueFulfillmentLineRecord line);
+
+    InventoryIssueFulfillmentRecord selectFulfillmentByRequest(@Param("requestId") Long requestId);
+
+    List<InventoryIssueFulfillmentLineRecord> selectFulfillmentLines(
+            @Param("fulfillmentId") Long fulfillmentId);
+
+    int consumeBalance(@Param("componentId") Long componentId,
+                       @Param("delta") BigDecimal delta, @Param("now") LocalDateTime now);
+
+    int consumeBatch(@Param("batchId") Long batchId, @Param("delta") BigDecimal delta);
+
+    int consumeReservation(@Param("id") Long id);
+
+    int consumeLine(@Param("lineId") Long lineId, @Param("delta") BigDecimal delta);
+
+    int issueRequest(@Param("id") Long id, @Param("version") Integer version,
+                     @Param("issuedAt") LocalDateTime issuedAt,
+                     @Param("actorId") Long actorId, @Param("now") LocalDateTime now);
 
     List<Long> selectExpiredCandidateIds(@Param("limit") int limit);
 

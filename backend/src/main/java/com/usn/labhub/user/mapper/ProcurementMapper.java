@@ -161,6 +161,10 @@ public interface ProcurementMapper {
 
     int insertInventoryMovement(InventoryMovementRecord movement);
 
+    int insertInventoryMovementTyped(InventoryMovementRecord movement);
+
+    int updateInventoryMovementSourceId(@Param("id") Long id, @Param("sourceId") Long sourceId);
+
     int updateOrderLineReceived(@Param("id") Long id, @Param("version") Integer version,
                                 @Param("quantity") BigDecimal quantity);
 

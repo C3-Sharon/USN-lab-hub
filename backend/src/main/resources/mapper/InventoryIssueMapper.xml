@@ -369,4 +369,81 @@
         LIMIT #{pageSize} OFFSET #{offset}
     </select>
 
+    <delete id="deleteAllocationsByReservationIds">
+        DELETE FROM lab_inventory_reservation_allocation
+        WHERE reservation_id IN
+        <foreach collection="reservationIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <insert id="insertFulfillment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_fulfillment(
+            fulfillment_no,request_id,operator_id,operator_name,recipient_id,recipient_name,
+            issued_at,note,request_idempotency_id
+        ) VALUES(#{fulfillmentNo},#{requestId},#{operatorId},#{operatorName},#{recipientId},#{recipientName},
+                 #{issuedAt},#{note},#{requestIdempotencyId})
+    </insert>
+
+    <insert id="insertFulfillmentLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_fulfillment_line(
+            fulfillment_id,request_line_id,reservation_allocation_id,batch_id,quantity,
+            unit_cost_snapshot,movement_id
+        ) VALUES(#{fulfillmentId},#{requestLineId},#{reservationAllocationId},#{batchId},#{quantity},
+                 #{unitCostSnapshot},#{movementId})
+    </insert>
+
+    <select id="selectFulfillmentByRequest"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE request_id=#{requestId}
+    </select>
+
+    <select id="selectFulfillmentLines"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord">
+        SELECT id, fulfillment_id AS fulfillmentId, request_line_id AS requestLineId,
+               reservation_allocation_id AS reservationAllocationId, batch_id AS batchId,
+               quantity, unit_cost_snapshot AS unitCostSnapshot, movement_id AS movementId
+        FROM lab_inventory_fulfillment_line WHERE fulfillment_id=#{fulfillmentId} ORDER BY id ASC
+    </select>
+
+    <update id="consumeBalance">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity-#{delta},
+            reserved_quantity=reserved_quantity-#{delta},
+            version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+          AND on_hand_quantity &gt;= #{delta} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="consumeBatch">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity-#{delta},
+            reserved_quantity=reserved_quantity-#{delta}
+        WHERE id=#{batchId}
+          AND current_quantity &gt;= #{delta} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="consumeReservation">
+        UPDATE lab_inventory_reservation
+        SET status='CONSUMED', version=version+1
+        WHERE id=#{id} AND status='ACTIVE'
+    </update>
+
+    <update id="consumeLine">
+        UPDATE lab_inventory_issue_line
+        SET issued_quantity=issued_quantity+#{delta},
+            reserved_quantity=reserved_quantity-#{delta},
+            version=version+1
+        WHERE id=#{lineId} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="issueRequest">
+        UPDATE lab_inventory_issue_request
+        SET status='ISSUED', issued_at=#{issuedAt}, version=version+1,
+            updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='APPROVED'
+    </update>
+
 </mapper>

@@ -116,4 +116,24 @@ public class InventoryIssueApiException extends RuntimeException {
         return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_RESERVATION_NOT_ACTIVE",
                 "领用预占已消费或释放");
     }
+
+    public static InventoryIssueApiException fulfillDenied() {
+        return new InventoryIssueApiException(HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED",
+                "无发放或批次重分配权限");
+    }
+
+    public static InventoryIssueApiException issueAlreadyConfirmed() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_ISSUE_ALREADY_CONFIRMED",
+                "该申请已发放");
+    }
+
+    public static InventoryIssueApiException batchAllocationConflict() {
+        return new InventoryIssueApiException(HttpStatus.CONFLICT, "INVENTORY_BATCH_ALLOCATION_CONFLICT",
+                "批次替换时库存已变化");
+    }
+
+    public static InventoryIssueApiException issueTransactionFailed() {
+        return new InventoryIssueApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "INVENTORY_ISSUE_TRANSACTION_FAILED", "发放失败，库存未变化");
+    }
 }

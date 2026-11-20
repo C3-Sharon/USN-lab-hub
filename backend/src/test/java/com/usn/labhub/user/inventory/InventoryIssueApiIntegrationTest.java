@@ -64,16 +64,16 @@ class InventoryIssueApiIntegrationTest {
         when(attendanceService.getOverview(anyLong())).thenReturn(attendance);
 
         jdbc.update("DELETE FROM lab_procurement_audit_log");
+        jdbc.update("DELETE FROM lab_inventory_return_line");
+        jdbc.update("DELETE FROM lab_inventory_write_off_command");
+        jdbc.update("DELETE FROM lab_inventory_fulfillment_line");
+        jdbc.update("DELETE FROM lab_inventory_reservation_allocation");
+        jdbc.update("DELETE FROM lab_inventory_return");
+        jdbc.update("DELETE FROM lab_inventory_fulfillment");
+        jdbc.update("DELETE FROM lab_inventory_reservation");
+        jdbc.update("DELETE FROM lab_inventory_issue_approval_record");
         jdbc.update("DELETE FROM lab_inventory_issue_policy_forced_category");
         jdbc.update("DELETE FROM lab_inventory_issue_policy_component_override");
-        jdbc.update("DELETE FROM lab_inventory_issue_approval_record");
-        jdbc.update("DELETE FROM lab_inventory_reservation_allocation");
-        jdbc.update("DELETE FROM lab_inventory_reservation");
-        jdbc.update("DELETE FROM lab_inventory_fulfillment_line");
-        jdbc.update("DELETE FROM lab_inventory_fulfillment");
-        jdbc.update("DELETE FROM lab_inventory_return_line");
-        jdbc.update("DELETE FROM lab_inventory_return");
-        jdbc.update("DELETE FROM lab_inventory_write_off_command");
         jdbc.update("DELETE FROM lab_inventory_issue_line");
         jdbc.update("DELETE FROM lab_inventory_issue_request");
         jdbc.update("DELETE FROM lab_inventory_issue_policy_version");
@@ -363,6 +363,201 @@ class InventoryIssueApiIntegrationTest {
                 String.class, componentId));
     }
 
+    @Test
+    void confirmIssueConsumesAndWritesMovements() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "confirm-0001", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "confirm-0002", submitBody(1)));
+
+        Map<String, Object> issued = data(post("/api/inventory-issue-requests/" + requestId
+                        + "/confirm-issue", admin, "confirm-0003", confirmBody(2, 1, "已交付")));
+        assertEquals("ISSUED", issued.get("status"));
+        assertNotNull(issued.get("fulfillmentId"));
+        assertTrue(issued.get("fulfillmentNo").toString().matches("FUL-\\d{8}-\\d{6}"));
+        assertEquals(3, ((Number) issued.get("requestVersion")).intValue());
+        assertEquals(1, ((List<?>) issued.get("movements")).size());
+
+        assertEquals("15.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals("15.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(current_quantity,':',reserved_quantity) "
+                        + "FROM lab_inventory_batch WHERE component_id=?",
+                String.class, componentId));
+        assertEquals("CONSUMED", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_reservation WHERE request_id=?",
+                String.class, requestId));
+        assertEquals("5.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(issued_quantity,':',reserved_quantity) "
+                        + "FROM lab_inventory_issue_line WHERE request_id=?",
+                String.class, requestId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='ISSUE_OUT'",
+                Integer.class));
+    }
+
+    @Test
+    void confirmIssueReplaysAndRejectsNewKey() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "confirm-replay-1", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "confirm-replay-2", submitBody(1)));
+
+        Map<String, Object> issued = data(post("/api/inventory-issue-requests/" + requestId
+                + "/confirm-issue", admin, "confirm-replay-3", confirmBody(2, 1, null)));
+        Map<String, Object> replay = data(post("/api/inventory-issue-requests/" + requestId
+                + "/confirm-issue", admin, "confirm-replay-3", confirmBody(2, 1, null)));
+        assertEquals(Boolean.TRUE, replay.get("idempotentReplay"));
+        assertEquals(issued.get("fulfillmentId"), replay.get("fulfillmentId"));
+        assertEquals(issued.get("movements"), replay.get("movements"));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        admin, "confirm-replay-4", confirmBody(3, 2, null)),
+                HttpStatus.CONFLICT, "INVENTORY_ISSUE_ALREADY_CONFIRMED");
+    }
+
+    @Test
+    void confirmIssueEnforcesDutySeparation() {
+        String member = token(login("20260001", "20260001"));
+        String teacher = token(login("teacher001", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "confirm-duty-1", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "confirm-duty-2", submitBody(1)));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        member, "confirm-duty-3", confirmBody(2, 1, null)),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED");
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        teacher, "confirm-duty-4", confirmBody(2, 1, null)),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED");
+        assertEquals("APPROVED", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_issue_request WHERE id=?",
+                String.class, requestId));
+    }
+
+    @Test
+    void confirmIssueRejectsStaleReservationVersion() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "confirm-ver-1", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "confirm-ver-2", submitBody(1)));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        admin, "confirm-ver-3", confirmBody(2, 2, null)),
+                HttpStatus.CONFLICT, "VERSION_CONFLICT");
+    }
+
+    @Test
+    void confirmIssueAfterExpiryConflicts() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "confirm-exp-1", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "confirm-exp-2", submitBody(1)));
+        jdbc.update("UPDATE lab_inventory_reservation SET expires_at='2000-01-01 00:00:00' "
+                + "WHERE request_id=?", requestId);
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        admin, "confirm-exp-3", confirmBody(2, 1, null)),
+                HttpStatus.CONFLICT, "INVENTORY_RESERVATION_EXPIRED");
+    }
+
+    @Test
+    void reallocateSwapsBatchReservation() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "realloc-0001", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "realloc-0002", submitBody(1)));
+        long reservationId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_reservation WHERE request_id=?", Long.class, requestId);
+        jdbc.update("""
+                INSERT INTO lab_procurement_order(
+                    purchase_no,title,requester_id,requester_name,currency,
+                    item_subtotal,shipping_amount,discount_amount,payable_amount,
+                    status,approval_required,approval_policy_version,created_by,updated_by
+                ) VALUES('PUR-ISS-TEST-2','领用库存事实二',1,'system','CNY',
+                         10.00,0.00,0.00,10.00,'RECEIVED',0,1,1,1)
+                """);
+        Long secondOrderId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_order WHERE purchase_no='PUR-ISS-TEST-2'", Long.class);
+        jdbc.update("""
+                INSERT INTO lab_procurement_order_line(
+                    order_id,line_no,component_id,component_name,unit,
+                    ordered_quantity,unit_price,line_subtotal,allocated_net_amount,
+                    effective_unit_cost,received_quantity,version
+                ) VALUES(?,1,?,'领用测试电阻','PCS',10.000,1.0000,10.00,10.00,1.0000,10.000,1)
+                """, secondOrderId, componentId);
+        Long secondOrderLineId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_order_line WHERE order_id=? AND line_no=1",
+                Long.class, secondOrderId);
+        jdbc.update("""
+                INSERT INTO lab_procurement_receipt(
+                    receipt_no,order_id,status,received_at,receiver_id,receiver_name,
+                    confirmed_at,version,created_by,updated_by,active_draft_slot
+                ) VALUES('REC-ISS-TEST-2',?,'CONFIRMED',CURRENT_TIMESTAMP,1,'system',
+                         CURRENT_TIMESTAMP,1,1,1,NULL)
+                """, secondOrderId);
+        Long secondReceiptId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_receipt WHERE receipt_no='REC-ISS-TEST-2'", Long.class);
+        jdbc.update("""
+                INSERT INTO lab_procurement_receipt_line(
+                    receipt_id,order_line_id,component_id,quantity,unit,version
+                ) VALUES(?,?,?,10.000,'PCS',1)
+                """, secondReceiptId, secondOrderLineId, componentId);
+        Long secondReceiptLineId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_receipt_line WHERE receipt_id=?",
+                Long.class, secondReceiptId);
+        jdbc.update("""
+                INSERT INTO lab_inventory_batch(
+                    batch_no,component_id,source_receipt_line_id,
+                    initial_quantity,current_quantity,unit,unit_cost,status,created_by
+                ) VALUES('BAT-ISS-002',?,?,10.000,10.000,'PCS',1.0000,'AVAILABLE',1)
+                """, componentId, secondReceiptLineId);
+        long secondBatchId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-002'", Long.class);
+        jdbc.update("UPDATE lab_component_inventory_balance "
+                + "SET on_hand_quantity=on_hand_quantity+10.000, version=version+1 WHERE component_id=?",
+                componentId);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("requestVersion", 2);
+        body.put("reason", "改用新批次");
+        body.put("allocations", List.of(Map.of("reservationId", reservationId,
+                "batchId", secondBatchId, "quantity", new BigDecimal("5.000"))));
+        Map<String, Object> result = data(post("/api/inventory-issue-requests/" + requestId
+                + "/reallocate", admin, "realloc-0003", body));
+        assertEquals("APPROVED", result.get("status"));
+
+        assertEquals("0.000", jdbc.queryForObject(
+                "SELECT reserved_quantity FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'",
+                String.class));
+        assertEquals("5.000", jdbc.queryForObject(
+                "SELECT reserved_quantity FROM lab_inventory_batch WHERE batch_no='BAT-ISS-002'",
+                String.class));
+        assertEquals("30.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals(secondBatchId, jdbc.queryForObject(
+                "SELECT batch_id FROM lab_inventory_reservation_allocation WHERE reservation_id=?",
+                Long.class, reservationId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_reservation_allocation WHERE reservation_id=?",
+                Integer.class, reservationId));
+    }
+
     private Map<String, Object> policyBody(int baseVersion) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("basePolicyVersion", baseVersion);
@@ -401,6 +596,16 @@ class InventoryIssueApiIntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("requestVersion", version);
         body.put("comment", comment);
+        return body;
+    }
+
+    private Map<String, Object> confirmBody(int requestVersion, int reservationVersion, String note) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("requestVersion", requestVersion);
+        body.put("reservationVersion", reservationVersion);
+        if (note != null) {
+            body.put("note", note);
+        }
         return body;
     }
 

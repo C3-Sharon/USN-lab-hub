@@ -3,6 +3,8 @@ package com.usn.labhub.user.controller;
 import com.usn.labhub.user.common.auth.RequireRoles;
 import com.usn.labhub.user.common.result.Result;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueCommandDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryIssueConfirmIssueDTO;
+import com.usn.labhub.user.domain.dto.inventory.InventoryIssueReallocateDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestCreateDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestUpdateDTO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePageVO;
@@ -100,5 +102,22 @@ public class InventoryIssueRequestController {
                                               @RequestHeader("Idempotency-Key") String idempotencyKey,
                                               @Valid @RequestBody InventoryIssueCommandDTO request) {
         return Result.success(workflowService.cancel(id, idempotencyKey, request));
+    }
+
+    @PostMapping("/{id}/reallocate")
+    public Result<Map<String, Object>> reallocate(
+            @PathVariable Long id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody InventoryIssueReallocateDTO request) {
+        return Result.success(workflowService.reallocate(id, idempotencyKey, request));
+    }
+
+    @PostMapping("/{id}/confirm-issue")
+    public Result<Map<String, Object>> confirmIssue(
+            @PathVariable Long id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader(value = "X-USN-Test-Fault", required = false) String testFaultPoint,
+            @Valid @RequestBody InventoryIssueConfirmIssueDTO request) {
+        return Result.success(workflowService.confirmIssue(id, idempotencyKey, testFaultPoint, request));
     }
 }
