@@ -523,6 +523,7 @@
         FROM lab_inventory_return_line rl
         JOIN lab_inventory_return r ON r.id=rl.return_id
         WHERE r.fulfillment_id=#{fulfillmentId}
+        FOR UPDATE
     </select>
 
     <select id="selectReturn"

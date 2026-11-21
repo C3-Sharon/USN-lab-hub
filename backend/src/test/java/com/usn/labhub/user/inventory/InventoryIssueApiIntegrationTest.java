@@ -6,10 +6,12 @@ import com.usn.labhub.user.service.IAttendanceService;
 import com.usn.labhub.user.service.InventoryIssueExpiryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -22,6 +24,10 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -52,6 +58,8 @@ class InventoryIssueApiIntegrationTest {
     private IAttendanceService attendanceService;
     @Autowired
     private InventoryIssueExpiryService expiryService;
+    @Autowired
+    private Environment environment;
     private Long componentId;
 
     @BeforeEach
@@ -85,8 +93,8 @@ class InventoryIssueApiIntegrationTest {
         jdbc.update("DELETE FROM lab_procurement_receipt");
         jdbc.update("DELETE FROM lab_procurement_order_line");
         jdbc.update("DELETE FROM lab_procurement_order");
-        jdbc.update("DELETE FROM sys_user_role WHERE user_id=100");
-        jdbc.update("DELETE FROM sys_user WHERE id=100");
+        jdbc.update("DELETE FROM sys_user_role WHERE user_id IN (100,101,102)");
+        jdbc.update("DELETE FROM sys_user WHERE id IN (100,101,102)");
         jdbc.update("DELETE FROM lab_component_spec_snapshot");
         jdbc.update("DELETE FROM lab_component");
         jdbc.update("DELETE FROM lab_component_manufacturer");
@@ -708,6 +716,334 @@ class InventoryIssueApiIntegrationTest {
                 HttpStatus.BAD_REQUEST, "WRITE_OFF_REASON_REQUIRED");
     }
 
+    void verifyRollbackAtControlledFailurePoint() {
+        assertEquals("AFTER_FIRST_MOVEMENT",
+                environment.getProperty("usnhub.inventory.issue.test-fault-point"));
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "fault-create-1", requestBody())).get("id")).longValue();
+        Map<String, Object> submitted = data(post("/api/inventory-issue-requests/" + requestId
+                + "/submit", member, "fault-submit-1", submitBody(1)));
+        assertEquals("APPROVED", submitted.get("status"));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        admin, "fault-confirm-1", confirmBody(2, 1, null)),
+                HttpStatus.INTERNAL_SERVER_ERROR, "INVENTORY_ISSUE_TRANSACTION_FAILED");
+
+        assertEquals("APPROVED", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_issue_request WHERE id=?", String.class, requestId));
+        assertEquals("ACTIVE", jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_reservation WHERE request_id=?", String.class, requestId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_fulfillment WHERE request_id=?", Integer.class, requestId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='ISSUE_OUT'", Integer.class));
+        assertEquals("20.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals("20.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(current_quantity,':',reserved_quantity) "
+                        + "FROM lab_inventory_batch WHERE component_id=?",
+                String.class, componentId));
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void serializesConcurrentSubmitsForSameAvailableStockOnMySql() throws Exception {
+        String member = token(login("20260001", "20260001"));
+        long firstId = ((Number) draftWithQuantity(member, "mysql-submit-a", "15.000")
+                .get("id")).longValue();
+        long secondId = ((Number) draftWithQuantity(member, "mysql-submit-b", "15.000")
+                .get("id")).longValue();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ResponseEntity<Map>> first = executor.submit(() ->
+                    concurrentSubmit(firstId, member, "mysql-submit-a-2", ready, start));
+            Future<ResponseEntity<Map>> second = executor.submit(() ->
+                    concurrentSubmit(secondId, member, "mysql-submit-b-2", ready, start));
+            ready.await();
+            start.countDown();
+
+            long ok = 0;
+            long conflict = 0;
+            for (ResponseEntity<Map> response : List.of(first.get(), second.get())) {
+                if (HttpStatus.OK.equals(response.getStatusCode())) {
+                    ok++;
+                } else {
+                    assertEquals(HttpStatus.CONFLICT, response.getStatusCode(),
+                            String.valueOf(response.getBody()));
+                    assertTrue(List.of("INVENTORY_INSUFFICIENT_STOCK",
+                            "INVENTORY_CONCURRENT_CONFLICT")
+                            .contains(response.getBody().get("reason")));
+                    conflict++;
+                }
+            }
+            assertEquals(1, ok);
+            assertEquals(1, conflict);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_issue_request WHERE status='PENDING_APPROVAL'",
+                Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_issue_request WHERE status='DRAFT'",
+                Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_reservation WHERE status='ACTIVE'",
+                Integer.class));
+        assertEquals("15.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(reserved_quantity,':',on_hand_quantity-reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void serializesConfirmIssueVsExpiryOnMySql() throws Exception {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "mysql-expiry-a", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "mysql-expiry-b", submitBody(1)));
+        jdbc.update("UPDATE lab_inventory_reservation SET expires_at='2000-01-01 00:00:00' "
+                + "WHERE request_id=?", requestId);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ResponseEntity<Map>> confirm = executor.submit(() ->
+                    concurrentConfirmIssue(requestId, admin, "mysql-expiry-confirm", ready, start));
+            Future<?> expire = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                expiryService.expireIfNeeded(requestId);
+                return null;
+            });
+            ready.await();
+            start.countDown();
+            confirm.get();
+            expire.get();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        String status = jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_issue_request WHERE id=?", String.class, requestId);
+        String reservationStatus = jdbc.queryForObject(
+                "SELECT status FROM lab_inventory_reservation WHERE request_id=?", String.class, requestId);
+        if ("ISSUED".equals(status)) {
+            assertEquals("CONSUMED", reservationStatus);
+            assertEquals("15.000:0.000", jdbc.queryForObject(
+                    "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                            + "FROM lab_component_inventory_balance WHERE component_id=?",
+                    String.class, componentId));
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM lab_inventory_fulfillment WHERE request_id=?", Integer.class, requestId));
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='ISSUE_OUT'", Integer.class));
+        } else {
+            assertEquals("EXPIRED", status);
+            assertEquals("EXPIRED", reservationStatus);
+            assertEquals("20.000:0.000", jdbc.queryForObject(
+                    "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                            + "FROM lab_component_inventory_balance WHERE component_id=?",
+                    String.class, componentId));
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM lab_inventory_fulfillment WHERE request_id=?", Integer.class, requestId));
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='ISSUE_OUT'", Integer.class));
+        }
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void reallocatesAndWritesOffConcurrentlyWithoutInvariantViolationOnMySql() throws Exception {
+        long secondBatchId = seedSecondBatch();
+        long firstBatchId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-001'", Long.class);
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "mysql-race-a", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "mysql-race-b", submitBody(1)));
+        long reservationId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_reservation WHERE request_id=?", Long.class, requestId);
+
+        Map<String, Object> reallocate = new LinkedHashMap<>();
+        reallocate.put("requestVersion", 2);
+        reallocate.put("reason", "并发重分配");
+        reallocate.put("allocations", List.of(Map.of("reservationId", reservationId,
+                "batchId", secondBatchId, "quantity", new BigDecimal("5.000"))));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ResponseEntity<Map>> reallocateFuture = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return post("/api/inventory-issue-requests/" + requestId + "/reallocate",
+                        admin, "mysql-race-reallocate", reallocate);
+            });
+            Future<ResponseEntity<Map>> writeOffFuture = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return post("/api/inventory/batches/" + firstBatchId + "/scraps",
+                        admin, "mysql-race-scrap", writeOffBody("3.000", "并发报废"));
+            });
+            ready.await();
+            start.countDown();
+            assertReason(reallocateFuture.get(), HttpStatus.OK, null);
+            assertReason(writeOffFuture.get(), HttpStatus.OK, null);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals("17.000:0.000", jdbc.queryForObject(
+                "SELECT CONCAT(current_quantity,':',reserved_quantity) FROM lab_inventory_batch WHERE id=?",
+                String.class, firstBatchId));
+        assertEquals("10.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(current_quantity,':',reserved_quantity) FROM lab_inventory_batch WHERE id=?",
+                String.class, secondBatchId));
+        assertEquals("27.000:5.000", jdbc.queryForObject(
+                "SELECT CONCAT(on_hand_quantity,':',reserved_quantity) "
+                        + "FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals(secondBatchId, jdbc.queryForObject(
+                "SELECT batch_id FROM lab_inventory_reservation_allocation WHERE reservation_id=?",
+                Long.class, reservationId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='SCRAP_OUT'", Integer.class));
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void confirmsSameIdempotencyKeyReplayOnMySql() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "mysql-replay-a", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "mysql-replay-b", submitBody(1)));
+
+        Map<String, Object> issued = data(post("/api/inventory-issue-requests/" + requestId
+                + "/confirm-issue", admin, "mysql-replay-confirm", confirmBody(2, 1, null)));
+        Map<String, Object> replay = data(post("/api/inventory-issue-requests/" + requestId
+                + "/confirm-issue", admin, "mysql-replay-confirm", confirmBody(2, 1, null)));
+        assertEquals(Boolean.TRUE, replay.get("idempotentReplay"));
+        assertEquals(issued.get("fulfillmentId"), replay.get("fulfillmentId"));
+        assertEquals(issued.get("movements"), replay.get("movements"));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_fulfillment WHERE request_id=?", Integer.class, requestId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='ISSUE_OUT'", Integer.class));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                        admin, "mysql-replay-new", confirmBody(3, 2, null)),
+                HttpStatus.CONFLICT, "INVENTORY_ISSUE_ALREADY_CONFIRMED");
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void serializesConcurrentReturnInitiationWithinIssuedQuantityOnMySql() throws Exception {
+        Map<String, Object> ctx = issueOne("mysql-return");
+        String member = (String) ctx.get("member");
+        String admin = (String) ctx.get("admin");
+        long fulfillmentId = ((Number) ctx.get("fulfillmentId")).longValue();
+        long fulfillmentLineId = ((Number) ctx.get("fulfillmentLineId")).longValue();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ResponseEntity<Map>> first = executor.submit(() -> concurrentReturn(
+                    fulfillmentId, member, "mysql-return-1", fulfillmentLineId, "4.000", ready, start));
+            Future<ResponseEntity<Map>> second = executor.submit(() -> concurrentReturn(
+                    fulfillmentId, member, "mysql-return-2", fulfillmentLineId, "4.000", ready, start));
+            ready.await();
+            start.countDown();
+
+            long ok = 0;
+            long conflict = 0;
+            for (ResponseEntity<Map> response : List.of(first.get(), second.get())) {
+                if (HttpStatus.OK.equals(response.getStatusCode())) {
+                    ok++;
+                } else {
+                    assertEquals(HttpStatus.CONFLICT, response.getStatusCode(),
+                            String.valueOf(response.getBody()));
+                    assertEquals("INVENTORY_RETURN_EXCEEDS_ISSUED", response.getBody().get("reason"));
+                    conflict++;
+                }
+            }
+            assertEquals(1, ok);
+            assertEquals(1, conflict);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        long returnId = jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_return WHERE status='PENDING_CONFIRMATION'", Long.class);
+        data(post("/api/inventory-returns/" + returnId + "/confirm", admin,
+                "mysql-return-confirm", returnCommandBody(1)));
+        assertEquals("19.000", jdbc.queryForObject(
+                "SELECT on_hand_quantity FROM lab_component_inventory_balance WHERE component_id=?",
+                String.class, componentId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM lab_inventory_movement WHERE movement_type='RETURN_IN'", Integer.class));
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "USNHUB_TEST_MYSQL_URL", matches = "jdbc:mysql:.*")
+    void verifiesFiveRolePermissionMatrixOnMySql() {
+        String admin = token(login("admin", "admin123"));
+        String member = token(login("20260001", "20260001"));
+        String teacher = token(login("teacher001", "admin123"));
+        String stockkeeper = seedUser(101, "stockkeeper001", "库存管理员", 4);
+        String unrelated = seedUser(102, "unrelated001", "无关成员", 2);
+
+        assertReason(put("/api/inventory/issue-policy", member, policyBody(0)),
+                HttpStatus.FORBIDDEN, "INVENTORY_POLICY_DENIED");
+        assertReason(put("/api/inventory/issue-policy", stockkeeper, policyBody(0)),
+                HttpStatus.FORBIDDEN, "INVENTORY_POLICY_DENIED");
+        data(put("/api/inventory/issue-policy", admin, policyBody(0)));
+
+        long requestId = ((Number) draftWithQuantity(member, "acl-create-1", "15.000")
+                .get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "acl-submit-1", submitBody(1)));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/approve", member,
+                        "acl-approve-1", decisionBody(2, "自批")),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_SELF_APPROVAL");
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/approve", stockkeeper,
+                        "acl-approve-2", decisionBody(2, "库管审批")),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_APPROVAL_DENIED");
+        data(post("/api/inventory-issue-requests/" + requestId + "/approve", teacher,
+                "acl-approve-3", decisionBody(2, "同意")));
+
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue", teacher,
+                        "acl-issue-1", confirmBody(3, 1, null)),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED");
+        assertReason(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue", member,
+                        "acl-issue-2", confirmBody(3, 1, null)),
+                HttpStatus.FORBIDDEN, "INVENTORY_ISSUE_FULFILL_DENIED");
+        data(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue", stockkeeper,
+                "acl-issue-3", confirmBody(3, 1, null)));
+
+        assertReason(get("/api/inventory-issue-requests/" + requestId, unrelated),
+                HttpStatus.NOT_FOUND, "INVENTORY_ISSUE_REQUEST_NOT_FOUND");
+    }
+
     private Map<String, Object> issueOne(String suffix) {
         String member = token(login("20260001", "20260001"));
         String admin = token(login("admin", "admin123"));
@@ -730,6 +1066,102 @@ class InventoryIssueApiIntegrationTest {
         ctx.put("member", member);
         ctx.put("admin", admin);
         return ctx;
+    }
+
+    private Map<String, Object> draftWithQuantity(String member, String key, String quantity) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", "并发领用申请");
+        body.put("purpose", "并发一致性验证");
+        body.put("lines", List.of(line(componentId, quantity)));
+        return data(post("/api/inventory-issue-requests", member, key, body));
+    }
+
+    private ResponseEntity<Map> concurrentSubmit(long requestId, String token, String key,
+                                                 CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        start.await();
+        return post("/api/inventory-issue-requests/" + requestId + "/submit", token, key,
+                submitBody(1));
+    }
+
+    private ResponseEntity<Map> concurrentConfirmIssue(long requestId, String token, String key,
+                                                       CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        start.await();
+        return post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                token, key, confirmBody(2, 1, null));
+    }
+
+    private ResponseEntity<Map> concurrentReturn(long fulfillmentId, String token, String key,
+                                                 long fulfillmentLineId, String quantity,
+                                                 CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        start.await();
+        return post("/api/inventory-fulfillments/" + fulfillmentId + "/returns", token, key,
+                returnCreateBody("并发退回", fulfillmentLineId, quantity));
+    }
+
+    private String seedUser(int id, String memberId, String username, int roleId) {
+        jdbc.update("""
+                INSERT INTO sys_user(
+                    id,username,member_id,password,identity_id,group_id,faculty_id,status
+                ) VALUES(?,?,?,?,1,1,1,1)
+                """, id, username, memberId,
+                "$2a$10$.D/2kDKLyVtgEABJGOO4dODj1TRUq9ZSwQ3jlAYSfbbwbR3FhLGLO");
+        jdbc.update("INSERT INTO sys_user_role(user_id,role_id) VALUES(?,?)", id, roleId);
+        return token(login(memberId, "admin123"));
+    }
+
+    private long seedSecondBatch() {
+        jdbc.update("""
+                INSERT INTO lab_procurement_order(
+                    purchase_no,title,requester_id,requester_name,currency,
+                    item_subtotal,shipping_amount,discount_amount,payable_amount,
+                    status,approval_required,approval_policy_version,created_by,updated_by
+                ) VALUES('PUR-ISS-RACE','领用并发事实',1,'system','CNY',
+                         10.00,0.00,0.00,10.00,'RECEIVED',0,1,1,1)
+                """);
+        Long orderId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_order WHERE purchase_no='PUR-ISS-RACE'", Long.class);
+        jdbc.update("""
+                INSERT INTO lab_procurement_order_line(
+                    order_id,line_no,component_id,component_name,unit,
+                    ordered_quantity,unit_price,line_subtotal,allocated_net_amount,
+                    effective_unit_cost,received_quantity,version
+                ) VALUES(?,1,?,'领用测试电阻','PCS',10.000,1.0000,10.00,10.00,1.0000,10.000,1)
+                """, orderId, componentId);
+        Long orderLineId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_order_line WHERE order_id=?", Long.class, orderId);
+        jdbc.update("""
+                INSERT INTO lab_procurement_receipt(
+                    receipt_no,order_id,status,received_at,receiver_id,receiver_name,
+                    confirmed_at,version,created_by,updated_by,active_draft_slot
+                ) VALUES('REC-ISS-RACE',?,'CONFIRMED',CURRENT_TIMESTAMP,1,'system',
+                         CURRENT_TIMESTAMP,1,1,1,NULL)
+                """, orderId);
+        Long receiptId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_receipt WHERE receipt_no='REC-ISS-RACE'", Long.class);
+        jdbc.update("""
+                INSERT INTO lab_procurement_receipt_line(
+                    receipt_id,order_line_id,component_id,quantity,unit,version
+                ) VALUES(?,?,?,10.000,'PCS',1)
+                """, receiptId, orderLineId, componentId);
+        Long receiptLineId = jdbc.queryForObject(
+                "SELECT id FROM lab_procurement_receipt_line WHERE receipt_id=?", Long.class, receiptId);
+        jdbc.update("""
+                INSERT INTO lab_inventory_batch(
+                    batch_no,component_id,source_receipt_line_id,
+                    initial_quantity,current_quantity,unit,unit_cost,status,created_by
+                ) VALUES('BAT-ISS-RACE',?,?,10.000,10.000,'PCS',1.0000,'AVAILABLE',1)
+                """, componentId, receiptLineId);
+        jdbc.update("UPDATE lab_component_inventory_balance "
+                + "SET on_hand_quantity=on_hand_quantity+10.000, version=version+1 WHERE component_id=?",
+                componentId);
+        return jdbc.queryForObject(
+                "SELECT id FROM lab_inventory_batch WHERE batch_no='BAT-ISS-RACE'", Long.class);
     }
 
     private Map<String, Object> returnCreateBody(String reason, long fulfillmentLineId,
