@@ -7,11 +7,14 @@ import com.usn.labhub.user.domain.vo.procurement.InventoryBatchVO;
 import com.usn.labhub.user.domain.vo.procurement.InventoryMovementVO;
 import com.usn.labhub.user.domain.vo.procurement.ProcurementPageVO;
 import com.usn.labhub.user.service.InventoryQueryService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/inventory")
@@ -39,8 +42,17 @@ public class InventoryController {
     @GetMapping("/movements")
     public Result<ProcurementPageVO<InventoryMovementVO>> movements(
             @RequestParam(required = false) Long componentId,
+            @RequestParam(required = false) String movementType,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) Long operatorId,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                    LocalDateTime occurredFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                    LocalDateTime occurredTo,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return Result.success(service.movements(componentId, page, pageSize));
+        return Result.success(service.movements(componentId, movementType, sourceType, operatorId,
+                batchNo, occurredFrom, occurredTo, page, pageSize));
     }
 }
