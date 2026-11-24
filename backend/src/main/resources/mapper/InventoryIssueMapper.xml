@@ -1,0 +1,627 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.usn.labhub.user.mapper.InventoryIssueMapper">
+
+    <sql id="policyColumns">
+        id, policy_version AS policyVersion, currency,
+        direct_amount_threshold AS directAmountThreshold,
+        valuable_unit_cost_threshold AS valuableUnitCostThreshold,
+        default_direct_quantity_limit AS defaultDirectQuantityLimit,
+        low_stock_ratio AS lowStockRatio, reservation_ttl_hours AS reservationTtlHours,
+        effective_at AS effectiveAt, created_by AS createdBy, create_time AS createTime
+    </sql>
+
+    <select id="selectCurrentPolicy"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC LIMIT 1
+    </select>
+
+    <select id="selectCurrentPolicyForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC LIMIT 1 FOR UPDATE
+    </select>
+
+    <select id="selectPolicyVersions"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssuePolicyRecord">
+        SELECT <include refid="policyColumns"/>
+        FROM lab_inventory_issue_policy_version ORDER BY policy_version DESC
+    </select>
+
+    <select id="countActiveCategories" resultType="int">
+        SELECT COUNT(*) FROM lab_component_category
+        WHERE status='ACTIVE' AND id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <insert id="insertPolicy" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_policy_version(
+            policy_version,currency,direct_amount_threshold,valuable_unit_cost_threshold,
+            default_direct_quantity_limit,low_stock_ratio,reservation_ttl_hours,
+            effective_at,created_by,create_time
+        ) VALUES(#{policyVersion},'CNY',#{directAmountThreshold},#{valuableUnitCostThreshold},
+                 #{defaultDirectQuantityLimit},#{lowStockRatio},#{reservationTtlHours},
+                 #{effectiveAt},#{createdBy},#{createTime})
+    </insert>
+
+    <insert id="insertForcedCategory">
+        INSERT INTO lab_inventory_issue_policy_forced_category(policy_id,category_id)
+        VALUES(#{policyId},#{categoryId})
+    </insert>
+
+    <select id="selectForcedCategoryIds" resultType="long">
+        SELECT category_id FROM lab_inventory_issue_policy_forced_category
+        WHERE policy_id=#{policyId} ORDER BY category_id ASC
+    </select>
+
+    <insert id="insertOverride" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_policy_component_override(
+            policy_id,component_id,direct_quantity_limit,component_name,unit_snapshot,
+            created_by,create_time
+        ) VALUES(#{policyId},#{componentId},#{directQuantityLimit},#{componentName},#{unitSnapshot},
+                 #{createdBy},#{createTime})
+    </insert>
+
+    <select id="selectOverrides"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssuePolicyOverrideVO">
+        SELECT id, policy_id AS policyId, component_id AS componentId,
+               component_name AS componentName, unit_snapshot AS unit,
+               direct_quantity_limit AS directQuantityLimit
+        FROM lab_inventory_issue_policy_component_override
+        WHERE policy_id=#{policyId} ORDER BY id ASC
+    </select>
+
+    <select id="selectComponentForIssue"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord">
+        SELECT c.id,c.name,m.name AS manufacturerName,c.mpn,c.base_unit AS baseUnit,c.status,
+               c.category_id AS categoryId, cat.path AS categoryPath
+        FROM lab_component c
+        INNER JOIN lab_component_manufacturer m ON m.id=c.manufacturer_id
+        INNER JOIN lab_component_category cat ON cat.id=c.category_id
+        WHERE c.id=#{id}
+    </select>
+
+    <select id="selectRequestForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r WHERE r.id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectLinesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueLineRecord">
+        SELECT id, request_id AS requestId, line_no AS lineNo, component_id AS componentId,
+               component_name AS componentName, manufacturer_name AS manufacturerName, mpn,
+               unit, requested_quantity AS requestedQuantity,
+               reserved_quantity AS reservedQuantity, issued_quantity AS issuedQuantity,
+               returned_quantity AS returnedQuantity, estimated_amount AS estimatedAmount,
+               version
+        FROM lab_inventory_issue_line
+        WHERE request_id=#{requestId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectBatchesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch
+        WHERE component_id=#{componentId} AND status='AVAILABLE'
+          AND current_quantity-reserved_quantity > 0
+          AND (expiry_date IS NULL OR expiry_date &gt;= CURRENT_DATE)
+        ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectBatchesForUpdateByIds"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch
+        WHERE id IN
+        <foreach collection="batchIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectCurrentTimestamp" resultType="java.time.LocalDateTime">
+        SELECT CURRENT_TIMESTAMP
+    </select>
+
+    <update id="submitRequest">
+        UPDATE lab_inventory_issue_request
+        SET status=#{status}, approval_required=#{approvalRequired},
+            approval_reasons_json=#{approvalReasonsJson}, policy_version=#{policyVersion},
+            estimated_amount=#{estimatedAmount}, submitted_at=#{submittedAt}, expires_at=#{expiresAt},
+            version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <update id="decideRequest">
+        UPDATE lab_inventory_issue_request
+        SET status=#{toStatus}, approved_at=#{approvedAt}, version=version+1,
+            updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{fromStatus}
+    </update>
+
+    <update id="cancelRequest">
+        UPDATE lab_inventory_issue_request
+        SET status='CANCELED', version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status=#{status}
+    </update>
+
+    <update id="expireRequest">
+        UPDATE lab_inventory_issue_request
+        SET status='EXPIRED', version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status IN ('PENDING_APPROVAL','APPROVED')
+    </update>
+
+    <insert id="insertApproval" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_approval_record(
+            request_id,decision,actor_type,decided_by,decided_at,policy_version,
+            trigger_snapshot_json,comment,request_idempotency_id
+        ) VALUES(#{requestId},#{decision},#{actorType},#{decidedBy},#{decidedAt},#{policyVersion},
+                 #{triggerSnapshotJson},#{comment},#{requestIdempotencyId})
+    </insert>
+
+    <select id="selectApprovals"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord">
+        SELECT id, request_id AS requestId, decision, actor_type AS actorType,
+               decided_by AS decidedBy, decided_at AS decidedAt, policy_version AS policyVersion,
+               trigger_snapshot_json AS triggerSnapshotJson, comment,
+               request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_issue_approval_record
+        WHERE request_id=#{requestId} ORDER BY id ASC
+    </select>
+
+    <insert id="insertReservation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_reservation(
+            reservation_no,request_id,request_line_id,component_id,quantity,status,expires_at,version
+        ) VALUES(#{reservationNo},#{requestId},#{requestLineId},#{componentId},#{quantity},'ACTIVE',#{expiresAt},1)
+    </insert>
+
+    <insert id="insertReservationAllocation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_reservation_allocation(
+            reservation_id,batch_id,quantity,unit_cost_snapshot,version
+        ) VALUES(#{reservationId},#{batchId},#{quantity},#{unitCostSnapshot},1)
+    </insert>
+
+    <select id="selectReservationsForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord">
+        SELECT id, reservation_no AS reservationNo, request_id AS requestId,
+               request_line_id AS requestLineId, component_id AS componentId,
+               quantity, status, expires_at AS expiresAt,
+               release_reason AS releaseReason, version
+        FROM lab_inventory_reservation
+        WHERE request_id=#{requestId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectReservations"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord">
+        SELECT id, reservation_no AS reservationNo, request_id AS requestId,
+               request_line_id AS requestLineId, component_id AS componentId,
+               quantity, status, expires_at AS expiresAt,
+               release_reason AS releaseReason, version
+        FROM lab_inventory_reservation
+        WHERE request_id=#{requestId} ORDER BY id ASC
+    </select>
+
+    <select id="selectReservationAllocations"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord">
+        SELECT id, reservation_id AS reservationId, batch_id AS batchId,
+               quantity, unit_cost_snapshot AS unitCostSnapshot, version
+        FROM lab_inventory_reservation_allocation
+        WHERE reservation_id IN
+        <foreach collection="reservationIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY reservation_id ASC, id ASC
+    </select>
+
+    <select id="selectAllocationsForRequest"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord">
+        SELECT a.id, a.reservation_id AS reservationId, a.batch_id AS batchId,
+               a.quantity, a.unit_cost_snapshot AS unitCostSnapshot, a.version
+        FROM lab_inventory_reservation_allocation a
+        INNER JOIN lab_inventory_reservation r ON r.id=a.reservation_id
+        WHERE r.request_id=#{requestId}
+        ORDER BY a.reservation_id ASC, a.id ASC
+    </select>
+
+    <update id="releaseReservation">
+        UPDATE lab_inventory_reservation
+        SET status=#{status}, release_reason=#{releaseReason}, version=version+1
+        WHERE id=#{id} AND status='ACTIVE'
+    </update>
+
+    <update id="reserveBalance">
+        UPDATE lab_component_inventory_balance
+        SET reserved_quantity=reserved_quantity+#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId} AND on_hand_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="releaseBalance">
+        UPDATE lab_component_inventory_balance
+        SET reserved_quantity=reserved_quantity-#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="reserveBatch">
+        UPDATE lab_inventory_batch
+        SET reserved_quantity=reserved_quantity+#{delta}
+        WHERE id=#{batchId} AND current_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="releaseBatch">
+        UPDATE lab_inventory_batch
+        SET reserved_quantity=reserved_quantity-#{delta}
+        WHERE id=#{batchId} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="reserveLine">
+        UPDATE lab_inventory_issue_line
+        SET reserved_quantity=reserved_quantity+#{delta}
+        WHERE id=#{lineId}
+    </update>
+
+    <update id="releaseLine">
+        UPDATE lab_inventory_issue_line
+        SET reserved_quantity=reserved_quantity-#{delta}
+        WHERE id=#{lineId} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <select id="selectExpiredCandidateIds" resultType="long">
+        SELECT r.id
+        FROM lab_inventory_issue_request r
+        INNER JOIN lab_inventory_reservation res ON res.request_id=r.id AND res.status='ACTIVE'
+        WHERE r.status IN ('PENDING_APPROVAL','APPROVED') AND res.expires_at &lt; CURRENT_TIMESTAMP
+        GROUP BY r.id ORDER BY r.id ASC LIMIT #{limit}
+    </select>
+
+    <sql id="requestColumns">
+        r.id, r.request_no AS requestNo, r.title, r.purpose,
+        r.requester_id AS requesterId, r.requester_name AS requesterName,
+        r.project_id AS projectId, r.project_name AS projectName,
+        r.status, r.approval_required AS approvalRequired,
+        r.approval_reasons_json AS approvalReasonsJson,
+        r.policy_version AS policyVersion, r.estimated_amount AS estimatedAmount,
+        r.submitted_at AS submittedAt, r.approved_at AS approvedAt,
+        r.issued_at AS issuedAt, r.expires_at AS expiresAt,
+        r.version, r.created_by AS createdBy, r.create_time AS createTime,
+        r.updated_by AS updatedBy, r.update_time AS updateTime
+    </sql>
+
+    <insert id="insertRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_issue_request(
+            request_no,title,purpose,requester_id,requester_name,project_id,project_name,
+            status,version,created_by,create_time,updated_by,update_time
+        ) VALUES(#{requestNo},#{title},#{purpose},#{requesterId},#{requesterName},#{projectId},#{projectName},
+                 'DRAFT',1,#{createdBy},#{createTime},#{updatedBy},#{updateTime})
+    </insert>
+
+    <update id="updateDraftRequest">
+        UPDATE lab_inventory_issue_request
+        SET title=#{title}, purpose=#{purpose}, project_id=#{projectId}, project_name=#{projectName},
+            version=version+1, updated_by=#{updatedBy}, update_time=#{updateTime}
+        WHERE id=#{id} AND version=#{version} AND status='DRAFT'
+    </update>
+
+    <insert id="insertLine">
+        INSERT INTO lab_inventory_issue_line(
+            request_id,line_no,component_id,component_name,manufacturer_name,mpn,unit,
+            requested_quantity,reserved_quantity,issued_quantity,returned_quantity,version
+        ) VALUES(#{requestId},#{lineNo},#{componentId},#{componentName},#{manufacturerName},#{mpn},#{unit},
+                 #{requestedQuantity},0.000,0.000,0.000,1)
+    </insert>
+
+    <delete id="deleteLines">
+        DELETE FROM lab_inventory_issue_line WHERE request_id=#{requestId}
+    </delete>
+
+    <select id="selectRequest"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r WHERE r.id=#{id}
+    </select>
+
+    <select id="selectRequestView"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r WHERE r.id=#{id}
+    </select>
+
+    <select id="selectLines"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueLineVO">
+        SELECT id, request_id AS requestId, line_no AS lineNo, component_id AS componentId,
+               component_name AS componentName, manufacturer_name AS manufacturerName, mpn,
+               unit, requested_quantity AS requestedQuantity,
+               reserved_quantity AS reservedQuantity, issued_quantity AS issuedQuantity,
+               returned_quantity AS returnedQuantity, estimated_amount AS estimatedAmount,
+               version
+        FROM lab_inventory_issue_line
+        WHERE request_id=#{requestId}
+        ORDER BY line_no ASC, id ASC
+    </select>
+
+    <sql id="requestVisibility">
+        <if test="!viewAll">
+            AND (
+                r.requester_id=#{userId}
+                OR EXISTS(
+                    SELECT 1 FROM lab_project_member pm
+                    WHERE pm.project_id=r.project_id AND pm.user_id=#{userId}
+                      AND pm.project_role IN ('OWNER','MAINTAINER')
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="requestFilters">
+        <include refid="requestVisibility"/>
+        <if test="status != null">AND r.status=#{status}</if>
+        <if test="projectId != null">AND r.project_id=#{projectId}</if>
+        <if test="requesterId != null">AND r.requester_id=#{requesterId}</if>
+        <if test="componentId != null">
+            AND EXISTS(
+                SELECT 1 FROM lab_inventory_issue_line l
+                WHERE l.request_id=r.id AND l.component_id=#{componentId}
+            )
+        </if>
+        <if test="submittedFrom != null">AND r.submitted_at &gt;= #{submittedFrom}</if>
+        <if test="submittedTo != null">AND r.submitted_at &lt;= #{submittedTo}</if>
+        <if test="keyword != null">
+            AND (r.request_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.purpose LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="countRequests" resultType="long">
+        SELECT COUNT(*) FROM lab_inventory_issue_request r
+        WHERE 1=1 <include refid="requestFilters"/>
+    </select>
+
+    <select id="selectRequests"
+            resultType="com.usn.labhub.user.domain.vo.inventory.InventoryIssueRequestVO">
+        SELECT <include refid="requestColumns"/>
+        FROM lab_inventory_issue_request r
+        WHERE 1=1 <include refid="requestFilters"/>
+        ORDER BY ${sortColumn} ${sortOrder}, r.id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <delete id="deleteAllocationsByReservationIds">
+        DELETE FROM lab_inventory_reservation_allocation
+        WHERE reservation_id IN
+        <foreach collection="reservationIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <insert id="insertFulfillment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_fulfillment(
+            fulfillment_no,request_id,operator_id,operator_name,recipient_id,recipient_name,
+            issued_at,note,request_idempotency_id
+        ) VALUES(#{fulfillmentNo},#{requestId},#{operatorId},#{operatorName},#{recipientId},#{recipientName},
+                 #{issuedAt},#{note},#{requestIdempotencyId})
+    </insert>
+
+    <insert id="insertFulfillmentLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_fulfillment_line(
+            fulfillment_id,request_line_id,reservation_allocation_id,batch_id,quantity,
+            unit_cost_snapshot,movement_id
+        ) VALUES(#{fulfillmentId},#{requestLineId},#{reservationAllocationId},#{batchId},#{quantity},
+                 #{unitCostSnapshot},#{movementId})
+    </insert>
+
+    <select id="selectFulfillmentByRequest"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE request_id=#{requestId}
+    </select>
+
+    <select id="selectFulfillmentLines"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord">
+        SELECT id, fulfillment_id AS fulfillmentId, request_line_id AS requestLineId,
+               reservation_allocation_id AS reservationAllocationId, batch_id AS batchId,
+               quantity, unit_cost_snapshot AS unitCostSnapshot, movement_id AS movementId
+        FROM lab_inventory_fulfillment_line WHERE fulfillment_id=#{fulfillmentId} ORDER BY id ASC
+    </select>
+
+    <update id="consumeBalance">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity-#{delta},
+            reserved_quantity=reserved_quantity-#{delta},
+            version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+          AND on_hand_quantity &gt;= #{delta} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="consumeBatch">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity-#{delta},
+            reserved_quantity=reserved_quantity-#{delta}
+        WHERE id=#{batchId}
+          AND current_quantity &gt;= #{delta} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="consumeReservation">
+        UPDATE lab_inventory_reservation
+        SET status='CONSUMED', version=version+1
+        WHERE id=#{id} AND status='ACTIVE'
+    </update>
+
+    <update id="consumeLine">
+        UPDATE lab_inventory_issue_line
+        SET issued_quantity=issued_quantity+#{delta},
+            reserved_quantity=reserved_quantity-#{delta},
+            version=version+1
+        WHERE id=#{lineId} AND reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="issueRequest">
+        UPDATE lab_inventory_issue_request
+        SET status='ISSUED', issued_at=#{issuedAt}, version=version+1,
+            updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='APPROVED'
+    </update>
+
+    <select id="selectFulfillment"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE id=#{id}
+    </select>
+
+    <select id="selectFulfillmentForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord">
+        SELECT id, fulfillment_no AS fulfillmentNo, request_id AS requestId,
+               operator_id AS operatorId, operator_name AS operatorName,
+               recipient_id AS recipientId, recipient_name AS recipientName,
+               issued_at AS issuedAt, note, request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_fulfillment WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectFulfillmentLinesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord">
+        SELECT id, fulfillment_id AS fulfillmentId, request_line_id AS requestLineId,
+               reservation_allocation_id AS reservationAllocationId, batch_id AS batchId,
+               quantity, unit_cost_snapshot AS unitCostSnapshot, movement_id AS movementId
+        FROM lab_inventory_fulfillment_line WHERE fulfillment_id=#{fulfillmentId}
+        ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectBatch"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch WHERE id=#{id}
+    </select>
+
+    <select id="selectBatchesByIds"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord">
+        SELECT id, batch_no AS batchNo, component_id AS componentId,
+               current_quantity AS currentQuantity, reserved_quantity AS reservedQuantity,
+               unit_cost AS unitCost, unit, expiry_date AS expiryDate,
+               create_time AS createTime, status
+        FROM lab_inventory_batch
+        WHERE id IN
+        <foreach collection="batchIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insertReturn" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_return(
+            return_no,fulfillment_id,request_id,status,reason,requested_by,confirmed_by,
+            version,created_by,create_time,updated_by,update_time
+        ) VALUES(#{returnNo},#{fulfillmentId},#{requestId},#{status},#{reason},#{requestedBy},
+                 #{confirmedBy},#{version},#{createdBy},#{createTime},#{updatedBy},#{updateTime})
+    </insert>
+
+    <insert id="insertReturnLine" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_return_line(return_id,fulfillment_line_id,batch_id,quantity)
+        VALUES(#{returnId},#{fulfillmentLineId},#{batchId},#{quantity})
+    </insert>
+
+    <select id="selectReturnsByFulfillment"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE fulfillment_id=#{fulfillmentId} ORDER BY id DESC
+    </select>
+
+    <select id="selectReturnLineSummaries"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineSummaryRecord">
+        SELECT rl.fulfillment_line_id AS fulfillmentLineId, r.status AS status,
+               rl.quantity AS quantity
+        FROM lab_inventory_return_line rl
+        JOIN lab_inventory_return r ON r.id=rl.return_id
+        WHERE r.fulfillment_id=#{fulfillmentId}
+        FOR UPDATE
+    </select>
+
+    <select id="selectReturn"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE id=#{id}
+    </select>
+
+    <select id="selectReturnForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord">
+        SELECT id, return_no AS returnNo, fulfillment_id AS fulfillmentId,
+               request_id AS requestId, status, reason, requested_by AS requestedBy,
+               confirmed_by AS confirmedBy, version, created_by AS createdBy,
+               create_time AS createTime, updated_by AS updatedBy, update_time AS updateTime
+        FROM lab_inventory_return WHERE id=#{id} FOR UPDATE
+    </select>
+
+    <select id="selectReturnLines"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord">
+        SELECT id, return_id AS returnId, fulfillment_line_id AS fulfillmentLineId,
+               batch_id AS batchId, quantity
+        FROM lab_inventory_return_line WHERE return_id=#{returnId} ORDER BY id ASC
+    </select>
+
+    <select id="selectReturnLinesForUpdate"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord">
+        SELECT id, return_id AS returnId, fulfillment_line_id AS fulfillmentLineId,
+               batch_id AS batchId, quantity
+        FROM lab_inventory_return_line WHERE return_id=#{returnId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <update id="confirmReturn">
+        UPDATE lab_inventory_return
+        SET status='CONFIRMED', confirmed_by=#{confirmedBy}, version=version+1,
+            updated_by=#{confirmedBy}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='PENDING_CONFIRMATION'
+    </update>
+
+    <update id="rejectReturn">
+        UPDATE lab_inventory_return
+        SET status='REJECTED', version=version+1, updated_by=#{actorId}, update_time=#{now}
+        WHERE id=#{id} AND version=#{version} AND status='PENDING_CONFIRMATION'
+    </update>
+
+    <update id="increaseOnHand">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity+#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+    </update>
+
+    <update id="increaseBatchCurrent">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity+#{delta}
+        WHERE id=#{batchId}
+    </update>
+
+    <update id="writeOffBalance">
+        UPDATE lab_component_inventory_balance
+        SET on_hand_quantity=on_hand_quantity-#{delta}, version=version+1, update_time=#{now}
+        WHERE component_id=#{componentId}
+          AND on_hand_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <update id="writeOffBatch">
+        UPDATE lab_inventory_batch
+        SET current_quantity=current_quantity-#{delta}
+        WHERE id=#{batchId} AND current_quantity-reserved_quantity &gt;= #{delta}
+    </update>
+
+    <insert id="insertWriteOffCommand" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_write_off_command(
+            command_no,type,component_id,batch_id,quantity,reason,operator_id,
+            occurred_at,movement_id,request_id,created_by,create_time
+        ) VALUES(#{commandNo},#{type},#{componentId},#{batchId},#{quantity},#{reason},#{operatorId},
+                 #{occurredAt},#{movementId},#{requestId},#{createdBy},#{createTime})
+    </insert>
+
+</mapper>

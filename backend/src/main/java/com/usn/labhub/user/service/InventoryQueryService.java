@@ -8,11 +8,20 @@ import com.usn.labhub.user.mapper.ProcurementMapper;
 import com.usn.labhub.user.procurement.ProcurementAccessPolicy;
 import com.usn.labhub.user.procurement.ProcurementApiException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class InventoryQueryService {
+    private static final Set<String> MOVEMENT_TYPES = Set.of(
+            "PROCUREMENT_RECEIPT_IN", "ISSUE_OUT", "RETURN_IN", "LOSS_OUT", "SCRAP_OUT");
+    private static final Set<String> SOURCE_TYPES = Set.of(
+            "RECEIPT_LINE", "FULFILLMENT_LINE", "RETURN_LINE", "WRITE_OFF_COMMAND");
+
     private final ProcurementMapper mapper;
     private final ProcurementAccessPolicy access;
 
@@ -40,11 +49,22 @@ public class InventoryQueryService {
                 mapper.selectInventoryBatches(componentId, (page - 1) * pageSize, pageSize));
     }
 
-    public ProcurementPageVO<InventoryMovementVO> movements(Long componentId, int page, int pageSize) {
+    public ProcurementPageVO<InventoryMovementVO> movements(Long componentId, String movementType,
+                                                            String sourceType, Long operatorId,
+                                                            String batchNo, LocalDateTime occurredFrom,
+                                                            LocalDateTime occurredTo,
+                                                            int page, int pageSize) {
         access.requireInventoryDetail();
         validatePage(page, pageSize);
-        return page(mapper.countInventoryMovements(componentId), page, pageSize,
-                mapper.selectInventoryMovements(componentId, (page - 1) * pageSize, pageSize));
+        String normalizedType = enumOrNull(movementType, MOVEMENT_TYPES);
+        String normalizedSource = enumOrNull(sourceType, SOURCE_TYPES);
+        String normalizedBatchNo = keyword(batchNo, 80);
+        return page(mapper.countInventoryMovements(componentId, normalizedType, normalizedSource,
+                        operatorId, normalizedBatchNo, occurredFrom, occurredTo),
+                page, pageSize,
+                mapper.selectInventoryMovements(componentId, normalizedType, normalizedSource,
+                        operatorId, normalizedBatchNo, occurredFrom, occurredTo,
+                        (page - 1) * pageSize, pageSize));
     }
 
     private void validatePage(int page, int pageSize) {
@@ -55,5 +75,27 @@ public class InventoryQueryService {
 
     private <T> ProcurementPageVO<T> page(long total, int page, int pageSize, List<T> list) {
         return new ProcurementPageVO<>(total, page, pageSize, list);
+    }
+
+    private String enumOrNull(String value, Set<String> allowed) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!allowed.contains(normalized)) {
+            throw ProcurementApiException.invalid();
+        }
+        return normalized;
+    }
+
+    private String keyword(String value, int max) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > max) {
+            throw ProcurementApiException.invalid();
+        }
+        return normalized;
     }
 }
