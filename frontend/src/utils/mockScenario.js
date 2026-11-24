@@ -17,7 +17,10 @@ const STATES = Object.freeze([
   'partial-received',
   'transaction-failed',
   'inactive',
-  'placeholder'
+  'placeholder',
+  'insufficient-stock',
+  'reserved',
+  'expired'
 ])
 
 export function currentMockScenario() {
@@ -54,5 +57,8 @@ export const MOCK_STATE_META = Object.freeze({
   'partial-received': { label: '部分到货', desc: '仅显示 PARTIALLY_RECEIVED，保留剩余数量与进度' },
   'transaction-failed': { label: '入库事务失败', desc: '确认到货返回 500，批次/流水/数量均不改变' },
   inactive: { label: '已停用', desc: '灰色只读提示，仅提供恢复' },
-  placeholder: { label: '无图占位', desc: '确定性 placeholderKey，固定比例不布局跳动' }
+  placeholder: { label: '无图占位', desc: '确定性 placeholderKey，固定比例不布局跳动' },
+  'insufficient-stock': { label: '库存不足', desc: '提交返回 409 INVENTORY_INSUFFICIENT_STOCK，展示可用量与 traceId' },
+  reserved: { label: '预占中', desc: '展示预占到期倒计时与释放条件，审批不扣库存' },
+  expired: { label: '预占过期', desc: '预占已释放，禁用审批/发放并要求重新申请' }
 })

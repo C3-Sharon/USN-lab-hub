@@ -499,3 +499,121 @@ export function isProcurementIdempotencyReused(err) {
 export function isProcurementApprovalRequired(err) {
   return isReason(err, 'PROCUREMENT_APPROVAL_REQUIRED')
 }
+
+// ========== 库存领用与受控库存域错误码（INVENTORY_ISSUANCE_API.md v1.0 §10） ==========
+
+const ISSUE_DENIED_REASONS = [
+  'INVENTORY_ISSUE_OPERATION_DENIED',
+  'INVENTORY_ISSUE_APPROVAL_DENIED',
+  'INVENTORY_ISSUE_FULFILL_DENIED',
+  'INVENTORY_POLICY_DENIED',
+  'INVENTORY_WRITE_OFF_DENIED',
+  'ACCESS_DENIED'
+]
+
+const ISSUE_NOT_FOUND_REASONS = [
+  'INVENTORY_ISSUE_REQUEST_NOT_FOUND',
+  'INVENTORY_FULFILLMENT_NOT_FOUND',
+  'INVENTORY_RETURN_NOT_FOUND',
+  'INVENTORY_BATCH_NOT_FOUND'
+]
+
+/** 领用申请/发放/退回/批次不存在或不可见（404，隐藏存在性） */
+export function isIssueNotFound(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 404 || ISSUE_NOT_FOUND_REASONS.includes(reason)
+}
+
+/** 无领用/审批/发放/策略/退回/损耗报废权限（403） */
+export function isIssueDenied(err) {
+  const { code, reason } = normalizeApiError(err)
+  return code === 403 || ISSUE_DENIED_REASONS.includes(reason)
+}
+
+/** 领用申请、预占、批次或策略版本冲突（409） */
+export function isIssueVersionConflict(err) {
+  return isVersionConflict(err) || isReason(err, 'INVENTORY_POLICY_VERSION_CONFLICT')
+}
+
+/** 非法状态转换（409） */
+export function isIssueInvalidTransition(err) {
+  return isReason(err, 'INVENTORY_ISSUE_INVALID_TRANSITION')
+}
+
+/** 可用库存不足（409）；data 含 componentId/requestedQuantity/availableQuantity/traceId */
+export function isIssueInsufficientStock(err) {
+  return isReason(err, 'INVENTORY_INSUFFICIENT_STOCK')
+}
+
+/** 提取库存不足明细，用于详情页内联提示与 traceId 展示 */
+export function issueInsufficientStockDetail(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'INVENTORY_INSUFFICIENT_STOCK' || !data) return null
+  return {
+    componentId: data.componentId ?? null,
+    requestedQuantity: data.requestedQuantity ?? null,
+    availableQuantity: data.availableQuantity ?? null,
+    traceId: data.traceId || ''
+  }
+}
+
+/** 预占已过期（409） */
+export function isIssueReservationExpired(err) {
+  return isReason(err, 'INVENTORY_RESERVATION_EXPIRED')
+}
+
+/** 预占已被消费或释放（409） */
+export function isIssueReservationNotActive(err) {
+  return isReason(err, 'INVENTORY_RESERVATION_NOT_ACTIVE')
+}
+
+/** 批次库存或分配版本变化，需要刷新后重分配（409） */
+export function isIssueBatchAllocationConflict(err) {
+  return isReason(err, 'INVENTORY_BATCH_ALLOCATION_CONFLICT')
+}
+
+/** 申请已发放，不能重复确认（409） */
+export function isIssueAlreadyConfirmed(err) {
+  return isReason(err, 'INVENTORY_ISSUE_ALREADY_CONFIRMED')
+}
+
+/** 申请人不得审批/发放本人申请（403） */
+export function isIssueDutyConflict(err) {
+  return isReason(err, 'INVENTORY_ISSUE_SELF_APPROVAL')
+}
+
+/** 累计退回超过原发放未退数量（409）；data 含 fulfillmentLineId/returnableQuantity */
+export function isIssueReturnExceedsIssued(err) {
+  return isReason(err, 'INVENTORY_RETURN_EXCEEDS_ISSUED')
+}
+
+export function issueReturnExceedsDetail(err) {
+  const { reason, data } = normalizeApiError(err)
+  if (reason !== 'INVENTORY_RETURN_EXCEEDS_ISSUED' || !data) return null
+  return {
+    fulfillmentLineId: data.fulfillmentLineId ?? null,
+    returnableQuantity: data.returnableQuantity ?? null,
+    requestedQuantity: data.requestedQuantity ?? null
+  }
+}
+
+/** 损耗/报废不得占用或扣减已预占库存（409）；data 含 batchId/availableQuantity */
+export function isIssueReservedStockProtected(err) {
+  return isReason(err, 'INVENTORY_RESERVED_STOCK_PROTECTED')
+}
+
+/** 发放事务失败（500）；余额、批次、预占与流水均不得改变 */
+export function isIssueTransactionFailed(err) {
+  return isReason(err, 'INVENTORY_ISSUE_TRANSACTION_FAILED')
+}
+
+/** 同一 Idempotency-Key 复用于不同请求（409） */
+export function isIssueIdempotencyReused(err) {
+  return isReason(err, 'IDEMPOTENCY_KEY_REUSED')
+}
+
+/** 策略阈值或覆盖项非法（400） */
+export function isIssuePolicyInvalid(err) {
+  const { reason } = normalizeApiError(err)
+  return ['ISSUE_POLICY_INVALID', 'ISSUE_POLICY_OVERRIDE_INVALID'].includes(reason)
+}

@@ -38,6 +38,13 @@ import ProcurementDetail from '@/views/procurement/ProcurementDetail.vue'
 import ProcurementReceiptEditor from '@/views/procurement/ProcurementReceiptEditor.vue'
 import ProcurementReceiptDetail from '@/views/procurement/ProcurementReceiptDetail.vue'
 import ProcurementSettings from '@/views/procurement/ProcurementSettings.vue'
+import InventoryIssueList from '@/views/inventory/InventoryIssueList.vue'
+import InventoryIssueEditor from '@/views/inventory/InventoryIssueEditor.vue'
+import InventoryIssueDetail from '@/views/inventory/InventoryIssueDetail.vue'
+import InventoryIssueApprovals from '@/views/inventory/InventoryIssueApprovals.vue'
+import InventoryFulfillments from '@/views/inventory/InventoryFulfillments.vue'
+import InventoryMovements from '@/views/inventory/InventoryMovements.vue'
+import InventoryIssueSettings from '@/views/inventory/InventoryIssueSettings.vue'
 import IotOperationLogs from '@/views/iot/OperationLogs.vue'
 import IotPublic from '@/views/iot/PublicDisplay.vue'
 import Pm001Live from '@/views/iot/Pm001Live.vue'
@@ -315,6 +322,54 @@ const routes = [
         name: 'ProcurementSettings',
         component: ProcurementSettings,
         meta: { title: '采购审批策略', roles: [ROLE.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'inventory/issues',
+        name: 'InventoryIssueList',
+        component: InventoryIssueList,
+        meta: { title: '库存领用', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'inventory/issues/new',
+        name: 'InventoryIssueCreate',
+        component: InventoryIssueEditor,
+        meta: { title: '新建领用申请', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'inventory/issues/:id/edit',
+        name: 'InventoryIssueEdit',
+        component: InventoryIssueEditor,
+        meta: { title: '编辑领用草稿', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'inventory/issues/:id',
+        name: 'InventoryIssueDetail',
+        component: InventoryIssueDetail,
+        meta: { title: '领用申请详情', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'inventory/issue-approvals',
+        name: 'InventoryIssueApprovals',
+        component: InventoryIssueApprovals,
+        meta: { title: '领用待审批', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] }
+      },
+      {
+        path: 'inventory/fulfillments',
+        name: 'InventoryFulfillments',
+        component: InventoryFulfillments,
+        meta: { title: '领用发放队列', roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER] }
+      },
+      {
+        path: 'inventory/movements',
+        name: 'InventoryMovements',
+        component: InventoryMovements,
+        meta: { title: '库存流水', roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] }
+      },
+      {
+        path: 'inventory/issue-settings',
+        name: 'InventoryIssueSettings',
+        component: InventoryIssueSettings,
+        meta: { title: '领用审批策略', roles: [ROLE.SYSTEM_ADMIN] }
       }
     ]
   },

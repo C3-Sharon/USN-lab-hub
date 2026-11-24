@@ -150,6 +150,7 @@ const pageSubtitle = computed(() => {
     return '元器件型号、规格快照、图片占位、分类与制造商'
   }
   if (route.path.startsWith('/procurement')) return '采购单、分批到货、库存批次与审批策略'
+  if (route.path.startsWith('/inventory')) return '库存领用、预占审批、发放退回与受控库存流水'
   if (route.path.startsWith('/iot')) return 'IoT 设备、告警、建议、指令与日志'
   return ''
 })
@@ -171,7 +172,8 @@ const ICON = markRaw({
   component: Box,
   category: Share,
   manufacturer: OfficeBuilding,
-  procurement: ShoppingCart
+  procurement: ShoppingCart,
+  issue: Box
 })
 
 const menuItems = computed(() => {
@@ -218,6 +220,19 @@ const menuItems = computed(() => {
       children: [
         { index: '/procurements', title: '采购单', icon: ICON.procurement, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
         { index: '/procurement/settings', title: '审批策略', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN] }
+      ]
+    },
+    {
+      index: '/inventory',
+      title: '库存领用',
+      icon: ICON.issue,
+      roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER],
+      children: [
+        { index: '/inventory/issues', title: '领用申请', icon: ICON.issue, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/inventory/issue-approvals', title: '待审批', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER] },
+        { index: '/inventory/fulfillments', title: '发放队列', icon: ICON.procurement, roles: [ROLE.SYSTEM_ADMIN, ROLE.STOCK_KEEPER] },
+        { index: '/inventory/movements', title: '库存流水', icon: ICON.record, roles: [ROLE.SYSTEM_ADMIN, ROLE.TEACHER, ROLE.STOCK_KEEPER, ROLE.MEMBER] },
+        { index: '/inventory/issue-settings', title: '领用策略', icon: ICON.command, roles: [ROLE.SYSTEM_ADMIN] }
       ]
     },
     {
