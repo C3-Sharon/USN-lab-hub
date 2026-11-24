@@ -11,6 +11,8 @@ public class InventoryBalanceVO {
     private String componentName;
     private String status;
     private BigDecimal onHandQuantity;
+    private BigDecimal reservedQuantity;
+    private BigDecimal availableQuantity;
     private String unit;
     private Integer version;
     private LocalDateTime updateTime;

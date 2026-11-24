@@ -401,7 +401,8 @@
 
     <select id="selectInventoryBalancesForUpdate"
             resultType="com.usn.labhub.user.domain.entity.procurement.InventoryBalanceRecord">
-        SELECT component_id AS componentId,on_hand_quantity AS onHandQuantity,unit,version,update_time AS updateTime
+        SELECT component_id AS componentId,on_hand_quantity AS onHandQuantity,
+               reserved_quantity AS reservedQuantity,unit,version,update_time AS updateTime
         FROM lab_component_inventory_balance WHERE component_id IN
         <foreach collection="componentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         ORDER BY component_id ASC FOR UPDATE
@@ -433,6 +434,20 @@
                  #{operatorId},#{occurredAt},#{requestId})
     </insert>
 
+    <insert id="insertInventoryMovementTyped" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lab_inventory_movement(
+            movement_no,movement_type,component_id,batch_id,source_type,source_id,
+            quantity_delta,balance_before,balance_after,unit,unit_cost,reason,
+            operator_id,occurred_at,request_id
+        ) VALUES(#{movementNo},#{movementType},#{componentId},#{batchId},#{sourceType},#{sourceId},
+                 #{quantityDelta},#{balanceBefore},#{balanceAfter},#{unit},#{unitCost},#{reason},
+                 #{operatorId},#{occurredAt},#{requestId})
+    </insert>
+
+    <update id="updateInventoryMovementSourceId">
+        UPDATE lab_inventory_movement SET source_id=#{sourceId} WHERE id=#{id}
+    </update>
+
     <update id="updateOrderLineReceived">
         UPDATE lab_procurement_order_line
         SET received_quantity=received_quantity+#{quantity},version=version+1
@@ -461,6 +476,8 @@
     <select id="selectInventoryBalance" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryBalanceVO">
         SELECT c.id AS componentId,c.name AS componentName,c.status,
                COALESCE(b.on_hand_quantity,0.000) AS onHandQuantity,c.base_unit AS unit,
+               COALESCE(b.reserved_quantity,0.000) AS reservedQuantity,
+               (COALESCE(b.on_hand_quantity,0.000)-COALESCE(b.reserved_quantity,0.000)) AS availableQuantity,
                COALESCE(b.version,0) AS version,b.update_time AS updateTime
         FROM lab_component c LEFT JOIN lab_component_inventory_balance b ON b.component_id=c.id
         WHERE c.id=#{componentId}
@@ -472,7 +489,10 @@
 
     <select id="selectInventoryBatches" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryBatchVO">
         SELECT id,batch_no AS batchNo,component_id AS componentId,source_receipt_line_id AS sourceReceiptLineId,
-               initial_quantity AS initialQuantity,current_quantity AS currentQuantity,unit,unit_cost AS unitCost,
+               initial_quantity AS initialQuantity,current_quantity AS currentQuantity,
+               reserved_quantity AS reservedQuantity,
+               (current_quantity-reserved_quantity) AS availableQuantity,
+               unit,unit_cost AS unitCost,
                supplier_lot_no AS supplierLotNo,production_date AS productionDate,expiry_date AS expiryDate,
                location_note AS locationNote,quality_note AS qualityNote,status,create_time AS createTime
         FROM lab_inventory_batch WHERE component_id=#{componentId}
@@ -480,18 +500,35 @@
     </select>
 
     <select id="countInventoryMovements" resultType="long">
-        SELECT COUNT(*) FROM lab_inventory_movement
-        <if test="componentId != null">WHERE component_id=#{componentId}</if>
+        SELECT COUNT(*) FROM lab_inventory_movement m
+        LEFT JOIN lab_inventory_batch b ON b.id=m.batch_id
+        WHERE 1=1
+        <if test="componentId != null">AND m.component_id=#{componentId}</if>
+        <if test="movementType != null">AND m.movement_type=#{movementType}</if>
+        <if test="sourceType != null">AND m.source_type=#{sourceType}</if>
+        <if test="operatorId != null">AND m.operator_id=#{operatorId}</if>
+        <if test="batchNo != null">AND b.batch_no LIKE CONCAT('%', #{batchNo}, '%')</if>
+        <if test="occurredFrom != null">AND m.occurred_at &gt;= #{occurredFrom}</if>
+        <if test="occurredTo != null">AND m.occurred_at &lt;= #{occurredTo}</if>
     </select>
 
     <select id="selectInventoryMovements" resultType="com.usn.labhub.user.domain.vo.procurement.InventoryMovementVO">
-        SELECT id,movement_no AS movementNo,movement_type AS movementType,component_id AS componentId,
-               batch_id AS batchId,source_id AS sourceId,quantity_delta AS quantityDelta,
-               balance_before AS balanceBefore,balance_after AS balanceAfter,unit,unit_cost AS unitCost,
-               operator_id AS operatorId,occurred_at AS occurredAt
-        FROM lab_inventory_movement
-        <if test="componentId != null">WHERE component_id=#{componentId}</if>
-        ORDER BY occurred_at DESC,id DESC LIMIT #{pageSize} OFFSET #{offset}
+        SELECT m.id,m.movement_no AS movementNo,m.movement_type AS movementType,m.component_id AS componentId,
+               m.batch_id AS batchId,b.batch_no AS batchNo,m.source_type AS sourceType,m.source_id AS sourceId,
+               m.quantity_delta AS quantityDelta,
+               m.balance_before AS balanceBefore,m.balance_after AS balanceAfter,m.unit,m.unit_cost AS unitCost,
+               m.reason,m.operator_id AS operatorId,m.occurred_at AS occurredAt
+        FROM lab_inventory_movement m
+        LEFT JOIN lab_inventory_batch b ON b.id=m.batch_id
+        WHERE 1=1
+        <if test="componentId != null">AND m.component_id=#{componentId}</if>
+        <if test="movementType != null">AND m.movement_type=#{movementType}</if>
+        <if test="sourceType != null">AND m.source_type=#{sourceType}</if>
+        <if test="operatorId != null">AND m.operator_id=#{operatorId}</if>
+        <if test="batchNo != null">AND b.batch_no LIKE CONCAT('%', #{batchNo}, '%')</if>
+        <if test="occurredFrom != null">AND m.occurred_at &gt;= #{occurredFrom}</if>
+        <if test="occurredTo != null">AND m.occurred_at &lt;= #{occurredTo}</if>
+        ORDER BY m.occurred_at DESC,m.id DESC LIMIT #{pageSize} OFFSET #{offset}
     </select>
 
     <sql id="visibilityFilter">
