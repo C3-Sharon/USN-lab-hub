@@ -254,6 +254,49 @@ class InventoryIssueApiIntegrationTest {
     }
 
     @Test
+    void detailExposesReservationsApprovalsFulfillmentAndMasksCost() {
+        String member = token(login("20260001", "20260001"));
+        String admin = token(login("admin", "admin123"));
+        long requestId = ((Number) data(post("/api/inventory-issue-requests", member,
+                "detail-0001", requestBody())).get("id")).longValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/submit", member,
+                "detail-0002", submitBody(1)));
+
+        Map<String, Object> memberDetail = data(get("/api/inventory-issue-requests/" + requestId, member));
+        List<?> reservations = (List<?>) memberDetail.get("reservations");
+        assertEquals(1, reservations.size());
+        Map<String, Object> reservation = (Map<String, Object>) reservations.get(0);
+        assertNotNull(reservation.get("reservationId"));
+        assertEquals("ACTIVE", reservation.get("status"));
+        List<?> allocations = (List<?>) reservation.get("allocations");
+        assertEquals(1, allocations.size());
+        Map<String, Object> allocation = (Map<String, Object>) allocations.get(0);
+        assertNotNull(allocation.get("batchNo"));
+        assertNull(allocation.get("unitCostSnapshot"), "普通成员不得看到批次成本");
+        List<?> approvals = (List<?>) memberDetail.get("approvalRecords");
+        assertEquals(1, approvals.size());
+        assertEquals("AUTO_APPROVED", ((Map<String, Object>) approvals.get(0)).get("decision"));
+
+        Map<String, Object> adminDetail = data(get("/api/inventory-issue-requests/" + requestId, admin));
+        Map<String, Object> adminReservation =
+                (Map<String, Object>) ((List<?>) adminDetail.get("reservations")).get(0);
+        Map<String, Object> adminAllocation =
+                (Map<String, Object>) ((List<?>) adminReservation.get("allocations")).get(0);
+        assertNotNull(adminAllocation.get("unitCostSnapshot"), "管理员应能看到批次成本");
+
+        int requestVersion = ((Number) memberDetail.get("version")).intValue();
+        int reservationVersion = ((Number) reservation.get("version")).intValue();
+        data(post("/api/inventory-issue-requests/" + requestId + "/confirm-issue",
+                admin, "detail-0003", confirmBody(requestVersion, reservationVersion, null)));
+
+        Map<String, Object> issuedDetail = data(get("/api/inventory-issue-requests/" + requestId, admin));
+        assertNotNull(issuedDetail.get("fulfillment"));
+        List<?> fulfillmentLines =
+                (List<?>) ((Map<String, Object>) issuedDetail.get("fulfillment")).get("lines");
+        assertEquals(1, fulfillmentLines.size());
+    }
+
+    @Test
     void submitsManualApprovalAndTeacherDecides() {
         String member = token(login("20260001", "20260001"));
         String teacher = token(login("teacher001", "admin123"));

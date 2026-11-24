@@ -165,6 +165,16 @@
                  #{triggerSnapshotJson},#{comment},#{requestIdempotencyId})
     </insert>
 
+    <select id="selectApprovals"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord">
+        SELECT id, request_id AS requestId, decision, actor_type AS actorType,
+               decided_by AS decidedBy, decided_at AS decidedAt, policy_version AS policyVersion,
+               trigger_snapshot_json AS triggerSnapshotJson, comment,
+               request_idempotency_id AS requestIdempotencyId
+        FROM lab_inventory_issue_approval_record
+        WHERE request_id=#{requestId} ORDER BY id ASC
+    </select>
+
     <insert id="insertReservation" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO lab_inventory_reservation(
             reservation_no,request_id,request_line_id,component_id,quantity,status,expires_at,version
@@ -185,6 +195,16 @@
                release_reason AS releaseReason, version
         FROM lab_inventory_reservation
         WHERE request_id=#{requestId} ORDER BY id ASC FOR UPDATE
+    </select>
+
+    <select id="selectReservations"
+            resultType="com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord">
+        SELECT id, reservation_no AS reservationNo, request_id AS requestId,
+               request_line_id AS requestLineId, component_id AS componentId,
+               quantity, status, expires_at AS expiresAt,
+               release_reason AS releaseReason, version
+        FROM lab_inventory_reservation
+        WHERE request_id=#{requestId} ORDER BY id ASC
     </select>
 
     <select id="selectReservationAllocations"

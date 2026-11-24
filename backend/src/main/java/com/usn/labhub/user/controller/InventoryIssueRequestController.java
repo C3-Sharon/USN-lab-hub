@@ -66,8 +66,8 @@ public class InventoryIssueRequestController {
     }
 
     @GetMapping("/{id}")
-    public Result<InventoryIssueRequestVO> detail(@PathVariable Long id) {
-        return Result.success(service.detail(id));
+    public Result<Map<String, Object>> detail(@PathVariable Long id) {
+        return Result.success(service.detailView(id));
     }
 
     @PutMapping("/{id}")

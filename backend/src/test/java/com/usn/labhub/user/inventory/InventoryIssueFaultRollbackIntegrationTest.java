@@ -52,6 +52,10 @@ class InventoryIssueFaultRollbackIntegrationTest extends InventoryIssueApiIntegr
     void memberCannotConfirmReturn() {
     }
 
+    @Override
+    void detailExposesReservationsApprovalsFulfillmentAndMasksCost() {
+    }
+
     @Test
     void rollsBackEveryFactAtControlledFailurePoint() {
         verifyRollbackAtControlledFailurePoint();

@@ -91,12 +91,16 @@ public interface InventoryIssueMapper {
 
     int insertApproval(InventoryIssueApprovalRecord approval);
 
+    List<InventoryIssueApprovalRecord> selectApprovals(@Param("requestId") Long requestId);
+
     int insertReservation(InventoryIssueReservationRecord reservation);
 
     int insertReservationAllocation(InventoryIssueReservationAllocationRecord allocation);
 
     List<InventoryIssueReservationRecord> selectReservationsForUpdate(
             @Param("requestId") Long requestId);
+
+    List<InventoryIssueReservationRecord> selectReservations(@Param("requestId") Long requestId);
 
     List<InventoryIssueReservationAllocationRecord> selectReservationAllocations(
             @Param("reservationIds") List<Long> reservationIds);

@@ -9,8 +9,16 @@ import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestLineDTO;
 import com.usn.labhub.user.domain.dto.inventory.InventoryIssueRequestUpdateDTO;
 import com.usn.labhub.user.domain.entity.SysUser;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueComponentRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueApprovalRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueBatchRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentLineRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueFulfillmentRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueLineRecord;
 import com.usn.labhub.user.domain.entity.inventory.InventoryIssueRequestRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationAllocationRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryIssueReservationRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnLineRecord;
+import com.usn.labhub.user.domain.entity.inventory.InventoryReturnRecord;
 import com.usn.labhub.user.domain.entity.project.ProjectAccessRecord;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssueLineVO;
 import com.usn.labhub.user.domain.vo.inventory.InventoryIssuePageVO;
@@ -30,12 +38,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class InventoryIssueRequestService {
@@ -107,6 +118,21 @@ public class InventoryIssueRequestService {
         view.setLines(mapper.selectLines(id));
         decorate(view);
         return view;
+    }
+
+    public Map<String, Object> detailView(Long id) {
+        Map<String, Object> result = support.asMap(detail(id));
+        result.put("reservations", reservationViews(id));
+        result.put("approvalRecords", approvalViews(id));
+        InventoryIssueFulfillmentRecord fulfillment = mapper.selectFulfillmentByRequest(id);
+        if (fulfillment == null) {
+            result.put("fulfillment", null);
+            result.put("returns", List.of());
+        } else {
+            result.put("fulfillment", fulfillmentView(fulfillment));
+            result.put("returns", returnViews(fulfillment.getId()));
+        }
+        return result;
     }
 
     @Transactional
@@ -232,6 +258,139 @@ public class InventoryIssueRequestService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot parse inventory issue approval reasons", exception);
         }
+    }
+
+    private Map<String, Object> parseMap(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<>() { });
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot parse inventory issue snapshot", exception);
+        }
+    }
+
+    private List<Map<String, Object>> reservationViews(Long requestId) {
+        List<InventoryIssueReservationRecord> reservations = mapper.selectReservations(requestId);
+        if (reservations.isEmpty()) {
+            return List.of();
+        }
+        List<Long> reservationIds = reservations.stream()
+                .map(InventoryIssueReservationRecord::getId).toList();
+        List<InventoryIssueReservationAllocationRecord> allocations =
+                mapper.selectReservationAllocations(reservationIds);
+        Map<Long, InventoryIssueBatchRecord> batches = new HashMap<>();
+        List<Long> batchIds = allocations.stream()
+                .map(InventoryIssueReservationAllocationRecord::getBatchId).distinct().toList();
+        if (!batchIds.isEmpty()) {
+            for (InventoryIssueBatchRecord batch : mapper.selectBatchesByIds(batchIds)) {
+                batches.put(batch.getId(), batch);
+            }
+        }
+        Map<Long, List<InventoryIssueReservationAllocationRecord>> byReservation = allocations.stream()
+                .collect(Collectors.groupingBy(InventoryIssueReservationAllocationRecord::getReservationId));
+        boolean costVisible = access.canViewCost();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (InventoryIssueReservationRecord reservation : reservations) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("reservationId", reservation.getId());
+            view.put("reservationNo", reservation.getReservationNo());
+            view.put("requestLineId", reservation.getRequestLineId());
+            view.put("componentId", reservation.getComponentId());
+            view.put("quantity", reservation.getQuantity());
+            view.put("status", reservation.getStatus());
+            view.put("expiresAt", reservation.getExpiresAt());
+            view.put("releaseReason", reservation.getReleaseReason());
+            view.put("version", reservation.getVersion());
+            List<Map<String, Object>> allocationViews = new ArrayList<>();
+            for (InventoryIssueReservationAllocationRecord allocation :
+                    byReservation.getOrDefault(reservation.getId(), List.of())) {
+                InventoryIssueBatchRecord batch = batches.get(allocation.getBatchId());
+                Map<String, Object> allocationView = new LinkedHashMap<>();
+                allocationView.put("id", allocation.getId());
+                allocationView.put("reservationId", allocation.getReservationId());
+                allocationView.put("batchId", allocation.getBatchId());
+                allocationView.put("batchNo", batch == null ? null : batch.getBatchNo());
+                allocationView.put("quantity", allocation.getQuantity());
+                allocationView.put("expiryDate", batch == null ? null : batch.getExpiryDate());
+                allocationView.put("unitCostSnapshot", costVisible ? allocation.getUnitCostSnapshot() : null);
+                allocationView.put("version", allocation.getVersion());
+                allocationViews.add(allocationView);
+            }
+            view.put("allocations", allocationViews);
+            result.add(view);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> approvalViews(Long requestId) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (InventoryIssueApprovalRecord approval : mapper.selectApprovals(requestId)) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("id", approval.getId());
+            view.put("decision", approval.getDecision());
+            view.put("actorType", approval.getActorType());
+            view.put("decidedBy", approval.getDecidedBy());
+            view.put("decidedAt", approval.getDecidedAt());
+            view.put("policyVersion", approval.getPolicyVersion());
+            view.put("comment", approval.getComment());
+            view.put("triggerSnapshot", parseMap(approval.getTriggerSnapshotJson()));
+            result.add(view);
+        }
+        return result;
+    }
+
+    private Map<String, Object> fulfillmentView(InventoryIssueFulfillmentRecord fulfillment) {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", fulfillment.getId());
+        view.put("fulfillmentNo", fulfillment.getFulfillmentNo());
+        view.put("operatorId", fulfillment.getOperatorId());
+        view.put("operatorName", fulfillment.getOperatorName());
+        view.put("recipientId", fulfillment.getRecipientId());
+        view.put("recipientName", fulfillment.getRecipientName());
+        view.put("issuedAt", fulfillment.getIssuedAt());
+        view.put("note", fulfillment.getNote());
+        boolean costVisible = access.canViewCost();
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (InventoryIssueFulfillmentLineRecord line : mapper.selectFulfillmentLines(fulfillment.getId())) {
+            Map<String, Object> lineView = new LinkedHashMap<>();
+            lineView.put("id", line.getId());
+            lineView.put("requestLineId", line.getRequestLineId());
+            lineView.put("batchId", line.getBatchId());
+            lineView.put("quantity", line.getQuantity());
+            lineView.put("unitCostSnapshot", costVisible ? line.getUnitCostSnapshot() : null);
+            lineView.put("movementId", line.getMovementId());
+            lines.add(lineView);
+        }
+        view.put("lines", lines);
+        return view;
+    }
+
+    private List<Map<String, Object>> returnViews(Long fulfillmentId) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (InventoryReturnRecord record : mapper.selectReturnsByFulfillment(fulfillmentId)) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("id", record.getId());
+            view.put("returnNo", record.getReturnNo());
+            view.put("status", record.getStatus());
+            view.put("reason", record.getReason());
+            view.put("requestedAt", record.getCreateTime());
+            view.put("confirmedAt", "CONFIRMED".equals(record.getStatus()) ? record.getUpdateTime() : null);
+            List<Map<String, Object>> lines = new ArrayList<>();
+            for (InventoryReturnLineRecord line : mapper.selectReturnLines(record.getId())) {
+                Map<String, Object> lineView = new LinkedHashMap<>();
+                lineView.put("id", line.getId());
+                lineView.put("returnId", line.getReturnId());
+                lineView.put("fulfillmentLineId", line.getFulfillmentLineId());
+                lineView.put("batchId", line.getBatchId());
+                lineView.put("quantity", line.getQuantity());
+                lines.add(lineView);
+            }
+            view.put("lines", lines);
+            result.add(view);
+        }
+        return result;
     }
 
     private boolean componentVisible(InventoryIssueComponentRecord component) {
