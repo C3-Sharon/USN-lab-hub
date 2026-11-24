@@ -768,7 +768,9 @@ async function openReallocate() {
     const currentAllocation = (detail.value.reservations || [])
       .flatMap((reservation) => reservation.allocations || [])
       .find((allocation) => Number(allocation.id) === Number((line.allocations || [])[0]?.id))
+    const reservation = (detail.value.reservations || []).find((item) => Number(item.requestLineId) === Number(line.id))
     rows.push({
+      reservationId: reservation?.reservationId,
       requestLineId: line.id,
       componentName: line.componentName,
       unit: line.unit,
@@ -789,7 +791,7 @@ async function submitReallocate() {
   }
   const allocations = reallocateRows.value
     .filter((row) => row.batchId && Number(row.quantity) > 0)
-    .map((row) => ({ requestLineId: row.requestLineId, batchId: row.batchId, quantity: Number(row.quantity) }))
+    .map((row) => ({ reservationId: row.reservationId, batchId: row.batchId, quantity: Number(row.quantity) }))
   if (!allocations.length) {
     ElMessage.warning('至少需要一条批次分配')
     return

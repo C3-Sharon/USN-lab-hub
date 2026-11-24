@@ -563,7 +563,7 @@ const run = async () => {
       const reallocated = await flow.reallocateIssueRequest(2001, {
         requestVersion: current.version,
         reason: 'FEFO 调整到更早批次',
-        allocations: [{ requestLineId: current.lines[0].id, batchId: 1101, quantity: 5 }]
+        allocations: [{ reservationId: current.reservations[0].reservationId, batchId: 1101, quantity: 5 }]
       }, newKey('reallocate'))
       assert.equal(reallocated.reservations[0].allocations[0].batchId, 1101)
       assert.equal(reallocated.reservations[0].status, 'ACTIVE')

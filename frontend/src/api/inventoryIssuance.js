@@ -1807,7 +1807,9 @@ export function reallocateIssueRequest(requestId, payload, idempotencyKey) {
 
     const grouped = new Map()
     for (const allocation of allocations) {
-      const lineId = Number(allocation?.requestLineId)
+      const reservationId = Number(allocation?.reservationId)
+      const reservation = snapshot.reservations.find((item) => Number(item.reservationId) === reservationId)
+      const lineId = reservation ? Number(reservation.requestLineId) : NaN
       const batchId = Number(allocation?.batchId)
       const quantity = Number(allocation?.quantity)
       const line = issueRequest.lines.find((item) => Number(item.id) === lineId)
