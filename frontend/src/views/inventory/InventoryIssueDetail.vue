@@ -461,11 +461,14 @@ import {
   formatQuantityUnit,
   formatRemainingDuration,
   formatUnitCost,
+  getInventoryComponentSummary,
   getIssueRequest,
   issueRequestActions,
   lineReturnableQuantity,
   listInventoryComponentBatches,
   listInventoryMovements,
+  canViewInventoryMovements,
+  canViewIssueBatches,
   movementTypeMeta,
   normalizePage,
   reservationStatusMeta,
@@ -561,6 +564,24 @@ async function loadMovements(requestId) {
   }
 }
 
+async function enrichLineAvailability(data) {
+  if (!canViewIssueBatches() || !data?.lines?.length) return
+  const componentIds = [...new Set(data.lines.map((line) => Number(line.componentId)).filter(Boolean))]
+  await Promise.all(componentIds.map(async (componentId) => {
+    try {
+      const balance = await getInventoryComponentSummary(componentId)
+      data.lines
+        .filter((line) => Number(line.componentId) === componentId)
+        .forEach((line) => {
+          line.onHandQuantity = balance.onHandQuantity
+          line.availableQuantity = balance.availableQuantity
+        })
+    } catch (error) {
+      // 库存明细不可见时保持空值，不影响申请详情主体
+    }
+  }))
+}
+
 async function load() {
   loading.value = true
   loadError.value = ''
@@ -571,7 +592,10 @@ async function load() {
   try {
     const data = await getIssueRequest(route.params.id)
     detail.value = data
-    await loadMovements(data.id)
+    await enrichLineAvailability(data)
+    if (canViewInventoryMovements()) {
+      await loadMovements(data.id)
+    }
   } catch (error) {
     detail.value = null
     if (isIssueNotFound(error)) {
